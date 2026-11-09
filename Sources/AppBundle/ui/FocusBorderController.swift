@@ -103,8 +103,9 @@ private final class FocusBorderPanel: NSPanel {
         hidesOnDeactivate = false
         animationBehavior = .none
         level = .normal
-        // Follow the focused window to any Space, don't participate in cmd-` window cycling
-        collectionBehavior = [.canJoinAllSpaces, .transient, .ignoresCycle]
+        // Belong to a single Space at a time (otherwise it flashes on other Spaces, e.g. native fullscreen Spaces),
+        // move to the active Space when ordered in, don't participate in cmd-` window cycling
+        collectionBehavior = [.moveToActiveSpace, .transient, .ignoresCycle]
 
         let view = NSView()
         view.wantsLayer = true

@@ -11,6 +11,10 @@ enum GlobalObserver {
         let notifName = notification.name.rawValue
         Task.startUnstructured { @MainActor in
             if !TrayMenuModel.shared.isEnabled { return }
+            if notifName == NSWorkspace.activeSpaceDidChangeNotification.rawValue {
+                // The border belongs to the previous Space. The refresh session shows it again if needed
+                FocusBorderController.shared.hide()
+            }
             if notifName == NSWorkspace.didActivateApplicationNotification.rawValue {
                 scheduleCancellableCompleteRefreshSession(.globalObserver(notifName), optimisticallyPreLayoutWorkspaces: true)
             } else {
