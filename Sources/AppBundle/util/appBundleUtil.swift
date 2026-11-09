@@ -116,13 +116,6 @@ extension CGFloat {
     }
 }
 
-extension CGPoint: @retroactive Hashable { // todo migrate to self written Point
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(x)
-        hasher.combine(y)
-    }
-}
-
 #if DEBUG
     let isDebug = true
 #else

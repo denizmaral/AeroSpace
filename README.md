@@ -138,7 +138,7 @@ A notes on how to setup the project, build it, how to run the tests, etc. can be
 
 ## macOS compatibility
 
-* AeroSpace binary runs on: macOS 13+
+* AeroSpace binary runs on: macOS 15+
 * AeroSpace build from sources is guaranteed on: macOS 15+ (it's the minimum version that we build on CI)
 
 ## Sponsorship
