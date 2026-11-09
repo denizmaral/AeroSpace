@@ -39,7 +39,6 @@ private struct AppServerTerminationHandler: TerminationHandler {
             )
             window.macApp.setAxFrameForTermination(window.windowId, point, windowSize)
         }
-        stopFocusBorderIfManagedByAeroSpace()
         if isDebug {
             let semaphore = DispatchSemaphore(value: 0)
             // Use Task.detached to avoid inheriting @MainActor.

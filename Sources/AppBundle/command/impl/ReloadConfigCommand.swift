@@ -56,7 +56,6 @@ struct ReloadConfigResult {
         await activateMode_nonCancellable(activeMode)
         syncStartAtLogin()
         syncFocusFollowsMouse(config)
-        syncFocusBorder(config)
         syncConfigFileWatcher()
     }
 

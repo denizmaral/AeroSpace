@@ -37,7 +37,6 @@ full-screen-api.transition-duration.leave = 0 0
 == Highlight focused windows with colored borders
 
 To highlight the focused window with colored border you can use link:https://github.com/FelixKratz/JankyBorders[JankyBorders].
-The easiest way is the xref:guide.adoc#focus-border[focus-border] config section.
 
 You can also use `after-startup-command` to start JankyBorders together with AeroSpace
 
