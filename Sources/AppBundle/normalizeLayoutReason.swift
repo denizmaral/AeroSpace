@@ -36,9 +36,8 @@
 /// and the standard subrole yet). validateStillPopups runs in every complete refresh session, but nothing triggers the
 /// next session until the user interacts with something, so the window stays untiled. Recheck shortly after
 @MainActor func schedulePopupRecheck() {
-    if popupRecheckTask != nil { return } // Debounce bursts of popups
+    popupRecheckTask?.cancel() // Restart. Every new popup gets the whole schedule
     popupRecheckTask = Task.startUnstructured { @MainActor in
-        defer { popupRecheckTask = nil }
         for delay: Duration in [.milliseconds(300), .milliseconds(1200)] {
             try await Task.sleep(for: delay)
             if macosPopupWindowsContainer.children.isEmpty { return }
