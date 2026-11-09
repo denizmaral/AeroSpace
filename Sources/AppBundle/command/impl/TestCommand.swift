@@ -4,6 +4,7 @@ import Common
 struct TestCommand: Command {
     let args: TestCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache: Bool = false
+    /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) async -> ConditionalExitCode {
         guard let target = args.resolveTargetOrReportError(env, io) else { return .fail }

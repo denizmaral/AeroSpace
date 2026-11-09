@@ -4,6 +4,7 @@ import Common
 struct ListWindowsCommand: Command {
     let args: ListWindowsCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = false
+    /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) async -> BinaryExitCode {
         let focus = globalFocus

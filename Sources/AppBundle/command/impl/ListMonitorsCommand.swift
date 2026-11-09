@@ -4,6 +4,7 @@ import Common
 struct ListMonitorsCommand: Command {
     let args: ListMonitorsCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = false
+    /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> BinaryExitCode {
         let focus = globalFocus

@@ -58,17 +58,22 @@ func runHeavyCompleteRefreshSession(
     }
 }
 
+/// - Parameter readOnly: The body doesn't change the model (e.g. list-* queries that status bars poll every second).
+///   The session skips layout, focus synchronization and the follow-up complete refresh session
 @MainActor
 func runLightSession<T>(
     _ event: RefreshSessionEvent,
     _: RunSessionGuard,
+    readOnly: Bool = false,
     body: @MainActor () async throws -> T,
 ) async throws -> T {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
-    activeRefreshTask?.cancel() // Give priority to runSession
-    activeRefreshTask = nil
-    let perf = SessionPerfLog("light \(event)")
+    if !readOnly {
+        activeRefreshTask?.cancel() // Give priority to runSession
+        activeRefreshTask = nil
+    }
+    let perf = SessionPerfLog(readOnly ? "query \(event)" : "light \(event)")
     defer { perf.finish() }
     return try await $refreshSessionEvent.withValue(event) {
         let nativeFocused = try await getNativeFocusedWindow(.cancellable)
@@ -78,6 +83,7 @@ func runLightSession<T>(
 
         await refreshModel_nonCancellable()
         let result = try await body()
+        if readOnly { return result }
         await refreshModel_nonCancellable()
 
         let focusAfter = globalFocus.windowOrNil

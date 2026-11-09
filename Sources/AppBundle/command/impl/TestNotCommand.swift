@@ -4,6 +4,7 @@ import Common
 struct TestNotCommand: Command {
     let args: TestNotCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache: Bool = false
+    /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) async -> ConditionalExitCode {
         switch await TestCommand(args: args.testArgs).run(env, io) {

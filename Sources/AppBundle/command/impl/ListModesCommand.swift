@@ -4,6 +4,7 @@ import Common
 struct ListModesCommand: Command {
     let args: ListModesCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = false
+    /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> BinaryExitCode {
         let modes: [String] = args.current ? [activeMode ?? mainModeId] : config.modes.keys.sorted()

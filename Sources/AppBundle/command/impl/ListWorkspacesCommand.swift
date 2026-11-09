@@ -4,6 +4,7 @@ import Common
 struct ListWorkspacesCommand: Command {
     let args: ListWorkspacesCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = false
+    /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> BinaryExitCode {
         var result: [Workspace] = Workspace.all

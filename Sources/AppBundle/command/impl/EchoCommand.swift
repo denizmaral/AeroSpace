@@ -3,6 +3,7 @@ import Common
 struct EchoCommand: Command {
     let args: EchoCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = false
+    /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) async -> BinaryExitCode {
         guard let target = args.resolveTargetOrReportError(env, io) else { return .fail }

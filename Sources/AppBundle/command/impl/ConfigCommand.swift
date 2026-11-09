@@ -4,6 +4,7 @@ import Common
 struct ConfigCommand: Command {
     let args: ConfigCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = false
+    /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> BinaryExitCode {
         switch args.mode {

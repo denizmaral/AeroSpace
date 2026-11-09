@@ -10,6 +10,14 @@ protocol Command: AeroAny, Equatable, Sendable {
 
     /// We should reset closedWindowsCache when the command can potentially change the tree
     var shouldResetClosedWindowsCache: Bool { get }
+
+    /// The command only reads the model (it doesn't change the tree, the focus, windows or the config).
+    /// Read-only commands skip layout and the follow-up refresh session. See ``runLightSession(_:_:readOnly:body:)``
+    var isReadOnly: Bool { get }
+}
+
+extension Command {
+    var isReadOnly: Bool { false }
 }
 
 extension Command {

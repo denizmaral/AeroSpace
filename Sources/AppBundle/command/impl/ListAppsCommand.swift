@@ -4,6 +4,7 @@ import Common
 struct ListAppsCommand: Command {
     let args: ListAppsCmdArgs
     /*conforms*/ let shouldResetClosedWindowsCache = false
+    /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> BinaryExitCode {
         var result = Array(MacApp.allAppsMap.values)
