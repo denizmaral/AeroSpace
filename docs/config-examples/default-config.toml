@@ -69,6 +69,15 @@ on-mode-changed = ""
 
 focus-follows-mouse.enabled = false
 
+# Colored border around the focused window. It's drawn in the gap between windows (gaps.inner.* >= 2 * width)
+# Colors: 0xAARRGGBB, gradient(top_left=0xAARRGGBB,bottom_right=0xAARRGGBB)
+# See: https://nikitabobko.github.io/AeroSpace/guide#focus-border
+# [focus-border]
+#     enabled = true
+#     color = '0xff33ccff'
+#     width = 4
+#     radius = 12
+
 # Possible values: (qwerty|dvorak|colemak)
 # See https://nikitabobko.github.io/AeroSpace/guide#key-mapping
 key-mapping.preset = 'qwerty'
