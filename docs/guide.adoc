@@ -414,6 +414,28 @@ enable-normalization-opposite-orientation-for-nested-containers = false
 
 Unless you're hardcore i3 user who knows what they are doing, it's recommended to keep the normalizations enabled.
 
+[#new-window-placement]
+=== New window placement
+
+`new-window-placement` config option controls where new tiling windows are put in the <<tree,tree>>.
+The option also applies to windows that become tiling (`layout tiling`) and to windows moved by xref:commands.adoc#move-node-to-workspace[move-node-to-workspace].
+
+* `i3` (default). The new window is put next to the most recent window in the same container.
+All windows in the container share the space equally, so the windows are arranged in a single row or column.
+* `dwindle`. The new window takes half of the space of the most recent tiling window, similar to Hyprland's dwindle layout.
+The split orientation depends on the aspect ratio of the most recent window:
+wide windows are split side by side, tall windows are split top to bottom.
+On a regular monitor, this results in a spiral: the 2nd window splits the screen in two columns, the 3rd window splits the right column in two rows, and so on.
+When the new window is closed, the most recent window gets its space back.
+
+[source,toml]
+----
+new-window-placement = 'dwindle'
+----
+
+`dwindle` relies on <<normalization,normalizations>> to collapse the splits back. It's recommended to keep them enabled.
+`dwindle` doesn't split containers with `accordion` layout.
+
 [#floating-windows]
 === Floating windows
 

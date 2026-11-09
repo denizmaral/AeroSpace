@@ -34,6 +34,13 @@ default-root-container-layout = 'tiles'
 #               tall monitor (anything higher than wide) gets vertical orientation
 default-root-container-orientation = 'auto'
 
+# How new tiling windows are placed. Possible values: i3|dwindle
+# 'i3' means:      the new window is put next to the most recent window in the same container
+# 'dwindle' means: the new window splits the most recent window in half (like Hyprland's dwindle layout).
+#                  Wide windows are split side by side, tall windows are split top to bottom
+# See: https://nikitabobko.github.io/AeroSpace/guide#new-window-placement
+new-window-placement = 'i3'
+
 # Mouse follows focus when focused monitor changes
 # Drop it from your config, if you don't like this behavior
 # See https://nikitabobko.github.io/AeroSpace/guide#on-focus-changed-callbacks

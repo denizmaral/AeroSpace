@@ -39,10 +39,13 @@ final class MacWindow: Window {
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         allWindowsMap[windowId] = window
+        let dwindleAnchor = window.dwindleAnchor
 
         try await debugWindowsIfRecording(window, .cancellable)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
             await runOnWindowDetected(ifConventional: window)
+            // After the callbacks, because they may move the window to another workspace
+            window.dwindleSplit(dwindleAnchor)
         }
         return window
     }
@@ -222,6 +225,15 @@ extension Window {
             ? unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
             : try await unbindAndGetBindingDataForNewWindow(self.asMacWindow().windowId, self.asMacWindow().macApp, workspace, window: self, cm)
         bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+        dwindleSplit(dwindleAnchor)
+    }
+
+    /// Binds the window to the workspace the same way as newly detected tiling windows are bound
+    @MainActor
+    func bindAsNewTilingWindow(to workspace: Workspace) {
+        let data = unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
+        bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+        dwindleSplit(dwindleAnchor)
     }
 }
 
@@ -240,7 +252,10 @@ private func unbindAndGetBindingDataForNewWindow(_ windowId: OpaqueWindowId, _ m
 @MainActor
 private func unbindAndGetBindingDataForNewTilingWindow(_ workspace: Workspace, window: Window?) -> BindingData {
     window?.unbindFromParent() // It's important to unbind to get correct data from below
-    if let (tilingParent, index) = workspace.mostRecentWindowRecursive?.nearestAliveTilingParent() {
+    let mostRecentWindow = config.newWindowPlacement == .dwindle
+        ? workspace.rootTilingContainer.mostRecentWindowRecursive // Split the most recent tiling window, even if a floating window was focused after it
+        : workspace.mostRecentWindowRecursive
+    if let (tilingParent, index) = mostRecentWindow?.nearestAliveTilingParent() {
         return BindingData(parent: tilingParent, adaptiveWeight: WEIGHT_AUTO, index: index + 1)
     } else {
         return BindingData(
