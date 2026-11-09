@@ -38,7 +38,11 @@ import Common
         focusFollowsTask = Task.startUnstructured { @MainActor in
             // Ignores macOS menubar dropdown, but, unfortunately, it doesn't ignore non-native menu-like fake windows.
             // todo: It would be cool to somehow reuse isWindowHeuristic logic here
-            if await isAxWindowUnderMouse(location) == false { return }
+            if await isAxWindowUnderMouse(location) == false {
+                // E.g. a menu or a popover is over the window. Retry on the next mouse move
+                if windowUnderMouse === window { windowUnderMouse = nil }
+                return
+            }
             try checkCancellation()
             try await runLightSession(.focusFollowsMouse, token) {
                 _ = window.focusWindow()
