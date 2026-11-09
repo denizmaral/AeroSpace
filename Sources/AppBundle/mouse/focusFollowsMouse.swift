@@ -3,6 +3,13 @@ import Common
 
 @MainActor private var focusFollowsMouseMonitor: Any? = nil
 @MainActor private var focusFollowsTask: Task<(), any Error>? = nil
+/// The window under the mouse as of the previous mouseMoved event.
+///
+/// The focus follows the mouse only when the mouse enters a different window (like Hyprland's `mouse_refocus = false`):
+/// - mouseMoved events arrive at the display refresh rate. Most of them don't cross window boundaries, and they are
+///   handled without any accessibility calls and without refresh sessions
+/// - Small mouse moves don't steal the focus that was changed by other means (keyboard, Mission Control, cmd-tab)
+@MainActor private weak var windowUnderMouse: Window? = nil
 
 @MainActor func syncFocusFollowsMouse(_ config: Config) {
     if config.focusFollowsMouse.enabled == (focusFollowsMouseMonitor != nil) {
@@ -14,42 +21,43 @@ import Common
         focusFollowsMouseMonitor = nil
         focusFollowsTask?.cancel()
         focusFollowsTask = nil
+        windowUnderMouse = nil
         return
     }
 
     // Interestingly, this callback seems to not fire when the mouse is down which is good,
     // because this is how I want it to work for windows/tabs/files dragging
     focusFollowsMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { @MainActor event in
-        let location = event.locationInWindow.withYAxisFlipped
-        focusFollowsTask?.cancel()
         guard let token: RunSessionGuard = .isServerEnabled else { return }
+        let location = event.locationInWindow.withYAxisFlipped
+        let window = location.monitorApproximation.visibleWorkspace.windowUnderMouse(location)
+        if window === windowUnderMouse { return }
+        windowUnderMouse = window
+        focusFollowsTask?.cancel()
+        guard let window, window != globalFocus.windowOrNil else { return }
         focusFollowsTask = Task.startUnstructured { @MainActor in
-            try checkCancellation()
             // Ignores macOS menubar dropdown, but, unfortunately, it doesn't ignore non-native menu-like fake windows.
             // todo: It would be cool to somehow reuse isWindowHeuristic logic here
             if await isAxWindowUnderMouse(location) == false { return }
             try checkCancellation()
-            let workspace = location.monitorApproximation.visibleWorkspace
-            var window: Window? = nil
-            for child in workspace.floatingWindowsContainer._mruChildren {
-                try checkCancellation()
-                guard let child = child as? Window else { continue }
-                guard let rect = try await child.getAxRect(.cancellable) else { continue }
-                if rect.contains(location) {
-                    window = child
-                    break
-                }
-            }
-            if window == nil {
-                window = location.findWindowRecursively(in: workspace.rootTilingContainer, virtual: false, fullscreenCoversAll: true)
-            }
-            if let window {
-                try await runLightSession(.focusFollowsMouse, token) {
-                    _ = window.focusWindow()
-                    window.nativeFocus()
-                }
+            try await runLightSession(.focusFollowsMouse, token) {
+                _ = window.focusWindow()
+                window.nativeFocus()
             }
         }
+    }
+}
+
+extension Workspace {
+    /// In-memory hit testing against the rects of the last layout. No accessibility calls
+    @MainActor
+    fileprivate func windowUnderMouse(_ location: CGPoint) -> Window? {
+        for child in floatingWindowsContainer._mruChildren { // Approximation of the z-order
+            if let window = child as? Window, window.lastLayoutFloatingRect?.contains(location) == true {
+                return window
+            }
+        }
+        return location.findWindowRecursively(in: rootTilingContainer, virtual: false, fullscreenCoversAll: true)
     }
 }
 

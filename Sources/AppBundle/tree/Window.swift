@@ -11,6 +11,8 @@ open class Window: TreeNode, Hashable {
     var lifeStatus: WindowLifeStatus = .alive
     /// The sibling that gave half of its weight to this window (see `applyDwindleSplit`). It takes the weight back on close
     weak var dwindleSplitAnchor: TreeNode? = nil
+    /// The rect of the floating window as of the last layout. Allows hit testing without accessibility calls
+    var lastLayoutFloatingRect: Rect? = nil
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {

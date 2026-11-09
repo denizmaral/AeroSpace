@@ -34,6 +34,7 @@ extension TreeNode {
                 for (window, windowRect) in zip(windows, rects) {
                     window.lastAppliedLayoutPhysicalRect = nil
                     window.lastAppliedLayoutVirtualRect = nil
+                    window.lastLayoutFloatingRect = windowRect
                     window.layoutFloatingWindow(context, windowRect)
                 }
             case .window(let window):
