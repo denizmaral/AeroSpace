@@ -13,12 +13,13 @@ struct WindowPlacement: Equatable, Sendable {
 ///
 /// Binary format (little-endian):
 /// ```
-/// Header (16 bytes):
+/// Header (24 bytes):
 ///   magic:       UInt32 "MSWP"
-///   version:     UInt16 (1)
+///   version:     UInt16 (2)
 ///   reserved:    UInt16
 ///   count:       UInt32
 ///   blobLength:  UInt32
+///   bootTime:    UInt64  (seconds since 1970. Window ids and pids are reused after a reboot)
 /// Records (16 bytes each, sorted by nativeWindowId for binary search):
 ///   nativeWindowId: UInt32
 ///   pid:            Int32
@@ -32,11 +33,12 @@ struct WindowPlacement: Equatable, Sendable {
 struct WindowPlacementSnapshot: Sendable {
     private let data: Data
     let count: Int
+    let bootTime: UInt64
     private let blobStart: Int
 
     private static let magic: UInt32 = 0x5057_534D // "MSWP" little-endian
-    private static let version: UInt16 = 1
-    private static let headerSize = 16
+    private static let version: UInt16 = 2
+    private static let headerSize = 24
     private static let recordSize = 16
 
     /// Validates the header. `data` can be (and normally is) a memory mapping. Nothing is copied
@@ -51,6 +53,7 @@ struct WindowPlacementSnapshot: Sendable {
         guard data.count == blobStart + blobLength else { return nil }
         self.data = data
         self.count = count
+        self.bootTime = data.loadLE(UInt64.self, at: 16)
         self.blobStart = blobStart
     }
 
@@ -92,7 +95,7 @@ struct WindowPlacementSnapshot: Sendable {
     }
 
     /// `placements` must be sorted by nativeWindowId and must not contain duplicate ids
-    static func encode(_ placements: [WindowPlacement]) -> Data {
+    static func encode(_ placements: [WindowPlacement], bootTime: UInt64) -> Data {
         var records = Data(capacity: placements.count * recordSize)
         var blob = Data()
         for placement in placements {
@@ -111,6 +114,7 @@ struct WindowPlacementSnapshot: Sendable {
         result.appendLE(UInt16(0))
         result.appendLE(UInt32(placements.count))
         result.appendLE(UInt32(blob.count))
+        result.appendLE(bootTime)
         result.append(records)
         result.append(blob)
         return result
@@ -131,19 +135,32 @@ enum WindowPlacementStore {
         .appending(path: aeroSpaceAppId, directoryHint: .isDirectory)
         .appending(path: "window-placement.bin")
 
-    /// The placements of the previous run
+    /// The macOS boot time. Window ids and pids are reused after a reboot, the placements of another boot are useless
+    private static let bootTime: UInt64 = {
+        var bootTime = timeval()
+        var size = MemoryLayout<timeval>.size
+        return unsafe sysctlbyname("kern.boottime", &bootTime, &size, nil, 0) == 0 ? UInt64(bootTime.tv_sec) : 0
+    }()
+
+    /// The placements of the previous run (of this boot)
     private static let previousRun: WindowPlacementSnapshot? = isUnitTest
         ? nil
-        : (try? Data(contentsOf: url, options: .mappedIfSafe)).flatMap(WindowPlacementSnapshot.init(data:))
+        : (try? Data(contentsOf: url, options: .mappedIfSafe))
+            .flatMap(WindowPlacementSnapshot.init(data:))
+            .flatMap { $0.bootTime == bootTime ? $0 : nil }
     /// Windows of the previous run that were detected in this run
     private static var restoredWindowIds: Set<UInt32> = []
     private static var lastPersisted: [WindowPlacement] = []
 
-    /// The placement of the window in the previous run, if the window isn't known to this run yet
+    /// The placement of the window in the previous run. Only the first detection of the window in this run is restored:
+    /// later, the window may be moved, and if it's dropped and detected again, its previous run placement is outdated
     static func previousPlacement(of windowId: OpaqueWindowId, _ macApp: MacApp) -> WindowPlacement? {
-        guard let previousRun, let nativeWindowId = macApp.nativeWindowId(of: windowId) else { return nil }
-        let placement = previousRun.placement(nativeWindowId: nativeWindowId, pid: macApp.nsApp.processIdentifier)
-        if placement != nil { restoredWindowIds.insert(nativeWindowId) }
+        guard let previousRun,
+              let nativeWindowId = macApp.nativeWindowId(of: windowId),
+              !restoredWindowIds.contains(nativeWindowId),
+              let placement = previousRun.placement(nativeWindowId: nativeWindowId, pid: macApp.nsApp.processIdentifier)
+        else { return nil }
+        restoredWindowIds.insert(nativeWindowId)
         return placement
     }
 
@@ -181,7 +198,7 @@ enum WindowPlacementStore {
         lastPersisted = placements
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try WindowPlacementSnapshot.encode(placements).write(to: url, options: .atomic)
+            try WindowPlacementSnapshot.encode(placements, bootTime: bootTime).write(to: url, options: .atomic)
         } catch {
             perfLogger.error("Can't persist window placement: \(error.localizedDescription, privacy: .public)")
         }
