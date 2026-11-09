@@ -34,16 +34,41 @@ enum MissionControl {
         isActive = false
     }
 
+    private static var exitFallbackTask: Task<(), any Error>? = nil
+    private static var activeSince: ContinuousClock.Instant = .now
+
+    /// App activation or Space change while Mission Control is shown means that it was closed. Events right after it was
+    /// shown are ignored (Mission Control itself may cause them)
+    static func exitIfStale() {
+        if isActive && ContinuousClock.now - activeSince > .milliseconds(500) { exit() }
+    }
+
     fileprivate static func handle(_ notification: String) {
-        let wasActive = isActive
-        isActive = notification != exitNotification
-        if isActive {
-            FocusBorderController.shared.hide()
-        } else if wasActive {
-            // The mouse stopped over some window. Don't focus it until the mouse enters another window
-            resetFocusFollowsMouse()
-            scheduleCancellableCompleteRefreshSession(.globalObserver(notification)) // Shows the focus border again
+        if notification == exitNotification {
+            exit()
+            return
         }
+        isActive = true
+        activeSince = .now
+        FocusBorderController.shared.hide()
+        // Fallback in case the exit notification is missed. Mission Control is never shown for a minute
+        exitFallbackTask?.cancel()
+        exitFallbackTask = Task.startUnstructured { @MainActor in
+            try await Task.sleep(for: .seconds(60))
+            exit()
+        }
+    }
+
+    /// Also called when an app is activated or the Space changes (Mission Control is closed by then). A fallback in
+    /// case the exit notification is missed: otherwise, the focus border and focus-follows-mouse would stay off
+    static func exit() {
+        guard isActive else { return }
+        isActive = false
+        exitFallbackTask?.cancel()
+        exitFallbackTask = nil
+        // The mouse stopped over some window. Don't focus it until the mouse enters another window
+        resetFocusFollowsMouse()
+        scheduleCancellableCompleteRefreshSession(.globalObserver(exitNotification)) // Shows the focus border again
     }
 }
 

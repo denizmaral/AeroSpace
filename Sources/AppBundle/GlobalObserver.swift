@@ -19,6 +19,7 @@ enum GlobalObserver {
                     // The border belongs to the previous Space. The refresh session shows it again if needed
                     FocusBorderController.shared.hide()
                     MacWindow.invalidateAllSentFrames()
+                    MissionControl.exitIfStale()
                 case NSWorkspace.didLaunchApplicationNotification.rawValue where bundleId == "com.apple.dock":
                     MissionControl.observe() // The Dock was relaunched
                 case NSWorkspace.didWakeNotification.rawValue, NSApplication.didChangeScreenParametersNotification.rawValue:
@@ -26,6 +27,7 @@ enum GlobalObserver {
                 case NSWorkspace.didActivateApplicationNotification.rawValue:
                     // Self-healing: the user interacts with the app. Make sure that its windows are where they must be
                     if let pid { MacWindow.invalidateSentFrames(pid: pid) }
+                    MissionControl.exitIfStale()
                 default:
                     break
             }
