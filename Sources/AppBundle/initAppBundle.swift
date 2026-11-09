@@ -20,6 +20,7 @@ import Foundation
 
         startUnixSocketServer()
         GlobalObserver.initObserver()
+        MissionControl.observe()
         Workspace.garbageCollectUnusedWorkspaces() // init workspaces
         for monitor in Monitor.all {
             _ = monitor.getWorkspacesContainerOrCreate().children.filterIsInstance(of: Workspace.self)

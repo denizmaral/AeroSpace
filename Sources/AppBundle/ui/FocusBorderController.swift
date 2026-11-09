@@ -26,6 +26,7 @@ final class FocusBorderController {
         let border = config.focusBorder
         guard border.enabled,
               TrayMenuModel.shared.isEnabled,
+              !MissionControl.isActive,
               let window = globalFocus.windowOrNil as? MacWindow,
               let nativeWindowId = window.macApp.nativeWindowId(of: window.windowId)
         else { return hide() }

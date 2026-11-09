@@ -9,7 +9,9 @@ enum GlobalObserver {
             return
         }
         let notifName = notification.name.rawValue
-        let pid = (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
+        let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        let pid = app?.processIdentifier
+        let bundleId = app?.bundleIdentifier
         Task.startUnstructured { @MainActor in
             if !TrayMenuModel.shared.isEnabled { return }
             switch notifName {
@@ -17,6 +19,8 @@ enum GlobalObserver {
                     // The border belongs to the previous Space. The refresh session shows it again if needed
                     FocusBorderController.shared.hide()
                     MacWindow.invalidateAllSentFrames()
+                case NSWorkspace.didLaunchApplicationNotification.rawValue where bundleId == "com.apple.dock":
+                    MissionControl.observe() // The Dock was relaunched
                 case NSWorkspace.didWakeNotification.rawValue, NSApplication.didChangeScreenParametersNotification.rawValue:
                     MacWindow.invalidateAllSentFrames() // macOS may move windows around
                 case NSWorkspace.didActivateApplicationNotification.rawValue:

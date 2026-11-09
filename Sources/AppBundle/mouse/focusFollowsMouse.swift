@@ -28,7 +28,7 @@ import Common
     // Interestingly, this callback seems to not fire when the mouse is down which is good,
     // because this is how I want it to work for windows/tabs/files dragging
     focusFollowsMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { @MainActor event in
-        guard let token: RunSessionGuard = .isServerEnabled else { return }
+        guard let token: RunSessionGuard = .isServerEnabled, !MissionControl.isActive else { return }
         let location = event.locationInWindow.withYAxisFlipped
         let window = location.monitorApproximation.visibleWorkspace.windowUnderMouse(location)
         if window === windowUnderMouse { return }
@@ -46,6 +46,13 @@ import Common
             }
         }
     }
+}
+
+/// E.g. after Mission Control, the mouse stopped over some window. It must not be focused until the mouse enters another
+/// window
+@MainActor func resetFocusFollowsMouse() {
+    let location = NSEvent.mouseLocation.withYAxisFlipped
+    windowUnderMouse = location.monitorApproximation.visibleWorkspace.windowUnderMouse(location)
 }
 
 extension Workspace {
