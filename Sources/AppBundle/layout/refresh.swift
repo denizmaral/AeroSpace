@@ -88,9 +88,11 @@ func runLightSession<T>(
         updateFocusCache(nativeFocused)
         let focusBefore = globalFocus.windowOrNil
 
+        // Read-only sessions don't cancel a running complete refresh session, they may interleave with it at await
+        // points. They must not mutate the tree (normalization, garbage collection) or run callbacks
+        if readOnly { return try await body() }
         await refreshModel_nonCancellable()
         let result = try await body()
-        if readOnly { return result }
         await refreshModel_nonCancellable()
 
         let focusAfter = globalFocus.windowOrNil
