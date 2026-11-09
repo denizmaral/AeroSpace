@@ -30,6 +30,8 @@ func runHeavyCompleteRefreshSession(
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
     if !TrayMenuModel.shared.isEnabled { return }
+    let perf = SessionPerfLog("heavy \(event)")
+    defer { perf.finish() }
     let res = await Result {
         try await $refreshSessionEvent.withValue(event) {
             let nativeFocused = try await getNativeFocusedWindow(.cancellable)
@@ -66,6 +68,8 @@ func runLightSession<T>(
     defer { signposter.endInterval(#function, state) }
     activeRefreshTask?.cancel() // Give priority to runSession
     activeRefreshTask = nil
+    let perf = SessionPerfLog("light \(event)")
+    defer { perf.finish() }
     return try await $refreshSessionEvent.withValue(event) {
         let nativeFocused = try await getNativeFocusedWindow(.cancellable)
         if let nativeFocused { try await debugWindowsIfRecording(nativeFocused, .cancellable) }

@@ -345,6 +345,7 @@ extension AXUIElement: AxUiElementMock {
     func get<Attr: ReadableAttr>(_ attr: Attr) -> Attr.T? {
         let state = signposter.beginInterval(#function, "attr: \(attr.key) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
         defer { signposter.endInterval(#function, state) }
+        AxStats.recordRead()
         var raw: AnyObject?
         return unsafe AXUIElementCopyAttributeValue(self, attr.key as CFString, &raw) == .success
             ? raw.flatMap(attr.getter)
@@ -356,12 +357,14 @@ extension AXUIElement: AxUiElementMock {
         let state = signposter.beginInterval(#function, "attr: \(attr.key) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
         defer { signposter.endInterval(#function, state) }
         guard let value = attr.setter(value) else { return false }
+        AxStats.recordWrite()
         return AXUIElementSetAttributeValue(self, attr.key as CFString, value) == .success
     }
 
     func containingNativeWindowId() -> CGWindowID? {
         let state = signposter.beginInterval(#function, "axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
         defer { signposter.endInterval(#function, state) }
+        AxStats.recordRead()
         var cgWindowId = CGWindowID()
         return unsafe _AXUIElementGetWindow(self, &cgWindowId) == .success && cgWindowId != kCGNullWindowID
             ? cgWindowId
