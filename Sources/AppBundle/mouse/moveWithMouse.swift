@@ -10,6 +10,10 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
     let pid = ax.pid
     Task.startUnstructured { @MainActor in
         guard let token: RunSessionGuard = .isServerEnabled else { return }
+        if let nativeWindowId, let pid {
+            // The window may be moved or resized by somebody else (the user, the app). See Window.setAxFrame
+            Window.get(byNativeId: nativeWindowId, pid: pid)?.invalidateSentFrame()
+        }
         guard let nativeWindowId,
               let pid,
               let window = Window.get(byNativeId: nativeWindowId, pid: pid),

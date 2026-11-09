@@ -164,8 +164,11 @@ final class MacApp: AbstractApp {
     func setAxFrame(_ windowId: OpaqueWindowId, _ topLeft: CGPoint?, _ size: CGSize?) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs[windowId] = withWindowAsync(windowId, .cancellable) { [axApp] window, job in
-            try disableAnimations(app: axApp.threadGuarded, job) {
+            let isApplied = try disableAnimations(app: axApp.threadGuarded, job) {
                 try setFrame(window, topLeft, size, job)
+            }
+            if !isApplied { // E.g. the app is busy. Make the next layout send the frame again
+                Task.startUnstructured { @MainActor in Window.get(byId: windowId)?.invalidateSentFrame() }
             }
         }
     }
@@ -174,7 +177,7 @@ final class MacApp: AbstractApp {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         let semaphore = DispatchSemaphore(value: 0)
         let job = withWindowAsync(windowId, .nonCancellable) { [axApp] window, job in
-            try? disableAnimations(app: axApp.threadGuarded, job) {
+            _ = try? disableAnimations(app: axApp.threadGuarded, job) {
                 try setFrame(window, topLeft, size, job)
             }
             semaphore.signal()
@@ -471,14 +474,17 @@ private func getAxRect(window: AXUIElement, job: RunLoopJob) throws -> Rect? {
     return Rect(topLeftX: topLeftCorner.x, topLeftY: topLeftCorner.y, width: size.width, height: size.height)
 }
 
-private func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?, _ job: RunLoopJob) throws {
+/// Returns false if any of the AX writes failed
+private func setFrame(_ window: AXUIElement, _ topLeft: CGPoint?, _ size: CGSize?, _ job: RunLoopJob) throws -> Bool {
     // Set size and then the position. The order is important https://github.com/nikitabobko/AeroSpace/issues/143
     //                                                        https://github.com/nikitabobko/AeroSpace/issues/335
-    if let size { window.set(Ax.sizeAttr, size) }
+    var isApplied = true
+    if let size { isApplied = window.set(Ax.sizeAttr, size) && isApplied }
     try job.checkCancellation()
-    if let topLeft { window.set(Ax.topLeftCornerAttr, topLeft) } else { return }
+    if let topLeft { isApplied = window.set(Ax.topLeftCornerAttr, topLeft) && isApplied } else { return isApplied }
     try job.checkCancellation()
-    if let size { window.set(Ax.sizeAttr, size) }
+    if let size { isApplied = window.set(Ax.sizeAttr, size) && isApplied }
+    return isApplied
 }
 
 // Some undocumented magic

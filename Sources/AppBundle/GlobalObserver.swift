@@ -9,11 +9,21 @@ enum GlobalObserver {
             return
         }
         let notifName = notification.name.rawValue
+        let pid = (notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
         Task.startUnstructured { @MainActor in
             if !TrayMenuModel.shared.isEnabled { return }
-            if notifName == NSWorkspace.activeSpaceDidChangeNotification.rawValue {
-                // The border belongs to the previous Space. The refresh session shows it again if needed
-                FocusBorderController.shared.hide()
+            switch notifName {
+                case NSWorkspace.activeSpaceDidChangeNotification.rawValue:
+                    // The border belongs to the previous Space. The refresh session shows it again if needed
+                    FocusBorderController.shared.hide()
+                    MacWindow.invalidateAllSentFrames()
+                case NSWorkspace.didWakeNotification.rawValue, NSApplication.didChangeScreenParametersNotification.rawValue:
+                    MacWindow.invalidateAllSentFrames() // macOS may move windows around
+                case NSWorkspace.didActivateApplicationNotification.rawValue:
+                    // Self-healing: the user interacts with the app. Make sure that its windows are where they must be
+                    if let pid { MacWindow.invalidateSentFrames(pid: pid) }
+                default:
+                    break
             }
             if notifName == NSWorkspace.didActivateApplicationNotification.rawValue {
                 scheduleCancellableCompleteRefreshSession(.globalObserver(notifName), optimisticallyPreLayoutWorkspaces: true)
@@ -56,6 +66,8 @@ enum GlobalObserver {
         nc.addObserver(forName: NSWorkspace.didUnhideApplicationNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main, using: onNotif)
+        nc.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main, using: onNotif)
+        NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main, using: onNotif)
 
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { _ in
             guard let token: RunSessionGuard = .isServerEnabled else { return }

@@ -13,6 +13,8 @@ open class Window: TreeNode, Hashable {
     weak var dwindleSplitAnchor: TreeNode? = nil
     /// The rect of the floating window as of the last layout. Allows hit testing without accessibility calls
     var lastLayoutFloatingRect: Rect? = nil
+    /// See ``setAxFrame(_:_:)``
+    private var sentFrame: SentFrame? = nil
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -63,7 +65,31 @@ open class Window: TreeNode, Hashable {
     func getAxRect(_ cm: CancellationMode) async throws -> Rect? { die("Not implemented") }
     func getCenter(_ cm: CancellationMode) async throws -> CGPoint? { try await getAxRect(cm)?.center }
 
-    func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) { die("Not implemented") }
+    /// Sends the frame to the window, unless exactly the same frame was already sent.
+    ///
+    /// The layout runs at the end of every refresh session, and most of the time nothing changes. Each send costs
+    /// several accessibility round trips to the app (and wakes the app up), so unchanged frames are skipped. The sent
+    /// frame is forgotten (``invalidateSentFrame()``) whenever the window may have been moved or resized by somebody
+    /// else: AX moved/resized notifications, failed AX writes, app activation, Space/display changes, wake, etc.
+    @MainActor
+    final func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+        let frame = SentFrame(topLeft: topLeft, size: size)
+        if frame == sentFrame { return }
+        sentFrame = frame
+        sendAxFrame(topLeft, size)
+    }
+
+    /// The next ``setAxFrame(_:_:)`` sends the frame even if it's the same as the previous one
+    @MainActor
+    final func invalidateSentFrame() { sentFrame = nil }
+
+    /// Use ``setAxFrame(_:_:)``
+    func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) { die("Not implemented") }
+}
+
+private struct SentFrame: Equatable {
+    let topLeft: CGPoint?
+    let size: CGSize?
 }
 
 enum MacosWindowNativeState: Sendable {

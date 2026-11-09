@@ -79,12 +79,26 @@ final class MacWindow: Window {
         try await macApp.getWindowLevel(windowId, cm)
     }
 
-    func setNativeFullscreen(_ value: Bool) {
+    @MainActor func setNativeFullscreen(_ value: Bool) {
+        invalidateSentFrame() // macOS changes the frame. Also, the pending frame job is canceled
         macApp.setNativeFullscreen(windowId, value)
     }
 
-    func setNativeMinimized(_ value: Bool) {
+    @MainActor func setNativeMinimized(_ value: Bool) {
+        invalidateSentFrame() // The pending frame job is canceled
         macApp.setNativeMinimized(windowId, value)
+    }
+
+    /// See ``Window/setAxFrame(_:_:)``
+    @MainActor static func invalidateAllSentFrames() {
+        for window in allWindowsMap.values { window.invalidateSentFrame() }
+    }
+
+    /// See ``Window/setAxFrame(_:_:)``
+    @MainActor static func invalidateSentFrames(pid: pid_t) {
+        for window in allWindowsMap.values where window.macApp.nsApp.processIdentifier == pid {
+            window.invalidateSentFrame()
+        }
     }
 
     // skipClosedWindowsCache is an optimization when it's definitely not necessary to cache closed window.
@@ -210,7 +224,7 @@ final class MacWindow: Window {
         try await macApp.getAxSize(windowId, cm)
     }
 
-    override func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+    override func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
         macApp.setAxFrame(windowId, topLeft, size)
     }
 

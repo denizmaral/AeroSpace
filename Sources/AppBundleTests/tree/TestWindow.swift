@@ -28,6 +28,13 @@ final class TestWindow: Window, CustomStringConvertible {
         TestApp.shared.focusedWindow = self
     }
 
+    /// Frames that actually reached the window (unchanged frames are filtered by ``Window/setAxFrame(_:_:)``)
+    private(set) var sentFrames: [(topLeft: CGPoint?, size: CGSize?)] = []
+
+    override func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+        sentFrames.append((topLeft, size))
+    }
+
     override func closeAxWindow() {
         unbindAsClosed() // The same as MacWindow.garbageCollect
     }
