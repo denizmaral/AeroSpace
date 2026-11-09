@@ -11,6 +11,9 @@ func scheduleCancellableCompleteRefreshSession(
 ) {
     activeRefreshTask?.cancel()
     activeRefreshTask = Task.startUnstructured { @MainActor in
+        // Coalesce bursts of events (e.g. AX moved/resized notifications during window animations). A newer event
+        // cancels this task while it sleeps, before it makes any accessibility calls. One frame of latency
+        try await Task.sleep(for: .milliseconds(16))
         try checkCancellation()
         await runHeavyCompleteRefreshSession(
             event,
