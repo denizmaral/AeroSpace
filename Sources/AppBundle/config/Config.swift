@@ -52,6 +52,7 @@ struct Config: Withable {
     var keyMapping = KeyMapping()
     var execConfig: ExecConfig = ExecConfig()
     var focusFollowsMouse: FocusFollowsMouse = FocusFollowsMouse()
+    var focusBorder: FocusBorder? = nil // nil means that AeroSpace doesn't manage JankyBorders
 
     var onFocusChanged: Shell<any Command> = .empty
     // var onFocusedWorkspaceChanged: [any Command] = []

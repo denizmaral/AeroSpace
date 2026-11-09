@@ -69,6 +69,15 @@ on-mode-changed = ""
 
 focus-follows-mouse.enabled = false
 
+# Highlight the focused window with a colored border. Requires JankyBorders: brew install FelixKratz/formulae/borders
+# When the section is absent, AeroSpace doesn't start or stop JankyBorders
+# See: https://nikitabobko.github.io/AeroSpace/guide#focus-border
+# [focus-border]
+#     enabled = true
+#     active-color = '0xffe1e3e4'   # 0xAARRGGBB, glow(0xAARRGGBB), or gradient(top_left=0xAARRGGBB,bottom_right=0xAARRGGBB)
+#     inactive-color = '0xff494d64'
+#     width = 5
+
 # Possible values: (qwerty|dvorak|colemak)
 # See https://nikitabobko.github.io/AeroSpace/guide#key-mapping
 key-mapping.preset = 'qwerty'

@@ -439,6 +439,27 @@ new-window-placement = 'dwindle'
 `dwindle` and `balanced` rely on <<normalization,normalizations>> to collapse the splits back. It's recommended to keep them enabled.
 `dwindle` and `balanced` don't split containers with `accordion` layout.
 
+[#focus-border]
+=== Focus border
+
+AeroSpace can highlight the focused window with a colored border.
+The border is drawn by link:https://github.com/FelixKratz/JankyBorders[JankyBorders] that must be installed separately: `brew install FelixKratz/formulae/borders`
+
+[source,toml]
+----
+[focus-border]
+    enabled = true
+    active-color = 'gradient(top_left=0xee33ccff,bottom_right=0xee00ff99)'
+    inactive-color = '0xaa595959'
+    width = 5 # 1..50
+----
+
+* `enabled = true`. AeroSpace starts JankyBorders (or updates the running JankyBorders) on startup and on every config reload, and stops it when AeroSpace quits.
+* `enabled = false`. AeroSpace stops JankyBorders.
+* When the `focus-border` section is absent, AeroSpace doesn't touch JankyBorders.
+
+Supported color formats: `0xAARRGGBB`, `glow(0xAARRGGBB)`, `gradient(top_left=0xAARRGGBB,bottom_right=0xAARRGGBB)`, `gradient(top_right=0xAARRGGBB,bottom_left=0xAARRGGBB)`
+
 [#floating-windows]
 === Floating windows
 
