@@ -75,7 +75,7 @@ private struct LayoutContext {
     init(_ workspace: Workspace) {
         self.workspace = workspace
         self.resolvedGaps = ResolvedGaps(gaps: config.gaps, monitor: workspace.workspaceMonitorInfo)
-        self.hasMinimumSizes = workspace.rootTilingContainer.allLeafWindowsRecursive.contains { $0.learnedMinimumSize != .zero }
+        self.hasMinimumSizes = workspace.rootTilingContainer.allLeafWindowsRecursive.contains { $0.effectiveMinimumSize != .zero }
     }
 }
 
@@ -140,8 +140,10 @@ extension TilingContainer {
             : []
         guard let lengths = fitLengths(weights: weights, minimums: minimums, total: orientation == .h ? width : height) else {
             // The minimum sizes of the windows don't fit next to each other. Stack them (the tree isn't changed)
+            isRenderedAsAccordion = true
             return try await layoutAccordion(point, width: width, height: height, virtual: virtual, context)
         }
+        isRenderedAsAccordion = false
 
         for (i, child) in inhabitedChildren.enumerated() {
             child.setWeight(orientation, lengths[i])

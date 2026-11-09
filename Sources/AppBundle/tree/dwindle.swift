@@ -58,7 +58,7 @@ extension TreeNode {
             return workspace.workspaceMonitorInfo.visibleRectPaddedByOuterGaps
         }
         guard let parent = parent as? TilingContainer, let parentRect = parent.estimatedTilingRect(excluding: excluded) else { return nil }
-        switch parent.layout {
+        switch parent.renderedLayout {
             case .accordion:
                 return parentRect
             case .tiles:

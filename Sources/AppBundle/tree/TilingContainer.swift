@@ -5,6 +5,10 @@ final class TilingContainer: TreeNode, NonLeafTreeNodeObject { // todo consider 
     fileprivate var _orientation: Orientation
     private var _layout: Layout
     var lifeStatus: TilingContainerLifeStatus = .alive // todo tighten its visibility
+    /// The tiles container is rendered as accordion because the minimum sizes of its windows don't fit (see layoutTiles)
+    var isRenderedAsAccordion: Bool = false
+    /// How the container looks on the screen. Use it for geometry (hit testing), not for the tree semantics
+    var renderedLayout: Layout { isRenderedAsAccordion ? .accordion : layout }
 
     var orientation: Orientation { _orientation }
     var layout: Layout {

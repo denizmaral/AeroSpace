@@ -10,71 +10,85 @@ import Common
 // into the container at all (e.g. two windows of 1000pt and 960pt minimum width on a 1800pt wide screen), the container
 // is rendered as an accordion. The tree itself isn't changed, so it's rendered as tiles again once the windows fit.
 
-enum MinimumSizeObservation: Equatable {
-    /// The window has the size that the layout asked for
-    case fits
-    /// The window is bigger. It must be confirmed by the next observation
-    case pending
-    /// The window refused the size twice. `Window.learnedMinimumSize` is updated
-    case learned
-}
-
 extension Window {
     /// Distinguishes rounding (e.g. Terminal snaps its size to the character grid) from refusing the size
     private static let minimumSizeTolerance: CGFloat = 8
     private static let minimumSizeConfirmationDelay: Duration = .milliseconds(400)
 
-    /// Call it after kAXResizedNotification that isn't caused by the mouse
+    /// Call it after kAXResizedNotification that isn't caused by the mouse. See ``checkMinimumSize(confirmationDelay:)``
     @MainActor
     func scheduleMinimumSizeCheck() {
-        minimumSizeCheckTask?.cancel()
+        if minimumSizeCheckTask != nil { return } // Bursts of notifications must not shortcut the running check
         minimumSizeCheckTask = Task.startUnstructured { @MainActor [weak self] in
-            guard let self else { return }
-            var observation = await observeSize()
-            if observation == .pending {
-                // The first observation may be an animation, a late frame of an asynchronous app (e.g. Electron),
-                // or a resize initiated by the app itself. Meanwhile, the layout sends the frame again
-                try await Task.sleep(for: Self.minimumSizeConfirmationDelay)
-                observation = await observeSize()
-            }
-            if observation == .learned {
+            defer { self?.minimumSizeCheckTask = nil }
+            if try await self?.checkMinimumSize(confirmationDelay: Self.minimumSizeConfirmationDelay) == true {
                 scheduleCancellableCompleteRefreshSession(.minimumSizeLearned)
             }
         }
     }
 
-    /// Compares the actual size of the tiling window with the size that the layout asked for
+    /// A self-contained two-step check. The window must be bigger than the layout asked for, then the requested frame
+    /// is sent again, and after the delay the window must still be bigger by the same size. A single observation may
+    /// be an animation, a late frame of an asynchronous app (e.g. Electron) or a resize initiated by the app itself.
+    ///
+    /// - Returns: true if a new minimum size was learned
     @MainActor
-    func observeSize() async -> MinimumSizeObservation {
-        guard case .tilingContainer = windowParentCases,
-              !isFullscreen,
-              let requested = lastAppliedLayoutPhysicalRect,
-              let actual = try? await getAxSize(.cancellable)
-        else {
-            pendingMinimumSize = nil
-            return .fits
+    func checkMinimumSize(confirmationDelay: Duration) async throws -> Bool {
+        guard let requested = minimumSizeCheckableRect, let actual = try? await getAxSize(.cancellable) else { return false }
+        forgetMinimumSizeIfSmaller(actual)
+        guard let first = refusedSize(actual, requested) else { return false }
+
+        invalidateSentFrame()
+        setAxFrame(requested.topLeftCorner, CGSize(width: requested.width, height: requested.height))
+        try await Task.sleep(for: confirmationDelay)
+
+        guard minimumSizeCheckableRect == requested, // Otherwise, the layout has changed and the observation is inconclusive
+              let actual = try? await getAxSize(.cancellable),
+              let second = refusedSize(actual, requested),
+              abs(second.width - first.width) <= 2,
+              abs(second.height - first.height) <= 2
+        else { return false }
+        let minimumSize = effectiveMinimumSize
+        learnedMinimumSize = CGSize(width: max(minimumSize.width, second.width), height: max(minimumSize.height, second.height))
+        learnedMinimumSizeWorkspace = nodeWorkspace?.name
+        return true
+    }
+
+    /// The learned minimum size. It's forgotten when the window is moved to another workspace (the minimum size of a
+    /// window may change, e.g. when its sidebar is hidden). If the window still doesn't fit, its minimum is learned again
+    @MainActor
+    var effectiveMinimumSize: CGSize {
+        learnedMinimumSizeWorkspace == nil || learnedMinimumSizeWorkspace == nodeWorkspace?.name ? learnedMinimumSize : .zero
+    }
+
+    /// The rect that the layout asked for, if the window can be checked: a tiling window on a visible workspace.
+    /// Windows of invisible workspaces are hidden in the corner, only their position is sent
+    @MainActor
+    private var minimumSizeCheckableRect: Rect? {
+        guard case .tilingContainer = windowParentCases, !isFullscreen, nodeWorkspace?.isVisible == true else { return nil }
+        return lastAppliedLayoutPhysicalRect
+    }
+
+    /// The window is smaller than its learned minimum (e.g. resized by the app itself). The minimum is outdated
+    @MainActor
+    private func forgetMinimumSizeIfSmaller(_ actual: CGSize) {
+        let minimumSize = effectiveMinimumSize
+        if minimumSize.width > 0 && actual.width + Self.minimumSizeTolerance < minimumSize.width {
+            learnedMinimumSize.width = 0
         }
+        if minimumSize.height > 0 && actual.height + Self.minimumSizeTolerance < minimumSize.height {
+            learnedMinimumSize.height = 0
+        }
+    }
+
+    /// Per dimension: the actual size if the window is bigger than requested (beyond the tolerance), otherwise 0.
+    /// nil if the window fits
+    private func refusedSize(_ actual: CGSize, _ requested: Rect) -> CGSize? {
         let refused = CGSize(
             width: actual.width > requested.width + Self.minimumSizeTolerance ? actual.width : 0,
             height: actual.height > requested.height + Self.minimumSizeTolerance ? actual.height : 0,
         )
-        if refused == .zero {
-            pendingMinimumSize = nil
-            return .fits
-        }
-        guard let pending = pendingMinimumSize,
-              abs(pending.width - refused.width) <= 2,
-              abs(pending.height - refused.height) <= 2
-        else {
-            pendingMinimumSize = refused
-            return .pending
-        }
-        pendingMinimumSize = nil
-        learnedMinimumSize = CGSize(
-            width: max(learnedMinimumSize.width, refused.width),
-            height: max(learnedMinimumSize.height, refused.height),
-        )
-        return .learned
+        return refused == .zero ? nil : refused
     }
 }
 
@@ -84,7 +98,8 @@ extension TreeNode {
     func minimumLength(_ orientation: Orientation) -> CGFloat {
         switch tilingTreeNodeCasesOrDie() {
             case .window(let window):
-                return orientation == .h ? window.learnedMinimumSize.width : window.learnedMinimumSize.height
+                let minimumSize = window.effectiveMinimumSize
+                return orientation == .h ? minimumSize.width : minimumSize.height
             case .tilingContainer(let container):
                 var sum: CGFloat = 0
                 var max: CGFloat = 0

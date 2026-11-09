@@ -15,9 +15,10 @@ open class Window: TreeNode, Hashable {
     var lastLayoutFloatingRect: Rect? = nil
     /// See ``setAxFrame(_:_:)``
     private var sentFrame: SentFrame? = nil
-    /// The size that the window refused to shrink below. Zero if unknown. See minimumSize.swift
+    /// The size that the window refused to shrink below. Zero if unknown. Use `effectiveMinimumSize`. See minimumSize.swift
     var learnedMinimumSize: CGSize = .zero
-    var pendingMinimumSize: CGSize? = nil
+    /// The workspace where the minimum size was learned (nil: any)
+    var learnedMinimumSizeWorkspace: String? = nil
     var minimumSizeCheckTask: Task<(), any Error>? = nil
 
     @MainActor
