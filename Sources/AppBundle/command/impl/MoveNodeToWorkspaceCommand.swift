@@ -37,7 +37,7 @@ func moveWindowToWorkspace(_ window: Window, _ targetWorkspace: Workspace, _ io:
                 .succ(io.err("Window '\(window.windowId)' already belongs to workspace '\(targetWorkspace.name)'. Tip: use --fail-if-noop to exit with non-zero code"))
         }
     }
-    if index == nil && !window.isFloating && config.newWindowPlacement == .dwindle {
+    if index == nil && !window.isFloating && config.newWindowPlacement.splitsAnchorWindow {
         window.bindAsNewTilingWindow(to: targetWorkspace)
     } else {
         let targetContainer: NonLeafTreeNodeObject = window.isFloating

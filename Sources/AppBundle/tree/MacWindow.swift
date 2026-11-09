@@ -252,10 +252,7 @@ private func unbindAndGetBindingDataForNewWindow(_ windowId: OpaqueWindowId, _ m
 @MainActor
 private func unbindAndGetBindingDataForNewTilingWindow(_ workspace: Workspace, window: Window?) -> BindingData {
     window?.unbindFromParent() // It's important to unbind to get correct data from below
-    let mostRecentWindow = config.newWindowPlacement == .dwindle
-        ? workspace.rootTilingContainer.mostRecentWindowRecursive // Split the most recent tiling window, even if a floating window was focused after it
-        : workspace.mostRecentWindowRecursive
-    if let (tilingParent, index) = mostRecentWindow?.nearestAliveTilingParent() {
+    if let (tilingParent, index) = workspace.newTilingWindowAnchor?.nearestAliveTilingParent() {
         return BindingData(parent: tilingParent, adaptiveWeight: WEIGHT_AUTO, index: index + 1)
     } else {
         return BindingData(

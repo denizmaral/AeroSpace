@@ -41,7 +41,7 @@ struct Config: Withable {
     var _nonEmptyWorkspacesRootContainersLayoutOnStartup: Void = ()
     var defaultRootContainerLayout: Layout = .tiles
     var defaultRootContainerOrientation: DefaultContainerOrientation = .auto
-    var newWindowPlacement: NewWindowPlacement = .i3
+    var newWindowPlacement: NewWindowPlacement = .dwindle
     var startAtLogin: Bool = false
     var autoReloadConfig: Bool = false
     var automaticallyUnhideMacosHiddenApps: Bool = false
@@ -86,6 +86,8 @@ enum DefaultContainerOrientation: String {
 enum NewWindowPlacement: String {
     /// The new window is put next to the most recent window in the same container (i3-like)
     case i3
-    /// The new window splits the most recent window in half (Hyprland-like dwindle layout)
+    /// The new window splits the most recent tiling window in half (Hyprland-like dwindle layout)
     case dwindle
+    /// The new window splits the largest tiling window in half. E.g., 4 windows are arranged in a 2x2 grid
+    case balanced
 }

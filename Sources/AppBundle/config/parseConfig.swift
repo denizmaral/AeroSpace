@@ -423,7 +423,7 @@ private func parseDefaultContainerOrientation(_ raw: OrderedJson, _ backtrace: C
 private func parseNewWindowPlacement(_ raw: OrderedJson, _ backtrace: ConfigBacktrace) -> ResOrConfigParseDiagnostic<NewWindowPlacement> {
     parseString(raw, backtrace).flatMap {
         NewWindowPlacement(rawValue: $0)
-            .toResult(.init(backtrace, "Can't parse new window placement '\($0)'. Possible values: (i3|dwindle)"))
+            .toResult(.init(backtrace, "Can't parse new window placement '\($0)'. Possible values: (i3|dwindle|balanced)"))
     }
 }
 
