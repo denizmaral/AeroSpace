@@ -120,7 +120,19 @@ extension Window {
         else { return }
 
         // The anchor's rect before the window was put next to it
-        let anchorOrientation: Orientation? = anchor.estimatedTilingRect(excluding: self).map { $0.width >= $0.height ? .h : .v }
+        let anchorRect = anchor.estimatedTilingRect(excluding: self)
+        // Split in the other direction if the known minimum sizes (see minimumSize.swift) only fit that way
+        func fits(_ orientation: Orientation, _ rect: Rect) -> Bool {
+            let half = rect.getDimension(orientation) / 2
+            return anchor.minimumLength(orientation) <= half && minimumLength(orientation) <= half
+        }
+        let anchorOrientation: Orientation?
+        if let anchorRect {
+            let preferred: Orientation = anchorRect.width >= anchorRect.height ? .h : .v
+            anchorOrientation = !fits(preferred, anchorRect) && fits(preferred.opposite, anchorRect) ? preferred.opposite : preferred
+        } else {
+            anchorOrientation = nil
+        }
         let isOnlyAnchorAndSelf = parent.inhabitedChildren.count { $0 != self } == 1
         if isOnlyAnchorAndSelf {
             // The window and the anchor split the whole container equally. Only the orientation needs to be decided
