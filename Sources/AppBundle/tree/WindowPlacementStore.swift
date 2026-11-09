@@ -163,6 +163,8 @@ enum WindowPlacementStore {
                 isFloating: window.isFloating,
             ))
         }
+        // E.g. the lock screen: all windows are temporarily invisible. Keep the last persisted placement
+        if placements.isEmpty { return }
         // Keep the windows of the previous run that are not detected yet (e.g. on other macOS Spaces)
         if let previousRun {
             let liveIds = Set(placements.map(\.nativeWindowId))
