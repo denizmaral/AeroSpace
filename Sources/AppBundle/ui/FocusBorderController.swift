@@ -12,6 +12,7 @@ final class FocusBorderController {
 
     private var panel: FocusBorderPanel? = nil
     private var drawnAppearance: Appearance? = nil
+    private var orderedAboveNativeWindowId: UInt32? = nil
 
     private struct Appearance: Equatable {
         let size: CGSize
@@ -47,10 +48,16 @@ final class FocusBorderController {
         if panel.frame != frame {
             panel.setFrame(frame, display: false)
         }
-        panel.order(.above, relativeTo: Int(nativeWindowId))
+        // Window server round trip. The border is outside of the window, so it stays visible even if the app raises
+        // its window above the panel. Reorder only when the focused window changes
+        if !panel.isVisible || orderedAboveNativeWindowId != nativeWindowId {
+            panel.order(.above, relativeTo: Int(nativeWindowId))
+            orderedAboveNativeWindowId = nativeWindowId
+        }
     }
 
     func hide() {
+        orderedAboveNativeWindowId = nil
         guard let panel, panel.isVisible else { return }
         panel.orderOut(nil)
     }
