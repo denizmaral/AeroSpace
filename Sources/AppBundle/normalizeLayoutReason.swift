@@ -7,6 +7,23 @@
     try await validateStillPopups()
 }
 
+@MainActor private var popupRecheckTask: Task<(), any Error>? = nil
+
+/// Some apps create windows that look like popups for a moment (e.g. a new Terminal window doesn't have its buttons
+/// and the standard subrole yet). validateStillPopups runs in every complete refresh session, but nothing triggers the
+/// next session until the user interacts with something, so the window stays untiled. Recheck shortly after
+@MainActor func schedulePopupRecheck() {
+    if popupRecheckTask != nil { return } // Debounce bursts of popups
+    popupRecheckTask = Task.startUnstructured { @MainActor in
+        defer { popupRecheckTask = nil }
+        for delay: Duration in [.milliseconds(300), .milliseconds(1200)] {
+            try await Task.sleep(for: delay)
+            if macosPopupWindowsContainer.children.isEmpty { return }
+            scheduleCancellableCompleteRefreshSession(.popupRecheck)
+        }
+    }
+}
+
 @MainActor private func validateStillPopups() async throws {
     for node in macosPopupWindowsContainer.children {
         let popup = (node as! MacWindow)

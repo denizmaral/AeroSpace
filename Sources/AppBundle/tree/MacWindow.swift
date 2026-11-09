@@ -39,6 +39,7 @@ final class MacWindow: Window {
         }
         window.lifeStatus = lifeStatus // Invisible windows (e.g. on other macOS Spaces) must not split other windows
         allWindowsMap[windowId] = window
+        if case .macosPopupWindowsContainer = window.windowParentCases { schedulePopupRecheck() }
         let dwindleSplit = window.captureDwindleSplit()
 
         try await debugWindowsIfRecording(window, .cancellable)
