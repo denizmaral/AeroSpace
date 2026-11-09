@@ -9,8 +9,25 @@
         if windows.isEmpty { continue }
         try await _normalizeLayoutReason(workspace: workspace, windows: windows)
     }
+    nativeStateCheckedVisibleWorkspaces = Set(Workspace.all.lazy.filter(\.isVisible).map(\.name))
     try await _normalizeLayoutReason(workspace: globalFocus.workspace, windows: macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self))
     try await validateStillPopups()
+}
+
+/// The visible workspaces whose windows' native state is checked. See normalizeLayoutReason
+@MainActor private var nativeStateCheckedVisibleWorkspaces: Set<String> = []
+
+/// Workspaces that became visible (e.g. the `workspace` command) are laid out before the next complete refresh session.
+/// Check the native state of their windows first. Otherwise, e.g. a minimized window gets a tile and leaves a hole
+@MainActor func normalizeLayoutReasonOfNewlyVisibleWorkspaces() async throws {
+    var visible: Set<String> = []
+    for workspace in Workspace.all where workspace.isVisible {
+        visible.insert(workspace.name)
+        if !nativeStateCheckedVisibleWorkspaces.contains(workspace.name) {
+            try await _normalizeLayoutReason(workspace: workspace, windows: workspace.allLeafWindowsRecursive)
+        }
+    }
+    nativeStateCheckedVisibleWorkspaces = visible
 }
 
 @MainActor private var popupRecheckTask: Task<(), any Error>? = nil
