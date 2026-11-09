@@ -40,14 +40,14 @@ struct Main {
             print(
                 """
                 aerospace CLI client version: \(cliClientVersionAndHash)
-                AeroSpace.app server version: \(serverVersionAndHash ?? "Unknown. The server is not responding")
+                MarSpace.app server version: \(serverVersionAndHash ?? "Unknown. The server is not responding")
                 """,
             )
             if serverVersionAndHash != nil && cliClientVersionAndHash != serverVersionAndHash {
                 eprint(
                     """
                     Warning: AeroSpace client/server versions don't match. Possible fixes:
-                      - Restart AeroSpace.app (server restart is required after each update)
+                      - Restart MarSpace.app (server restart is required after each update)
                       - Reinstall and restart AeroSpace (corrupted installation)
                     """,
                 )
@@ -75,7 +75,7 @@ struct Main {
             case .customError(let msg):
                 exit(failExitCode, err: msg)
             case .nwError(let e):
-                exit(failExitCode, err: "Can't connect to AeroSpace server. Is AeroSpace.app running?\n\(e.localizedDescription)")
+                exit(failExitCode, err: "Can't connect to MarSpace server. Is MarSpace.app running?\n\(e.localizedDescription)")
         }
 
         var stdin = ""
@@ -124,9 +124,9 @@ struct Main {
                 """
                 Warning: AeroSpace client/server versions don't match
                   - aerospace CLI client version: \(cliClientVersionAndHash)
-                  - AeroSpace.app server version: \(ans.serverVersionAndHash)
+                  - MarSpace.app server version: \(ans.serverVersionAndHash)
                   Possible fixes:
-                  - Restart AeroSpace.app (server restart is required after each update)
+                  - Restart MarSpace.app (server restart is required after each update)
                   - Reinstall and restart AeroSpace (corrupted installation)
                 """,
             )

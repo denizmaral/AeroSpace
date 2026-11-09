@@ -1,3 +1,12 @@
+# MarSpace
+
+MarSpace is a fork of [AeroSpace](https://github.com/nikitabobko/AeroSpace) by Nikita Bobko (MIT License, see `LICENSE.txt`).
+Additions: Hyprland-like `dwindle`/`balanced` window placement, a built-in focus border, minimum window size handling,
+window placement that survives restarts, a modern menu bar panel, and a lot of performance work (diff-based layout).
+For compatibility, the bundle id (`bobko.aerospace`), the CLI (`aerospace`) and the config (`~/.aerospace.toml`) are unchanged.
+
+The rest of this document is the original AeroSpace README.
+
 # AeroSpace Beta [![Build](https://github.com/nikitabobko/AeroSpace/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/nikitabobko/AeroSpace/actions/workflows/build.yml)
 
 <img src="./resources/Assets.xcassets/AppIcon.appiconset/icon.png" width="40%" align="right">

@@ -48,7 +48,7 @@ cd ./xcode
         AEROSPACE_BUILD_INFO_LDFLAGS="-sectcreate __TEXT __aero_build $build_info_file"
 cd -
 
-cp -r "xcode/.xcode-build/Build/Products/$xcode_configuration/AeroSpace.app" .release
+cp -r "xcode/.xcode-build/Build/Products/$xcode_configuration/MarSpace.app" .release
 cp -r "$cli_bin_path/aerospace" .release
 
 # Binary reproducibility: strip non-portable rpaths
@@ -79,7 +79,7 @@ cp -r ./legal ".release/AeroSpace-v$build_version/legal"
 cp -r .shell-completion ".release/AeroSpace-v$build_version/shell-completion"
 cd .release
     mkdir -p "AeroSpace-v$build_version/bin" && cp -r aerospace "AeroSpace-v$build_version/bin"
-    cp -r AeroSpace.app "AeroSpace-v$build_version"
+    cp -r MarSpace.app "AeroSpace-v$build_version"
     zip -r "AeroSpace-v$build_version.zip" "AeroSpace-v$build_version"
 cd -
 

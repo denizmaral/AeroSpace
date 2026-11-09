@@ -40,10 +40,10 @@ targets:
     settings:
       configs:
         Debug:
-          PRODUCT_NAME: AeroSpace-Debug
+          PRODUCT_NAME: MarSpace-Debug
           PRODUCT_BUNDLE_IDENTIFIER: bobko.aerospace.debug
         Release:
-          PRODUCT_NAME: AeroSpace
+          PRODUCT_NAME: MarSpace
           PRODUCT_BUNDLE_IDENTIFIER: bobko.aerospace
           SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
           GCC_TREAT_WARNINGS_AS_ERRORS: YES

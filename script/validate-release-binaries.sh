@@ -3,20 +3,20 @@ cd "$(dirname "$0")/.."
 source ./script/setup.sh
 
 expected_layout=$(cat <<EOF
-.release/AeroSpace.app
-.release/AeroSpace.app/Contents
-.release/AeroSpace.app/Contents/_CodeSignature
-.release/AeroSpace.app/Contents/_CodeSignature/CodeResources
-.release/AeroSpace.app/Contents/MacOS
-.release/AeroSpace.app/Contents/MacOS/AeroSpace
-.release/AeroSpace.app/Contents/Resources
-.release/AeroSpace.app/Contents/Resources/default-config.toml
-.release/AeroSpace.app/Contents/Resources/AppIcon.icns
-.release/AeroSpace.app/Contents/Resources/Assets.car
-.release/AeroSpace.app/Contents/Frameworks
-.release/AeroSpace.app/Contents/Frameworks/libswiftCompatibilitySpan.dylib
-.release/AeroSpace.app/Contents/Info.plist
-.release/AeroSpace.app/Contents/PkgInfo
+.release/MarSpace.app
+.release/MarSpace.app/Contents
+.release/MarSpace.app/Contents/_CodeSignature
+.release/MarSpace.app/Contents/_CodeSignature/CodeResources
+.release/MarSpace.app/Contents/MacOS
+.release/MarSpace.app/Contents/MacOS/MarSpace
+.release/MarSpace.app/Contents/Resources
+.release/MarSpace.app/Contents/Resources/default-config.toml
+.release/MarSpace.app/Contents/Resources/AppIcon.icns
+.release/MarSpace.app/Contents/Resources/Assets.car
+.release/MarSpace.app/Contents/Frameworks
+.release/MarSpace.app/Contents/Frameworks/libswiftCompatibilitySpan.dylib
+.release/MarSpace.app/Contents/Info.plist
+.release/MarSpace.app/Contents/PkgInfo
 EOF
 )
 
@@ -29,7 +29,7 @@ check-equals() {
     fi
 }
 
-check-equals ".release/AeroSpace.app layout" "$expected_layout" "$(find .release/AeroSpace.app)"
+check-equals ".release/MarSpace.app layout" "$expected_layout" "$(find .release/MarSpace.app)"
 
 check-universal-binary() {
     if ! file "$1" | grep --fixed-string -q "Mach-O universal binary with 2 architectures: [x86_64:Mach-O 64-bit executable x86_64] [arm64"; then
@@ -77,7 +77,7 @@ expected_app_rpaths=$(cat <<EOF
 @executable_path/../Frameworks
 EOF
 )
-check-rpaths .release/AeroSpace.app/Contents/MacOS/AeroSpace "$expected_app_rpaths"
+check-rpaths .release/MarSpace.app/Contents/MacOS/MarSpace "$expected_app_rpaths"
 
 expected_cli_rpaths=$(cat <<EOF
 /usr/lib/swift
@@ -103,7 +103,7 @@ expected_app_dylibs=$(cat <<EOF
 	@rpath/libswiftCompatibilitySpan.dylib
 EOF
 )
-check-dylibs .release/AeroSpace.app/Contents/MacOS/AeroSpace "$expected_app_dylibs"
+check-dylibs .release/MarSpace.app/Contents/MacOS/MarSpace "$expected_app_dylibs"
 
 expected_cli_dylibs=$(cat <<EOF
 	/System/Library/Frameworks/Foundation.framework/Versions/C/Foundation
@@ -115,11 +115,11 @@ EOF
 )
 check-dylibs .release/aerospace "$expected_cli_dylibs"
 
-check-universal-binary .release/AeroSpace.app/Contents/MacOS/AeroSpace
+check-universal-binary .release/MarSpace.app/Contents/MacOS/MarSpace
 check-universal-binary .release/aerospace
 
-codesign -v .release/AeroSpace.app
+codesign -v .release/MarSpace.app
 codesign -v .release/aerospace
 
-check-contains-hash .release/AeroSpace.app/Contents/MacOS/AeroSpace
+check-contains-hash .release/MarSpace.app/Contents/MacOS/MarSpace
 check-contains-hash .release/aerospace
