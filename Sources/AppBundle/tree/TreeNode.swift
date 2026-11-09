@@ -19,6 +19,8 @@ open class TreeNode: Equatable, AeroAny {
     // - focus-follows-mouse
     var lastAppliedLayoutPhysicalRect: Rect? = nil // with real inner gaps
     final var unboundStacktrace: String? = nil
+    /// Incremented every time the node is bound. Allows to detect that the node was moved after some point in time
+    private(set) final var bindingGeneration: UInt64 = 0
     var isBound: Bool { parent != nil } // todo drop, once https://github.com/nikitabobko/AeroSpace/issues/1215 is fixed
 
     @MainActor
@@ -92,6 +94,7 @@ open class TreeNode: Equatable, AeroAny {
         }
         newParent._children.insert(self, at: index != INDEX_BIND_LAST ? index : newParent._children.count)
         _parent = newParent
+        bindingGeneration &+= 1
         unboundStacktrace = nil
         // todo consider disabling automatic mru propogation
         // 1. "floating windows" in FocusCommand break the MRU because of that :(

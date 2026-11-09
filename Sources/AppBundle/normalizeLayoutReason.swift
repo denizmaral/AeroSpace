@@ -12,8 +12,10 @@
         let popup = (node as! MacWindow)
         let windowLevel = try await popup.getWindowLevel(.cancellable)
         if try await popup.isWindowHeuristic(windowLevel, .cancellable) {
-            try await popup.relayoutWindow(on: globalFocus.workspace, .cancellable)
+            let dwindleSplit = try await popup.relayoutWindowDeferringDwindleSplit(on: globalFocus.workspace, .cancellable)
             await runOnWindowDetected(ifConventional: popup)
+            // After the callbacks, because they may move the window to another workspace
+            popup.applyDwindleSplit(dwindleSplit)
         }
     }
 }

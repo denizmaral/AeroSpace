@@ -78,26 +78,38 @@ extension TreeNode {
     }
 }
 
+/// The split of the anchor node that makes room for a newly bound tiling window.
+///
+/// It's captured right after the window is bound next to the anchor, and applied later (e.g. after on-window-detected
+/// callbacks that may move the window to another workspace). If the window is bound again in the meantime (moved,
+/// floated, re-tiled), the captured split is stale and it's not applied.
+struct DwindleSplit {
+    fileprivate let anchor: TreeNode
+    fileprivate let windowBindingGeneration: UInt64
+}
+
 extension Window {
-    /// The node that the window is going to split, or nil if the split doesn't apply.
-    /// Capture it right after the window is bound, then pass it to ``dwindleSplit(_:)``
+    /// Captures the split for the window that was just bound right after its anchor. nil if the split doesn't apply
     @MainActor
-    var dwindleAnchor: TreeNode? {
+    func captureDwindleSplit() -> DwindleSplit? {
         guard config.newWindowPlacement.splitsAnchorWindow,
               let parent = parent as? TilingContainer,
               let index = ownIndex(in: .all),
               index > 0
         else { return nil }
-        return parent.children[index - 1]
+        return DwindleSplit(anchor: parent.children[index - 1], windowBindingGeneration: bindingGeneration)
     }
 
-    /// Splits `anchor` to make room for the window.
-    /// It's a noop if the tree has changed since `anchor` was captured (e.g., on-window-detected callback moved the window)
+    /// Splits the anchor to make room for the window. It's a noop if the window was bound again since the split was
+    /// captured, if the window is invisible (e.g. it's on another macOS Space), or if the anchor was moved
     @MainActor
-    func dwindleSplit(_ anchor: TreeNode?) {
-        guard let anchor,
+    func applyDwindleSplit(_ split: DwindleSplit?) {
+        guard let split,
+              bindingGeneration == split.windowBindingGeneration,
+              lifeStatus.isInhabited,
               config.newWindowPlacement.splitsAnchorWindow,
               let parent = parent as? TilingContainer,
+              case let anchor = split.anchor,
               anchor.parent === parent,
               parent.lifeStatus == .alive,
               parent.layout == .tiles,
@@ -119,10 +131,13 @@ extension Window {
         }
         let targetOrientation = anchorOrientation ?? parent.orientation.opposite
         if targetOrientation == parent.orientation {
-            // Nested containers with the same orientation are not allowed by normalization. Split the weight instead
+            // Nested containers with the same orientation are not allowed by normalization. Split the weight instead,
+            // and give it back to the anchor when the window is closed (the nested container case is collapsed by
+            // the normalization instead)
             let halfWeight = anchor.getWeight(parent.orientation) / 2
             anchor.setWeight(parent.orientation, halfWeight)
             setWeight(parent.orientation, halfWeight)
+            dwindleSplitAnchor = anchor
         } else {
             let anchorBinding = anchor.unbindFromParent()
             unbindFromParent()
@@ -136,5 +151,18 @@ extension Window {
             anchor.bind(to: container, adaptiveWeight: WEIGHT_AUTO, index: 0)
             bind(to: container, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         }
+    }
+
+    /// See `dwindleSplitAnchor`
+    @MainActor
+    func returnWeightToDwindleSplitAnchor() {
+        defer { dwindleSplitAnchor = nil }
+        guard let anchor = dwindleSplitAnchor,
+              let parent = parent as? TilingContainer,
+              anchor.parent === parent,
+              parent.layout == .tiles
+        else { return }
+        let orientation = parent.orientation
+        anchor.setWeight(orientation, anchor.getWeight(orientation) + getWeight(orientation))
     }
 }

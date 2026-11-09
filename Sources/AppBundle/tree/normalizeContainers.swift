@@ -43,6 +43,10 @@ extension TilingContainer {
                 child.markAsMostRecentChild()
             }
         } else {
+            // Children that are flattened below are rebound to this container. Its lifeStatus from the previous
+            // normalization may be stale (e.g. mustBeFlattened), and binding to not alive containers is illegal.
+            // The actual lifeStatus is computed below
+            lifeStatus = .alive
             var inhabitedChildrenCount = 0
             for child in children {
                 (child as? TilingContainer)?.unbindEmptyAndFlattenContainersRecursive()

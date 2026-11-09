@@ -9,6 +9,8 @@ open class Window: TreeNode, Hashable {
     var noOuterGapsInFullscreen: Bool = false
     var layoutReason: LayoutReason = .standard
     var lifeStatus: WindowLifeStatus = .alive
+    /// The sibling that gave half of its weight to this window (see `applyDwindleSplit`). It takes the weight back on close
+    weak var dwindleSplitAnchor: TreeNode? = nil
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -30,6 +32,14 @@ open class Window: TreeNode, Hashable {
 
     @MainActor
     func closeAxWindow() { die("Not implemented") }
+
+    /// Unbinds the window that was closed
+    @MainActor
+    @discardableResult
+    final func unbindAsClosed() -> BindingData {
+        returnWeightToDwindleSplitAnchor()
+        return unbindFromParent()
+    }
 
     public func hash(into hasher: inout Hasher) {
         hasher.combine(windowId)

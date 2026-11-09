@@ -143,20 +143,114 @@ struct DwindleTest {
         assertEquals(rootB.layoutDescription, .h_tiles([.window(1), .window(2), .window(3)]))
     }
 
-    @Test func testSplitIsSkippedIfWindowWasMovedAfterAnchorWasCaptured() {
+    @Test func testSplitIsSkippedIfWindowWasMovedAfterSplitWasCaptured() {
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer.apply {
             TestWindow.new(id: 1, parent: $0)
             TestWindow.new(id: 2, parent: $0)
         }
         let window3 = TestWindow.new(id: 3, parent: root)
-        let anchor = window3.dwindleAnchor
-        assertEquals((anchor as? Window)?.windowId, 2)
+        let split = window3.captureDwindleSplit()
+        #expect(split != nil)
 
         // E.g., on-window-detected callback moved the window to another workspace
         window3.bind(to: Workspace.get(byName: "other").rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        window3.dwindleSplit(anchor)
+        window3.applyDwindleSplit(split)
         assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2)]))
+    }
+
+    @Test func testStaleSplitIsSkippedIfWindowWasRetiledNextToTheSameAnchor() async {
+        let root = Workspace.get(byName: name).rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0, adaptiveWeight: 420)
+            TestWindow.new(id: 2, parent: $0, adaptiveWeight: 1500) // 1500x1080 (wide)
+        }
+        let window3 = TestWindow.new(id: 3, parent: root)
+        let split = window3.captureDwindleSplit()
+
+        // E.g., on-window-detected callback: run = ['layout floating', 'layout tiling']. It splits window 2 on its own
+        assertEquals(window3.focusWindow(), true)
+        await parseCommand("layout floating").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        await parseCommand("layout tiling").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(root.children.map { $0.getWeight(.h) }, [420, 750, 750])
+
+        window3.applyDwindleSplit(split) // Must not split window 2 for the second time
+        assertEquals(root.children.map { $0.getWeight(.h) }, [420, 750, 750])
+    }
+
+    @Test func testInvisibleWindowDoesNotSplit() {
+        let root = Workspace.get(byName: name).rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0, adaptiveWeight: 420)
+            TestWindow.new(id: 2, parent: $0, adaptiveWeight: 1500)
+        }
+        // E.g., a window on another macOS Space
+        let window3 = TestWindow.new(id: 3, parent: root)
+        window3.lifeStatus = .invisible
+
+        window3.applyDwindleSplit(window3.captureDwindleSplit())
+        assertEquals(root.children.map { $0.getWeight(.h) }, [420, 1500, 1])
+    }
+
+    @Test func testPopupPromotedToWindow_splitIsAppliedAfterCallbacks() async throws {
+        config.onWindowDetected = parseConfig(
+            """
+            [[on-window-detected]]
+            if.app-id = 'bobko.AeroSpace.test-app'
+            run = 'move-node-to-workspace B'
+            """,
+        ).config.onWindowDetected
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0, adaptiveWeight: 420)
+            TestWindow.new(id: 2, parent: $0, adaptiveWeight: 1500)
+        }
+        let popup = TestWindow.new(id: 3, parent: workspace.floatingWindowsContainer)
+
+        // The same steps as in validateStillPopups
+        let split = try await popup.relayoutWindowDeferringDwindleSplit(on: workspace, .nonCancellable, forceTile: true)
+        await runOnWindowDetected(ifConventional: popup)
+        popup.applyDwindleSplit(split)
+
+        assertEquals(popup.nodeWorkspace?.name, "B")
+        workspace.normalizeContainers()
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2)]))
+        assertEquals(root.children.map { $0.getWeight(.h) }, [420, 1500])
+    }
+
+    @Test func testClosingTheNewWindowGivesTheWeightBack_sameOrientation() async {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0, adaptiveWeight: 420)
+            TestWindow.new(id: 2, parent: $0, adaptiveWeight: 1500) // 1500x1080 (wide)
+        }
+        let window3 = await tileNewWindow(3, workspace)
+        assertEquals(root.children.map { $0.getWeight(.h) }, [420, 750, 750])
+
+        window3.closeAxWindow()
+        workspace.normalizeContainers()
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2)]))
+        assertEquals(root.children.map { $0.getWeight(.h) }, [420, 1500])
+    }
+
+    /// Regression: binding to a container whose lifeStatus is stale (mustBeFlattened) from the previous normalization
+    @Test func testNormalizationFlattensIntoMustBeFlattenedContainer() {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer
+        TestWindow.new(id: 1, parent: root)
+        let vContainer = TilingContainer.newVTiles(parent: root, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        TestWindow.new(id: 5, parent: vContainer).lifeStatus = .invisible // E.g. a background native tab
+        let hContainer = TilingContainer.newHTiles(parent: vContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        let window2 = TestWindow.new(id: 2, parent: vContainer)
+        TestWindow.new(id: 3, parent: hContainer)
+        let window4 = TestWindow.new(id: 4, parent: hContainer)
+        workspace.normalizeContainers()
+
+        window2.closeAxWindow()
+        workspace.normalizeContainers() // vContainer: [5 (invisible), hContainer] -> mustBeFlattened
+        assertEquals(vContainer.lifeStatus, .mustBeFlattened)
+
+        window4.closeAxWindow()
+        workspace.normalizeContainers() // hContainer: [3] -> window 3 is flattened into vContainer
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .h_tiles([.window(5), .window(3)])]))
     }
 
     @Test func testBalanced_fourWindowsMakeGrid() async {

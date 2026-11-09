@@ -22,7 +22,7 @@ final class MacWindow: Window {
 
     @MainActor
     @discardableResult
-    static func getOrRegister(windowId: OpaqueWindowId, macApp: MacApp) async throws -> MacWindow {
+    static func getOrRegister(windowId: OpaqueWindowId, macApp: MacApp, lifeStatus: WindowLifeStatus = .alive) async throws -> MacWindow {
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId, .cancellable)
         let data = try await unbindAndGetBindingDataForNewWindow(
@@ -38,14 +38,15 @@ final class MacWindow: Window {
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+        window.lifeStatus = lifeStatus // Invisible windows (e.g. on other macOS Spaces) must not split other windows
         allWindowsMap[windowId] = window
-        let dwindleAnchor = window.dwindleAnchor
+        let dwindleSplit = window.captureDwindleSplit()
 
         try await debugWindowsIfRecording(window, .cancellable)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
             await runOnWindowDetected(ifConventional: window)
             // After the callbacks, because they may move the window to another workspace
-            window.dwindleSplit(dwindleAnchor)
+            window.applyDwindleSplit(dwindleSplit)
         }
         return window
     }
@@ -94,7 +95,7 @@ final class MacWindow: Window {
             return
         }
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded() }
-        let parent = unbindFromParent().parent
+        let parent = unbindAsClosed().parent
         let deadWindowWorkspace = parent.nodeWorkspace
         let focus = globalFocus
         if let deadWindowWorkspace, deadWindowWorkspace == focus.workspace ||
@@ -221,11 +222,17 @@ final class MacWindow: Window {
 extension Window {
     @MainActor
     func relayoutWindow(on workspace: Workspace, _ cm: CancellationMode, forceTile: Bool = false) async throws {
+        applyDwindleSplit(try await relayoutWindowDeferringDwindleSplit(on: workspace, cm, forceTile: forceTile))
+    }
+
+    /// The caller is responsible for applying the returned split (see ``DwindleSplit``)
+    @MainActor
+    func relayoutWindowDeferringDwindleSplit(on workspace: Workspace, _ cm: CancellationMode, forceTile: Bool = false) async throws -> DwindleSplit? {
         let data = forceTile
             ? unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
             : try await unbindAndGetBindingDataForNewWindow(self.asMacWindow().windowId, self.asMacWindow().macApp, workspace, window: self, cm)
         bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
-        dwindleSplit(dwindleAnchor)
+        return captureDwindleSplit()
     }
 
     /// Binds the window to the workspace the same way as newly detected tiling windows are bound
@@ -233,7 +240,7 @@ extension Window {
     func bindAsNewTilingWindow(to workspace: Workspace) {
         let data = unbindAndGetBindingDataForNewTilingWindow(workspace, window: self)
         bind(to: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
-        dwindleSplit(dwindleAnchor)
+        applyDwindleSplit(captureDwindleSplit())
     }
 }
 

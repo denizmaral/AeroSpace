@@ -132,7 +132,7 @@ private func refresh() async throws {
     }
     for (app, windows) in mapping {
         for (windowId, lifeStatus) in windows {
-            try await MacWindow.getOrRegister(windowId: windowId, macApp: app).lifeStatus = lifeStatus
+            try await MacWindow.getOrRegister(windowId: windowId, macApp: app, lifeStatus: lifeStatus).lifeStatus = lifeStatus
         }
     }
 
