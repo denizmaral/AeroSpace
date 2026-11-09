@@ -1,6 +1,12 @@
 @MainActor func normalizeLayoutReason() async throws {
     for workspace in Workspace.all {
-        let windows: [Window] = workspace.allLeafWindowsRecursive
+        // Windows of invisible workspaces are hidden in the corner of the screen, the user can't fullscreen or minimize
+        // them. Their native state is checked once the workspace becomes visible (it saves 2 AX calls per window per
+        // refresh session). Windows that are already in a native macOS state are always checked: the user can leave it
+        let windows: [Window] = workspace.isVisible
+            ? workspace.allLeafWindowsRecursive
+            : workspace.allLeafWindowsRecursive.filter { $0.layoutReason != .standard }
+        if windows.isEmpty { continue }
         try await _normalizeLayoutReason(workspace: workspace, windows: windows)
     }
     try await _normalizeLayoutReason(workspace: globalFocus.workspace, windows: macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self))
