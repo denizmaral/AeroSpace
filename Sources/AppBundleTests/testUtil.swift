@@ -61,6 +61,12 @@ func setUpWorkspacesForTests() {
             child.unbindFromParent()
         }
     }
+    // Global containers aren't part of any workspace. Tests must not see windows of previous tests
+    for container: NonLeafTreeNodeObject in [macosMinimizedWindowsContainer, macosPopupWindowsContainer] {
+        for child in container.children {
+            child.unbindFromParent()
+        }
+    }
     check(Workspace.get(byName: "setUpWorkspacesForTests").focusWorkspace())
     Workspace.garbageCollectUnusedWorkspaces()
     check(globalFocus.workspace.isEffectivelyEmpty)
