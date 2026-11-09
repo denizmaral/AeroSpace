@@ -12,7 +12,6 @@ public final class TrayMenuModel: ObservableObject {
     @Published var isEnabled: Bool = true
     @Published var workspaces: [WorkspaceViewModel] = []
     @Published var experimentalUISettings: ExperimentalUISettings = ExperimentalUISettings()
-    @Published var sponsorshipMessage: String = sponsorshipPrompts.randomElement().orDie()
     @Published var lastReloadConfigContainedWarnings: Bool = false
     @Published var axPermissionStatus: AxPermissionStatus = .waitingWithPrompt
 }
@@ -45,9 +44,15 @@ enum AxPermissionStatus: Equatable {
             default: ""
         }
         let hasFullscreenWindows = $0.allLeafWindowsRecursive.contains { $0.isFullscreen }
+        var appBundleUrls: [URL] = []
+        for window in $0.allLeafWindowsRecursive {
+            guard appBundleUrls.count < 4, let url = (window.app as? MacApp)?.nsApp.bundleURL, !appBundleUrls.contains(url) else { continue }
+            appBundleUrls.append(url)
+        }
         return WorkspaceViewModel(
             name: $0.name,
             suffix: suffix,
+            appBundleUrls: appBundleUrls,
             isFocused: focus.workspace == $0,
             isEffectivelyEmpty: $0.isEffectivelyEmpty,
             isVisible: $0.isVisible,
@@ -85,6 +90,8 @@ extension TrayMenuModel {
 struct WorkspaceViewModel: Hashable {
     let name: String
     let suffix: String
+    /// Up to 4 apps of the workspace (for the icons in the menu)
+    let appBundleUrls: [URL]
     let isFocused: Bool
     let isEffectivelyEmpty: Bool
     let isVisible: Bool
