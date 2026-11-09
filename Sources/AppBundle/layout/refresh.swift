@@ -49,6 +49,7 @@ func runHeavyCompleteRefreshSession(
             try await normalizeLayoutReason()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
             await FocusBorderController.shared.update()
+            WindowPlacementStore.persistIfChanged()
         }
     }
     switch res {
@@ -95,6 +96,7 @@ func runLightSession<T>(
             focusAfter?.nativeFocus() // syncFocusToMacOs
         }
         await FocusBorderController.shared.update()
+        WindowPlacementStore.persistIfChanged()
         if !event.isFocusFollowsMouse { scheduleCancellableCompleteRefreshSession(event) }
         return result
     }

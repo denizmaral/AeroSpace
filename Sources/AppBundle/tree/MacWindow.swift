@@ -25,19 +25,18 @@ final class MacWindow: Window {
     static func getOrRegister(windowId: OpaqueWindowId, macApp: MacApp, lifeStatus: WindowLifeStatus = .alive) async throws -> MacWindow {
         if let existing = allWindowsMap[windowId] { return existing }
         let rect = try await macApp.getAxRect(windowId, .cancellable)
-        let data = try await unbindAndGetBindingDataForNewWindow(
-            windowId,
-            macApp,
-            isStartup
-                ? (rect?.center.monitorApproximation ?? mainMonitorInfo).visibleWorkspace
-                : globalFocus.workspace,
-            window: nil,
-            .cancellable,
-        )
+        // The window is known from the previous run (AeroSpace was restarted, or the window was invisible until now)
+        let previousPlacement = WindowPlacementStore.previousPlacement(of: windowId, macApp)
+        let workspace = previousPlacement.map { Workspace.get(byName: $0.workspace) }
+            ?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitorInfo).visibleWorkspace : globalFocus.workspace)
+        let data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil, .cancellable)
 
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
+        if previousPlacement?.isFloating == true, window.parent is TilingContainer {
+            window.bindAsFloatingWindow(to: workspace)
+        }
         window.lifeStatus = lifeStatus // Invisible windows (e.g. on other macOS Spaces) must not split other windows
         allWindowsMap[windowId] = window
         let dwindleSplit = window.captureDwindleSplit()
