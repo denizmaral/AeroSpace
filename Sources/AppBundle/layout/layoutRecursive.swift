@@ -68,11 +68,14 @@ extension TreeNode {
 private struct LayoutContext {
     let workspace: Workspace
     let resolvedGaps: ResolvedGaps
+    /// Fast path: most of the time no window has a learned minimum size. See minimumSize.swift
+    let hasMinimumSizes: Bool
 
     @MainActor
     init(_ workspace: Workspace) {
         self.workspace = workspace
         self.resolvedGaps = ResolvedGaps(gaps: config.gaps, monitor: workspace.workspaceMonitorInfo)
+        self.hasMinimumSizes = workspace.rootTilingContainer.allLeafWindowsRecursive.contains { $0.learnedMinimumSize != .zero }
     }
 }
 
@@ -119,20 +122,30 @@ extension TilingContainer {
         var virtualPoint = virtual.topLeftCorner
 
         let inhabitedChildren = inhabitedChildren
+        guard let lastIndex = inhabitedChildren.indices.last else { return }
+        let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
+        // Gaps. Consider 4 cases:
+        // 1. Multiple children. Layout first child
+        // 2. Multiple children. Layout last child
+        // 3. Multiple children. Layout child in the middle
+        // 4. Single child
+        func gap(_ i: Int) -> CGFloat { rawGap - (i == 0 ? rawGap / 2 : 0) - (i == lastIndex ? rawGap / 2 : 0) }
 
-        guard let delta = ((orientation == .h ? width : height) - CGFloat(inhabitedChildren.sumOfDouble { $0.getWeight(orientation) }))
-            .div(inhabitedChildren.count) else { return }
+        let weights = inhabitedChildren.map { $0.getWeight(orientation) }
+        let minimums: [CGFloat] = context.hasMinimumSizes
+            ? inhabitedChildren.indices.map { i in
+                let minimum = inhabitedChildren[i].minimumLength(orientation)
+                return minimum > 0 ? minimum + gap(i) : 0
+            }
+            : []
+        guard let lengths = fitLengths(weights: weights, minimums: minimums, total: orientation == .h ? width : height) else {
+            // The minimum sizes of the windows don't fit next to each other. Stack them (the tree isn't changed)
+            return try await layoutAccordion(point, width: width, height: height, virtual: virtual, context)
+        }
 
-        let lastIndex = inhabitedChildren.indices.last
         for (i, child) in inhabitedChildren.enumerated() {
-            child.setWeight(orientation, child.getWeight(orientation) + delta)
-            let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
-            // Gaps. Consider 4 cases:
-            // 1. Multiple children. Layout first child
-            // 2. Multiple children. Layout last child
-            // 3. Multiple children. Layout child in the middle
-            // 4. Single child   let rawGap = gaps.inner.get(orientation).toDouble()
-            let gap = rawGap - (i == 0 ? rawGap / 2 : 0) - (i == lastIndex ? rawGap / 2 : 0)
+            child.setWeight(orientation, lengths[i])
+            let gap = gap(i)
             try await child.layoutRecursive(
                 i == 0 ? point : point.addingOffset(orientation, rawGap / 2),
                 width: orientation == .h ? child.hWeight - gap : width,

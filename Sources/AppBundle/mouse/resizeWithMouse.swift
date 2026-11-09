@@ -10,16 +10,13 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
     let pid = ax.pid
     Task.startUnstructured { @MainActor in
         guard let token: RunSessionGuard = .isServerEnabled else { return }
-        if let nativeWindowId, let pid {
-            // The window may be moved or resized by somebody else (the user, the app). See Window.setAxFrame
-            Window.get(byNativeId: nativeWindowId, pid: pid)?.invalidateSentFrame()
-        }
-        guard let nativeWindowId,
-              let pid,
-              let window = Window.get(byNativeId: nativeWindowId, pid: pid),
-              try await isManipulatedWithMouse(window)
-        else {
+        let window = nativeWindowId.flatMap { nativeWindowId in pid.flatMap { Window.get(byNativeId: nativeWindowId, pid: $0) } }
+        // The window may be moved or resized by somebody else (the user, the app). See Window.setAxFrame
+        window?.invalidateSentFrame()
+        guard let window, try await isManipulatedWithMouse(window) else {
             scheduleCancellableCompleteRefreshSession(.ax(notif))
+            // E.g. the window refused the size that the layout asked for. See minimumSize.swift
+            window?.scheduleMinimumSizeCheck()
             return
         }
         resizeWithMouseTask?.cancel()

@@ -15,6 +15,10 @@ open class Window: TreeNode, Hashable {
     var lastLayoutFloatingRect: Rect? = nil
     /// See ``setAxFrame(_:_:)``
     private var sentFrame: SentFrame? = nil
+    /// The size that the window refused to shrink below. Zero if unknown. See minimumSize.swift
+    var learnedMinimumSize: CGSize = .zero
+    var pendingMinimumSize: CGSize? = nil
+    var minimumSizeCheckTask: Task<(), any Error>? = nil
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {

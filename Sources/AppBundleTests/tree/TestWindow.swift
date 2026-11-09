@@ -22,6 +22,9 @@ final class TestWindow: Window, CustomStringConvertible {
 
     nonisolated var description: String { "TestWindow(\(windowId))" }
 
+    /// Emulates the actual frame of the window, e.g. an app that refuses to shrink its window
+    func setActualRectForTest(_ rect: Rect?) { _rect = rect }
+
     @MainActor
     override func nativeFocus() {
         appForTests = TestApp.shared
