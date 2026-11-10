@@ -46,3 +46,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         NSApp.setActivationPolicy(.accessory)
     }
 }
+
+/// Opening MarSpace again while it runs (Finder, Spotlight, `open -a MarSpace`) shows the settings window, like other menu
+/// bar apps do
+public final class MarSpaceAppDelegate: NSObject, NSApplicationDelegate {
+    public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        SettingsWindowController.shared.show()
+        return false
+    }
+}
