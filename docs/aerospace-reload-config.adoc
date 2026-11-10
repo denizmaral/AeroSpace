@@ -19,23 +19,27 @@ aerospace reload-config [-h|--help] [--no-gui] [--dry-run] [--warnings-as-errors
 // tag::body[]
 {manpurpose}
 
-If the config contains errors they will be printed to stdout, and GUI will open to show the errors.
+The settings are read from the disk again and applied. MarSpace applies every change of the settings window right away:
+the command is for scripts, and for settings that were put there by hand (a backup, another Mac).
 
-By default, warnings are written to stderr and do not open the diagnostics window.
-With `--warnings-as-errors`, warnings are treated like errors: written to stdout, shown in the diagnostics window, and the exit code is non-zero.
+Errors are the parts of the settings that can't be applied (they are left out): they are printed to stdout, and the exit
+code is non-zero. Warnings tell what happened to the settings file, e.g. that it was damaged and its backup was read: they
+are printed to stderr. A window shows both.
+
+With `--warnings-as-errors`, warnings are treated like errors: printed to stdout, and the exit code is non-zero.
 
 // =========================================================== Options
 include::util/conditional-options-header.adoc[]
 
 -h, --help:: Print help.
---no-gui:: Don't open GUI to show error. Only use stdout to report errors.
---dry-run:: Validate the config and show errors (if any) but don't reload the config.
---warnings-as-errors:: Treat warnings as errors: print them to stdout, open the GUI diagnostics window, and return a non-zero exit code.
+--no-gui:: Don't open the window that shows errors and warnings.
+--dry-run:: Read the settings and report errors and warnings, but don't apply them.
+--warnings-as-errors:: Treat warnings as errors: print them to stdout, and return a non-zero exit code.
 
 include::util/conditional-exit-code-header.adoc[]
 
-0:: Success. The config contains no errors.
-non-zero exit code:: Failure. The config contains errors.
+0:: Success. The settings contain no errors.
+non-zero exit code:: Failure. The settings contain errors.
 
 // end::body[]
 

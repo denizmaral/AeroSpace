@@ -17,10 +17,21 @@ struct ReloadConfigCommand: Command {
     }
 }
 
-struct ReloadConfigResult {
+struct ReloadConfigResult: Equatable {
     let isOk: Bool
     let stdout: String
     let stderr: String
+
+    /// - Parameter errors: the problems of the settings
+    /// - Parameter warnings: what happened to the settings file, e.g. it was damaged and the backup was read
+    /// - Parameter warningsAsErrors: `--warnings-as-errors`, e.g. for a script that must not go on with other settings
+    ///   than the saved ones
+    init(errors: [String], warnings: [String], warningsAsErrors: Bool) {
+        let failures = warningsAsErrors ? warnings + errors : errors
+        isOk = failures.isEmpty
+        stdout = failures.joined(separator: "\n\n")
+        stderr = warningsAsErrors ? "" : warnings.joined(separator: "\n\n")
+    }
 }
 
 /// Loads the settings and applies them
@@ -34,7 +45,7 @@ struct ReloadConfigResult {
             : Message(description: "\(aeroSpaceAppName) Settings", body: lines.joined(separator: "\n\n"))
     }
     if !args.dryRun { configUrl = SettingsRepository.applicationSupport.fileUrl }
-    return ReloadConfigResult(isOk: errors.isEmpty, stdout: errors.joined(separator: "\n\n"), stderr: loaded.notices.joined(separator: "\n\n"))
+    return ReloadConfigResult(errors: errors, warnings: loaded.notices, warningsAsErrors: args.warningsAsErrors)
 }
 
 /// Applies a compiled config, by what changed (dev-docs/settings-architecture.md): the hotkeys of keys that no mode uses
