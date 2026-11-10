@@ -29,7 +29,11 @@ final class MacWindow: Window {
         let previousPlacement = WindowPlacementStore.previousPlacement(of: windowId, macApp)
         let workspace = previousPlacement.map { Workspace.get(byName: $0.workspace) }
             ?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitorInfo).visibleWorkspace : globalFocus.workspace)
-        let data = try await unbindAndGetBindingDataForNewWindow(windowId, macApp, workspace, window: nil, .cancellable)
+        // A window that was tiling in the previous run is tiling again: the dialog heuristic may be wrong right now (the
+        // subrole of a window of a hidden app or a minimized window is AXDialog, e.g. when AeroSpace restarts)
+        let data = try await unbindAndGetBindingDataForNewWindow(
+            windowId, macApp, workspace, window: nil, .cancellable, wasTiling: previousPlacement?.isFloating == false,
+        )
 
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
@@ -266,13 +270,21 @@ extension Window {
 }
 
 // The function is private because it's unsafe. It leaves the window in unbound state
+/// `wasTiling`: the window is known to be a tiling window, a dialog verdict of the heuristic is ignored
 @MainActor
-private func unbindAndGetBindingDataForNewWindow(_ windowId: OpaqueWindowId, _ macApp: MacApp, _ workspace: Workspace, window: Window?, _ cm: CancellationMode) async throws -> BindingData {
+private func unbindAndGetBindingDataForNewWindow(
+    _ windowId: OpaqueWindowId,
+    _ macApp: MacApp,
+    _ workspace: Workspace,
+    window: Window?,
+    _ cm: CancellationMode,
+    wasTiling: Bool = false,
+) async throws -> BindingData {
     let windowLevel = try await macApp.getWindowLevel(windowId, cm)
     return switch try await macApp.getAxUiElementWindowType(windowId, windowLevel, cm) {
         case .popup: BindingData(parent: macosPopupWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        case .dialog: BindingData(parent: workspace.floatingWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
-        case .window: unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
+        case .dialog where !wasTiling: BindingData(parent: workspace.floatingWindowsContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        case .dialog, .window: unbindAndGetBindingDataForNewTilingWindow(workspace, window: window)
     }
 }
 
