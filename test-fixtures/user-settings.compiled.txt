@@ -1,0 +1,113 @@
+problems: []
+binding main alt-ctrl-1: workspace 1
+binding main alt-ctrl-2: workspace 2
+binding main alt-ctrl-3: workspace 3
+binding main alt-ctrl-4: workspace 4
+binding main alt-ctrl-5: workspace 5
+binding main alt-ctrl-6: workspace 6
+binding main alt-ctrl-7: workspace 7
+binding main alt-ctrl-8: workspace 8
+binding main alt-ctrl-9: workspace 9
+binding main alt-ctrl-a: workspace A
+binding main alt-ctrl-b: workspace B
+binding main alt-ctrl-c: workspace C
+binding main alt-ctrl-comma: layout accordion horizontal vertical
+binding main alt-ctrl-d: workspace D
+binding main alt-ctrl-e: workspace E
+binding main alt-ctrl-equal: resize smart +50
+binding main alt-ctrl-f: workspace F
+binding main alt-ctrl-g: workspace G
+binding main alt-ctrl-h: focus left
+binding main alt-ctrl-i: workspace I
+binding main alt-ctrl-j: focus down
+binding main alt-ctrl-k: focus up
+binding main alt-ctrl-l: focus right
+binding main alt-ctrl-m: workspace M
+binding main alt-ctrl-minus: resize smart -50
+binding main alt-ctrl-n: workspace N
+binding main alt-ctrl-o: workspace O
+binding main alt-ctrl-p: workspace P
+binding main alt-ctrl-period: layout tiles horizontal vertical
+binding main alt-ctrl-q: workspace Q
+binding main alt-ctrl-r: workspace R
+binding main alt-ctrl-s: workspace S
+binding main alt-ctrl-shift-1: move-node-to-workspace 1
+binding main alt-ctrl-shift-2: move-node-to-workspace 2
+binding main alt-ctrl-shift-3: move-node-to-workspace 3
+binding main alt-ctrl-shift-4: move-node-to-workspace 4
+binding main alt-ctrl-shift-5: move-node-to-workspace 5
+binding main alt-ctrl-shift-6: move-node-to-workspace 6
+binding main alt-ctrl-shift-7: move-node-to-workspace 7
+binding main alt-ctrl-shift-8: move-node-to-workspace 8
+binding main alt-ctrl-shift-9: move-node-to-workspace 9
+binding main alt-ctrl-shift-a: move-node-to-workspace A
+binding main alt-ctrl-shift-b: move-node-to-workspace B
+binding main alt-ctrl-shift-c: move-node-to-workspace C
+binding main alt-ctrl-shift-d: move-node-to-workspace D
+binding main alt-ctrl-shift-e: move-node-to-workspace E
+binding main alt-ctrl-shift-f: move-node-to-workspace F
+binding main alt-ctrl-shift-g: move-node-to-workspace G
+binding main alt-ctrl-shift-h: move left
+binding main alt-ctrl-shift-i: move-node-to-workspace I
+binding main alt-ctrl-shift-j: move down
+binding main alt-ctrl-shift-k: move up
+binding main alt-ctrl-shift-l: move right
+binding main alt-ctrl-shift-m: move-node-to-workspace M
+binding main alt-ctrl-shift-n: move-node-to-workspace N
+binding main alt-ctrl-shift-o: move-node-to-workspace O
+binding main alt-ctrl-shift-p: move-node-to-workspace P
+binding main alt-ctrl-shift-q: move-node-to-workspace Q
+binding main alt-ctrl-shift-r: move-node-to-workspace R
+binding main alt-ctrl-shift-s: move-node-to-workspace S
+binding main alt-ctrl-shift-semicolon: mode service
+binding main alt-ctrl-shift-t: move-node-to-workspace T
+binding main alt-ctrl-shift-tab: move-workspace-to-monitor --wrap-around next
+binding main alt-ctrl-shift-u: move-node-to-workspace U
+binding main alt-ctrl-shift-v: move-node-to-workspace V
+binding main alt-ctrl-shift-w: move-node-to-workspace W
+binding main alt-ctrl-shift-x: move-node-to-workspace X
+binding main alt-ctrl-shift-y: move-node-to-workspace Y
+binding main alt-ctrl-shift-z: move-node-to-workspace Z
+binding main alt-ctrl-t: workspace T
+binding main alt-ctrl-tab: workspace-back-and-forth
+binding main alt-ctrl-u: workspace U
+binding main alt-ctrl-v: workspace V
+binding main alt-ctrl-w: workspace W
+binding main alt-ctrl-x: workspace X
+binding main alt-ctrl-y: workspace Y
+binding main alt-ctrl-z: workspace Z
+binding main cmd-shift-f: fullscreen
+binding service alt-ctrl-shift-h: join-with left; mode main
+binding service alt-ctrl-shift-j: join-with down; mode main
+binding service alt-ctrl-shift-k: join-with up; mode main
+binding service alt-ctrl-shift-l: join-with right; mode main
+binding service backspace: close-all-windows-but-current; mode main
+binding service esc: reload-config; mode main
+binding service f: layout floating tiling; mode main
+binding service r: flatten-workspace-tree; mode main
+rule: {"commands":"move-node-to-workspace T","matcher":"appId=\"com.apple.Terminal\""} check further: false
+rule: {"commands":"move-node-to-workspace X","matcher":"appId=\"com.apple.dt.Xcode\""} check further: false
+rule: {"commands":"move-node-to-workspace F","matcher":"appId=\"com.apple.finder\""} check further: false
+rule: {"commands":"move-node-to-workspace B; macos-native-fullscreen on","matcher":"appId=\"app.zen-browser.zen\""} check further: false
+rule: {"commands":"move-node-to-workspace B","matcher":"appId=\"com.apple.Safari\""} check further: false
+rule: {"commands":"move-node-to-workspace B","matcher":"appId=\"com.google.Chrome\""} check further: false
+rule: {"commands":"move-node-to-workspace B","matcher":"appId=\"company.thebrowser.Browser\""} check further: false
+rule: {"commands":"move-node-to-workspace B","matcher":"appId=\"org.mozilla.firefox\""} check further: false
+rule: {"commands":"move-node-to-workspace I","matcher":"appId=\"com.microsoft.VSCode\""} check further: false
+rule: {"commands":"layout tiling","matcher":"appId=\"com.apple.systempreferences\""} check further: false
+after startup: 
+focus changed: 
+focused monitor changed: move-mouse monitor-lazy-center
+mode changed: 
+gaps: Gaps(inner: AppBundle.Gaps.Inner(vertical: AppBundle.DynamicConfigValue<Swift.Int>.constant(10), horizontal: AppBundle.DynamicConfigValue<Swift.Int>.constant(10)), outer: AppBundle.Gaps.Outer(left: AppBundle.DynamicConfigValue<Swift.Int>.constant(10), bottom: AppBundle.DynamicConfigValue<Swift.Int>.constant(10), top: AppBundle.DynamicConfigValue<Swift.Int>.constant(10), right: AppBundle.DynamicConfigValue<Swift.Int>.constant(10)))
+focus border: FocusBorder(enabled: true, color: AppBundle.FocusBorderColor.gradient(start: 3996372223, end: 3993042841, fromTopLeft: true), width: 4, radius: 12)
+persistent workspaces: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "I", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
+monitors: []
+start at login: true
+focus follows mouse: true
+new window placement: dwindle
+root: tiles auto
+normalization: true true
+accordion padding: 30
+unhide hidden apps: false
+keyboard: qwerty
