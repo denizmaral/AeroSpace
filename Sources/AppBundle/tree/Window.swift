@@ -103,6 +103,7 @@ open class Window: TreeNode, Hashable {
     func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) { die("Not implemented") }
 }
 
+// periphery:ignore - the properties are only compared (Equatable)
 private struct SentFrame: Equatable {
     let topLeft: CGPoint?
     let size: CGSize?

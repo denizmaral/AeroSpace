@@ -21,8 +21,8 @@ enum FocusBorderColor: Equatable {
 private let focusBorderParserTable: [String: any ParserProtocol<FocusBorder>] = [
     "enabled": Parser(\.enabled, parseBool),
     "color": Parser(\.color, parseFocusBorderColorConfig),
-    "width": Parser(\.width, { raw, backtrace in parseInt(raw, backtrace, in: 1 ... 20) }),
-    "radius": Parser(\.radius, { raw, backtrace in parseInt(raw, backtrace, in: 0 ... 50) }),
+    "width": Parser(\.width) { raw, backtrace in parseInt(raw, backtrace, in: 1 ... 20) },
+    "radius": Parser(\.radius) { raw, backtrace in parseInt(raw, backtrace, in: 0 ... 50) },
 ]
 
 func parseFocusBorder(_ raw: OrderedJson, _ backtrace: ConfigBacktrace, _ c: inout ConfigParserContext) -> FocusBorder {

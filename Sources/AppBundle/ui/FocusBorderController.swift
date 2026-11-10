@@ -14,6 +14,7 @@ final class FocusBorderController {
     private var drawnAppearance: Appearance? = nil
     private var orderedAboveNativeWindowId: UInt32? = nil
 
+    // periphery:ignore - the properties are only compared (Equatable)
     private struct Appearance: Equatable {
         let size: CGSize
         let border: FocusBorder
