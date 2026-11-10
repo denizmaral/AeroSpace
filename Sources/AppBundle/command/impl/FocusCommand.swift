@@ -129,15 +129,15 @@ struct FocusCommand: Command {
     }
     var _floatingWindows: [FloatingWindowData] = []
     for window in workspace.floatingWindows {
-        // todo bug: we shouldn't access ax api here. What if the window was moved but it wasn't committed to ax yet?
-        guard let center = try? await window.getCenter(.nonCancellable) else { continue }
+        // The observed frame includes a frame that was sent but not applied yet
+        guard let center = await window.screenCenter() else { continue }
 
         let tilingParent: TilingContainer
         let index: Int
         if let target = center.coerce(in: workspace.workspaceMonitorInfo.visibleRectPaddedByOuterGaps)?
             .findWindowRecursively(in: workspace.rootTilingContainer, virtual: true, fullscreenCoversAll: false)
         {
-            guard let targetCenter = try? await target.getCenter(.nonCancellable) else { continue }
+            guard let targetCenter = await target.screenCenter() else { continue }
             guard let _tilingParent = target.parent as? TilingContainer else { continue }
             tilingParent = _tilingParent
             index = switch tilingParent.layout {
@@ -212,5 +212,14 @@ extension TreeNode {
                  .floatingWindowsContainer:
                 die("Impossible")
         }
+    }
+}
+
+extension Window {
+    /// The center of what the user sees (``observedFrame``). An accessibility read until the frame is known
+    @MainActor
+    fileprivate func screenCenter() async -> CGPoint? {
+        if let observedFrame { return observedFrame.center }
+        return try? await getCenter(.nonCancellable)
     }
 }
