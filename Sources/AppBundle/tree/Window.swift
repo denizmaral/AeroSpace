@@ -21,6 +21,7 @@ open class Window: TreeNode, Hashable {
     var learnedMinimumSizeWorkspace: String? = nil
     var minimumSizeCheckTask: Task<(), any Error>? = nil
     var isMinimumSizeRecheckRequested: Bool = false
+    var minimumSizeCheckCooldownEnd: ContinuousClock.Instant? = nil
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -47,7 +48,8 @@ open class Window: TreeNode, Hashable {
     @discardableResult
     override func bind(to newParent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) -> BindingData? {
         let result = super.bind(to: newParent, adaptiveWeight: adaptiveWeight, index: index)
-        if let workspace = learnedMinimumSizeWorkspace, workspace != nodeWorkspace?.name {
+        // Another workspace. Global containers (e.g. minimized windows) don't count, the window comes back
+        if let learned = learnedMinimumSizeWorkspace, let workspace = nodeWorkspace?.name, workspace != learned {
             forgetMinimumSize() // See forgetMinimumSize
         }
         return result

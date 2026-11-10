@@ -80,13 +80,13 @@ struct MinimumSizeTest {
         let (window, _) = try await twoWindows(Workspace.get(byName: name), minimumSize: CGSize(width: 1000, height: 0))
         assertEquals(window.lastAppliedLayoutPhysicalRect?.width, 960) // The window stays 1000 wide
 
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), true)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
         assertEquals(window.effectiveMinimumSize, CGSize(width: 1000, height: 0))
     }
 
     @Test func testGridSnappingIsNotAMinimum() async throws {
         let (window, _) = try await twoWindows(Workspace.get(byName: name), minimumSize: CGSize(width: 965, height: 0))
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), false)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .fits)
         assertEquals(window.effectiveMinimumSize, .zero)
     }
 
@@ -95,7 +95,7 @@ struct MinimumSizeTest {
     @Test func testTransientResizeIsNotLearned() async throws {
         let (window, _) = try await twoWindows(Workspace.get(byName: name))
         window.setActualRectForTest(try #require(window.lastAppliedLayoutPhysicalRect).with(\.width, 1500))
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), false)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .fits)
         assertEquals(window.effectiveMinimumSize, .zero)
     }
 
@@ -107,7 +107,7 @@ struct MinimumSizeTest {
         #expect(Workspace.get(byName: "B").focusWorkspace())
         window.setActualRectForTest(try #require(window.lastAppliedLayoutPhysicalRect).with(\.width, 1500))
         let sentFramesCount = window.sentFrames.count
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), false)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .fits)
         assertEquals(window.sentFrames.count, sentFramesCount) // The window must stay hidden in the corner
 
         #expect(workspace.focusWorkspace())
@@ -130,7 +130,7 @@ struct MinimumSizeTest {
 
     @Test func testMinimumIsForgottenOnAnotherWorkspace() async throws {
         let (window, _) = try await twoWindows(Workspace.get(byName: name), minimumSize: CGSize(width: 1000, height: 0))
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), true)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
 
         let workspace = try #require(window.nodeWorkspace)
         window.bind(to: Workspace.get(byName: "other").rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
@@ -143,13 +143,13 @@ struct MinimumSizeTest {
     @Test func testMinimumIsForgottenWhenTheWindowIsSmaller() async throws {
         let workspace = Workspace.get(byName: name)
         let (window, _) = try await twoWindows(workspace, minimumSize: CGSize(width: 1300, height: 0))
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), true)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
         assertEquals(window.effectiveMinimumSize.width, 1300)
 
         // E.g. the app hides its sidebar and shrinks the window
         window.minimumSizeForTest = .zero
         window.setActualRectForTest(try #require(window.lastAppliedLayoutPhysicalRect).with(\.width, 900))
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), false)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .fits)
         assertEquals(window.effectiveMinimumSize, .zero)
     }
 
@@ -236,7 +236,7 @@ struct MinimumSizeCheckRaceTest {
             #expect(Workspace.get(byName: "B").focusWorkspace())
             window.setAxFrame(corner, nil) // hideInCorner
         }
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), false)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .fits)
         assertEquals(window.sentFrames.last?.topLeft, corner)
     }
 
@@ -251,7 +251,7 @@ struct MinimumSizeCheckRaceTest {
             TestWindow.new(id: 3, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
             try await workspace.layoutWorkspace() // 640
         }
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), true)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
         assertEquals(window.sentFrames.last?.size?.width, 640)
         assertEquals(window.effectiveMinimumSize.width, 1000)
     }
@@ -264,12 +264,77 @@ struct MinimumSizeCheckRaceTest {
         let window = appWindow(workspace, minimumWidth: 1300)
         TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
         try await workspace.layoutWorkspace()
-        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), true)
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
         window.minimumSizeForTest = .zero // E.g. the sidebar was hidden
 
         assertEquals(window.focusWindow(), true)
         await parseCommand("balance-sizes").cmdOrDie.run(.defaultEnv, .emptyStdin)
         try await workspace.layoutWorkspace()
         assertEquals(window.lastAppliedLayoutPhysicalRect?.width, 960)
+    }
+
+    /// If the minimum is still real after balance-sizes, it's learned again (the window doesn't necessarily post
+    /// kAXResizedNotification: it stays at its minimum)
+    @Test func testBalanceSizesRelearnsRealMinimum() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1300)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace()
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
+
+        assertEquals(window.focusWindow(), true)
+        await parseCommand("balance-sizes").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace() // The window stays at 1300
+        try await Task.sleep(for: .milliseconds(1200))
+        assertEquals(window.effectiveMinimumSize.width, 1300)
+        try await workspace.layoutWorkspace()
+        assertEquals(window.lastAppliedLayoutPhysicalRect?.width, 1300)
+    }
+
+    /// Minimized windows are bound to a global container. They come back to the same workspace
+    @Test func testMinimizeKeepsMinimum() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1000)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace()
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
+
+        window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+        window.bind(to: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        assertEquals(window.effectiveMinimumSize.width, 1000)
+    }
+
+    /// After learning, the check must not run again right away: the layout isn't updated yet, the refused frame would be
+    /// sent again
+    @Test func testNoRecheckRightAfterLearning() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 700)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        TestWindow.new(id: 3, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 640: the window stays 700
+        window.onGetAxSizeForTest = { window.scheduleMinimumSizeCheck() } // A notification during the check
+        window.scheduleMinimumSizeCheck()
+        try await Task.sleep(for: .milliseconds(1200))
+        assertEquals(window.effectiveMinimumSize.width, 700)
+        // The layout sent 640 once, the check sent it once again. Nothing after learning
+        assertEquals(window.sentFrames.count { $0.size?.width == 640 }, 2)
+    }
+
+    /// Some apps jitter. Both observations refused the size: the bigger one is learned
+    @Test func testJitteringWindowLearnsTheBiggerSize() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1000)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 960: the window stays 1000
+        let requested = try #require(window.lastAppliedLayoutPhysicalRect)
+        window.onGetAxSizeForTest = { // The first read
+            window.onGetAxSizeForTest = { window.setActualRectForTest(requested.with(\.width, 1012)) } // The second read
+        }
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
+        assertEquals(window.effectiveMinimumSize.width, 1012)
     }
 }

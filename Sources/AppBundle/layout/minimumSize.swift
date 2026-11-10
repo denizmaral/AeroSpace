@@ -10,68 +10,86 @@ import Common
 // into the container at all (e.g. two windows of 1000pt and 960pt minimum width on a 1800pt wide screen), the container
 // is rendered as an accordion. The tree itself isn't changed, so it's rendered as tiles again once the windows fit.
 
+enum MinimumSizeCheckResult: Equatable {
+    /// The window has the size that the layout asked for (or it can't be checked)
+    case fits
+    /// The window refused the size twice. `learnedMinimumSize` is updated
+    case learned
+    /// The layout kept changing during the check
+    case inconclusive
+}
+
 extension Window {
     /// Distinguishes rounding (e.g. Terminal snaps its size to the character grid) from refusing the size
     private static let minimumSizeTolerance: CGFloat = 8
     private static let minimumSizeConfirmationDelay: Duration = .milliseconds(400)
 
     /// Call it after kAXResizedNotification that isn't caused by the mouse. See ``checkMinimumSize(confirmationDelay:)``
+    ///
+    /// - Parameter delay: Let the layout send the new frame first (see ``forgetMinimumSizeAndRecheck()``)
     @MainActor
-    func scheduleMinimumSizeCheck() {
+    func scheduleMinimumSizeCheck(after delay: Duration = .zero) {
+        if let cooldown = minimumSizeCheckCooldownEnd, ContinuousClock.now < cooldown { return }
         if minimumSizeCheckTask != nil { // Don't shortcut the running check, but don't lose the notification either
             isMinimumSizeRecheckRequested = true
             return
         }
         minimumSizeCheckTask = Task.startUnstructured { @MainActor [weak self] in
             defer { self?.minimumSizeCheckTask = nil }
+            if delay > .zero { try await Task.sleep(for: delay) }
             while let self {
                 isMinimumSizeRecheckRequested = false
-                if try await checkMinimumSize(confirmationDelay: Self.minimumSizeConfirmationDelay) {
-                    scheduleCancellableCompleteRefreshSession(.minimumSizeLearned)
+                switch try await checkMinimumSize(confirmationDelay: Self.minimumSizeConfirmationDelay) {
+                    case .learned:
+                        // Don't recheck right away: the layout isn't updated yet (the refresh session is debounced), the
+                        // check would send the refused frame again. The new layout triggers a new check if needed
+                        scheduleCancellableCompleteRefreshSession(.minimumSizeLearned)
+                        return
+                    case .inconclusive:
+                        // E.g. the layout keeps changing. Don't spend AX calls on the window for a while
+                        minimumSizeCheckCooldownEnd = .now + .seconds(2)
+                        return
+                    case .fits:
+                        if !isMinimumSizeRecheckRequested { return }
                 }
-                if !isMinimumSizeRecheckRequested { return }
             }
         }
     }
 
     /// The window must be bigger than the layout asked for twice: the requested frame is sent again in between. A
     /// single observation may be an animation, a late frame of an asynchronous app (e.g. Electron) or a resize
-    /// initiated by the app itself.
+    /// initiated by the app itself. The bigger of the two refused sizes is learned (some apps jitter).
     ///
     /// Every await is followed by the synchronous revalidation of the requested rect: the layout may change it, or the
     /// workspace may become invisible meanwhile. A frame is sent only right after the validation
-    ///
-    /// - Returns: true if a new minimum size was learned
     @MainActor
-    func checkMinimumSize(confirmationDelay: Duration) async throws -> Bool {
+    func checkMinimumSize(confirmationDelay: Duration) async throws -> MinimumSizeCheckResult {
         var previous: (requested: Rect, refused: CGSize)? = nil
         for _ in 0 ..< 4 {
-            guard let requested = minimumSizeCheckableRect else { return false }
-            guard let actual = try? await getAxSize(.cancellable) else { return false }
+            guard let requested = minimumSizeCheckableRect else { return .fits }
+            guard let actual = try? await getAxSize(.cancellable) else { return .fits }
             guard minimumSizeCheckableRect == requested else { // The layout has changed meanwhile. Read again
                 previous = nil
                 continue
             }
             forgetMinimumSizeIfSmaller(actual)
-            guard let refused = refusedSize(actual, requested) else { return false }
-            if let previous,
-               previous.requested == requested,
-               abs(previous.refused.width - refused.width) <= 2,
-               abs(previous.refused.height - refused.height) <= 2
-            {
-                learnedMinimumSize = CGSize(
-                    width: max(learnedMinimumSize.width, refused.width),
-                    height: max(learnedMinimumSize.height, refused.height),
-                )
-                learnedMinimumSizeWorkspace = nodeWorkspace?.name
-                return true
+            guard let refused = refusedSize(actual, requested) else { return .fits }
+            if let previous, previous.requested == requested {
+                // The dimensions that were refused both times
+                let width = previous.refused.width > 0 && refused.width > 0 ? max(previous.refused.width, refused.width) : 0
+                let height = previous.refused.height > 0 && refused.height > 0 ? max(previous.refused.height, refused.height) : 0
+                if width > 0 || height > 0 {
+                    learnedMinimumSize = CGSize(width: max(learnedMinimumSize.width, width), height: max(learnedMinimumSize.height, height))
+                    learnedMinimumSizeWorkspace = nodeWorkspace?.name
+                    return .learned
+                }
             }
             previous = (requested, refused)
             invalidateSentFrame()
             setAxFrame(requested.topLeftCorner, CGSize(width: requested.width, height: requested.height))
             try await Task.sleep(for: confirmationDelay)
         }
-        return false
+        return .inconclusive
     }
 
     /// The learned minimum size. Zero if unknown
@@ -79,13 +97,23 @@ extension Window {
     var effectiveMinimumSize: CGSize { learnedMinimumSize }
 
     /// The minimum size of a window may change (e.g. its sidebar is hidden), but the layout never gives the window
-    /// less than its learned minimum, so a smaller minimum can't be observed. Explicit sizing by the user (resize,
-    /// balance-sizes, mouse) and moving the window to another workspace forget the learned minimum. If the window still
-    /// doesn't fit, its minimum is learned again
+    /// less than its learned minimum, so a smaller minimum can't be observed. Moving the window to another workspace
+    /// forgets the learned minimum (see Window.bind)
     @MainActor
     func forgetMinimumSize() {
         learnedMinimumSize = .zero
         learnedMinimumSizeWorkspace = nil
+    }
+
+    /// Explicit sizing by the user (resize, balance-sizes, mouse) forgets the learned minimum, and checks the window
+    /// again once the layout sent the new frame: if the minimum is still real, it's learned again. A window at its
+    /// minimum doesn't necessarily post kAXResizedNotification when it refuses a smaller size
+    @MainActor
+    func forgetMinimumSizeAndRecheck() {
+        guard learnedMinimumSize != .zero else { return }
+        forgetMinimumSize()
+        minimumSizeCheckCooldownEnd = nil
+        scheduleMinimumSizeCheck(after: .milliseconds(150))
     }
 
     /// The rect that the layout asked for, if the window can be checked: a tiling window on a visible workspace.
