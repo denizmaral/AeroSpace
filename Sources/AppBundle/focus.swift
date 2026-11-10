@@ -103,6 +103,10 @@ extension Workspace {
 
 @MainActor private var _lastKnownFocus: FrozenFocus = _focus
 
+/// Focus changes that focus-follows-mouse didn't make: the keyboard, commands, cmd-tab, clicks. A check of the window under
+/// the mouse that started before one of them doesn't focus anything, the later action wins (see FocusFollowsMouseTracker)
+@MainActor private(set) var focusChangesByOtherMeans: UInt = 0
+
 // Used by workspace-back-and-forth
 @MainActor var _prevFocusedWorkspaceName: String? = nil {
     didSet {
@@ -130,6 +134,7 @@ extension Workspace {
     if frozenFocus != _lastKnownFocus {
         _prevFocus = _lastKnownFocus
         hasFocusChanged = true
+        if refreshSessionEvent?.isFocusFollowsMouse != true { focusChangesByOtherMeans &+= 1 }
     }
     if frozenFocus.workspaceName != _lastKnownFocus.workspaceName {
         _prevFocusedWorkspaceName = _lastKnownFocus.workspaceName

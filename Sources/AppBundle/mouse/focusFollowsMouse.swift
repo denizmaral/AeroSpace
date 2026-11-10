@@ -25,7 +25,7 @@ import Common
         guard let token: RunSessionGuard = .isServerEnabled, !MissionControl.isActive else { return }
         let location = event.locationInWindow.withYAxisFlipped
         let windows = location.monitorApproximation.visibleWorkspace.windowsUnderMouse(location)
-        switch mouseTracker.mouseMoved(over: windows, focused: globalFocus.windowOrNil, now: .now) {
+        switch mouseTracker.mouseMoved(over: windows, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now) {
             case .stay: return
             case .leave:
                 focusFollowsTask?.cancel()
@@ -43,7 +43,9 @@ import Common
                 case .unknown: windows.count == 1 ? windows.first : nil
             }
             try checkCancellation()
-            guard let target = mouseTracker.checked(real: real, focused: globalFocus.windowOrNil, now: .now) else { return }
+            guard let target = mouseTracker.checked(
+                real: real, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now,
+            ) else { return }
             try await runLightSession(.focusFollowsMouse, token) {
                 _ = target.focusWindow()
                 target.nativeFocus()
@@ -74,6 +76,8 @@ import Common
 /// - It's focused only if it's another window than the one that was really under the mouse before. Moving the mouse
 ///   doesn't steal the focus that was changed by other means (keyboard, Mission Control, cmd-tab) while the mouse stays
 ///   over the same window, also where it passes over the border of a window behind it
+/// - A check that started before the focus was changed by other means doesn't focus anything: the later action wins (the
+///   first accessibility call to an app can take a while)
 @MainActor
 struct FocusFollowsMouseTracker {
     static let recheckInterval: Duration = .milliseconds(100)
@@ -100,6 +104,8 @@ struct FocusFollowsMouseTracker {
     /// The earliest next check while no window that AeroSpace manages is found on top. nil: no check is needed, or one is
     /// running
     private var recheckAt: ContinuousClock.Instant? = nil
+    /// ``focusChangesByOtherMeans`` when the running check started
+    private var focusChangesAtCheckStart: UInt = 0
 
     /// - Parameter windows: the windows under the mouse right now. The one on top is not focused until the mouse enters
     ///   another window
@@ -111,10 +117,12 @@ struct FocusFollowsMouseTracker {
     }
 
     /// - Parameter windows: the windows whose observed frames contain the mouse location
-    mutating func mouseMoved(over windows: [Window], focused: Window?, now: ContinuousClock.Instant) -> MouseMove {
+    /// - Parameter focusChanges: ``focusChangesByOtherMeans``
+    mutating func mouseMoved(over windows: [Window], focused: Window?, focusChanges: UInt, now: ContinuousClock.Instant) -> MouseMove {
         if windows.count == windowIds.count, windows.allSatisfy({ windowIds.contains($0.windowId) }) {
             guard let recheckAt, now >= recheckAt else { return .stay }
             self.recheckAt = nil
+            focusChangesAtCheckStart = focusChanges
             return .recheck
         }
         windowIds = Set(windows.map(\.windowId))
@@ -129,18 +137,20 @@ struct FocusFollowsMouseTracker {
             isRealWindowKnown = true
             return .leave
         }
+        focusChangesAtCheckStart = focusChanges
         return .enter
     }
 
     /// - Parameter real: the window really on top under the mouse. nil: not managed by AeroSpace, a menu or a popover
     /// - Returns: the window to focus
-    mutating func checked(real: Window?, focused: Window?, now: ContinuousClock.Instant) -> Window? {
+    /// - Parameter focusChanges: ``focusChangesByOtherMeans``
+    mutating func checked(real: Window?, focused: Window?, focusChanges: UInt, now: ContinuousClock.Instant) -> Window? {
         let previous: Window?? = isRealWindowKnown ? .some(realWindow) : .none
         realWindow = real
         isRealWindowKnown = true
         // E.g. a menu over the window: the window is focused when the menu is closed and the mouse moves
         recheckAt = real == nil ? now + Self.recheckInterval : nil
-        guard let real, real != focused, previous.map({ real !== $0 }) ?? true else { return nil }
+        guard let real, real != focused, previous.map({ real !== $0 }) ?? true, focusChanges == focusChangesAtCheckStart else { return nil }
         return real
     }
 
