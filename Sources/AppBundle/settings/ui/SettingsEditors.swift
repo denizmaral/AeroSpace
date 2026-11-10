@@ -333,7 +333,6 @@ private struct CustomCommandField: View {
 /// Shows a key chord and records a new one: click, then type the shortcut. Esc cancels
 struct KeyChordRecorder: View {
     @Binding var chord: KeyChord?
-    let keyNames: KeyNames
     @Binding var isRecording: Bool
     @State private var monitor: Any? = nil
 
@@ -343,14 +342,12 @@ struct KeyChordRecorder: View {
         } label: {
             Group {
                 if monitor != nil {
-                    Text("Type a shortcut…").foregroundStyle(.tint)
-                } else if let chord {
-                    Text(keyNames.symbols(chord)).font(.body.monospaced().weight(.medium))
+                    Label("Press the keys…", systemImage: "record.circle").foregroundStyle(.tint)
                 } else {
-                    Text("Record").foregroundStyle(.secondary)
+                    Label("Record new keys", systemImage: "keyboard")
                 }
             }
-            .frame(minWidth: 96)
+            .frame(minWidth: 140)
             .padding(.vertical, 3)
             .padding(.horizontal, 8)
             .background(.quaternary, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -384,23 +381,6 @@ struct KeyChordRecorder: View {
     }
 }
 
-extension KeyNames {
-    /// E.g. ⌃⌥H
-    func symbols(_ chord: KeyChord) -> String {
-        var result = ""
-        if chord.modifiers.contains(.control) { result += "⌃" }
-        if chord.modifiers.contains(.option) { result += "⌥" }
-        if chord.modifiers.contains(.shift) { result += "⇧" }
-        if chord.modifiers.contains(.command) { result += "⌘" }
-        let name = name(chord.key)
-        let special: [String: String] = [
-            "left": "←", "right": "→", "up": "↑", "down": "↓", "enter": "↩", "tab": "⇥", "esc": "⎋", "backspace": "⌫",
-            "space": "Space", "minus": "-", "equal": "=", "period": ".", "comma": ",", "semicolon": ";", "slash": "/",
-            "backslash": "\\", "quote": "'", "backtick": "`", "leftSquareBracket": "[", "rightSquareBracket": "]",
-        ]
-        return result + (special[name] ?? name.uppercased())
-    }
-}
 
 // MARK: - Apps
 

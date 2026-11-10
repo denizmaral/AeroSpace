@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Common
 import SwiftUI
 
@@ -27,6 +28,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 },
             )
             self.model = model
+            DistributedNotificationCenter.default().addObserver(
+                forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String), object: nil, queue: .main,
+            ) { _ in
+                MainActor.assumeIsolated { model.keyboardLayoutChanges &+= 1 }
+            }
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))
             window.title = "\(aeroSpaceAppName) Settings"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]

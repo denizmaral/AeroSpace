@@ -18,6 +18,9 @@ final class SettingsModel {
 
     private(set) var problems: [SettingsProblem]
 
+    /// Changes when the keyboard layout of macOS changes: the key labels of the shortcuts follow it
+    var keyboardLayoutChanges = 0
+
     /// A key chord is being recorded: MarSpace's own shortcuts are paused meanwhile (they would take the keys)
     var isRecordingShortcut = false {
         didSet {

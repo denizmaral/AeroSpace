@@ -153,18 +153,6 @@ private struct GeneralPane: View {
                     Toggle("Alternate the orientation of nested containers", isOn: $general.oppositeOrientationForNestedContainers)
                 }
             }
-
-            Section {
-                Picker("Keyboard layout", selection: $general.keyboardLayout) {
-                    Text("QWERTY").tag(KeyMapping.Preset.qwerty)
-                    Text("Dvorak").tag(KeyMapping.Preset.dvorak)
-                    Text("Colemak").tag(KeyMapping.Preset.colemak)
-                }
-            } footer: {
-                Text("How the keys of the shortcuts are named. Shortcuts keep their physical keys.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
     }

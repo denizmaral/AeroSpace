@@ -7,73 +7,70 @@ struct ShortcutsPane: View {
     @Bindable var model: SettingsModel
     @State private var modeName = mainModeId
     @State private var search = ""
-    @State private var expanded: Set<Int> = []
+    @State private var editing: Int? = nil
     @State private var newModeName = ""
     @State private var isAddingMode = false
 
     private var modeIndex: Int? { model.settings.modes.firstIndex { $0.name == modeName } }
-    private var keyNames: KeyNames { KeyNames(model.settings.general.keyboardLayout) }
 
     var body: some View {
         Form {
-            Section {
-                HStack(spacing: 8) {
-                    Picker("Mode", selection: $modeName) {
-                        ForEach(model.settings.modes) { Text($0.name.capitalized).tag($0.name) }
-                    }
-                    .pickerStyle(.segmented)
-                    .fixedSize()
-                    Button {
-                        isAddingMode = true
-                    } label: {
-                        Image(systemName: "plus")
-                    }
-                    .help("Add a mode: a set of shortcuts that is active until a shortcut switches back")
-                    if modeName != mainModeId {
-                        Button(role: .destructive) {
-                            model.settings.modes.removeAll { $0.name == modeName }
-                            modeName = mainModeId
-                        } label: {
-                            Image(systemName: "trash")
-                        }
-                        .help("Remove the mode")
-                    }
-                    Spacer()
-                    TextField("", text: $search, prompt: Text("Search"))
-                        .labelsHidden()
-                        .textFieldStyle(.roundedBorder)
-                        .frame(maxWidth: 180)
-                }
-            } footer: {
-                Text(modeName == mainModeId
-                    ? "Active normally. Click a shortcut to record another one, click the arrow to change what it does."
-                    : "Active after a shortcut switches to the '\(modeName)' mode, until one switches back.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-
             if let modeIndex {
                 let shortcuts = model.settings.modes[modeIndex].shortcuts
+                let displayed = displayed(shortcuts)
                 ForEach(ShortcutGroup.allCases) { group in
-                    let indices = displayed(shortcuts).filter { ShortcutGroup(shortcuts[$0]) == group }
+                    let indices = displayed.filter { ShortcutGroup(shortcuts[$0]) == group }
                     if !indices.isEmpty {
-                        Section("\(group.title) · \(indices.count)") {
+                        Section {
                             ForEach(indices, id: \.self) { index in row(modeIndex, index) }
+                        } header: {
+                            Text(group.title)
                         }
                     }
+                }
+                if displayed.isEmpty {
+                    ContentUnavailableView.search(text: search)
                 }
                 Section {
                     Button {
                         model.settings.modes[modeIndex].shortcuts.append(Settings.Shortcut(chord: KeyChord([.control, .option], .f1), actions: [.focus(.left)]))
-                        expanded = [model.settings.modes[modeIndex].shortcuts.count - 1]
+                        editing = model.settings.modes[modeIndex].shortcuts.count - 1
                     } label: {
-                        Label("Add a shortcut", systemImage: "plus.circle.fill")
+                        Label("Add a shortcut", systemImage: "plus")
                     }
-                    .buttonStyle(.borderless)
+                } footer: {
+                    Text(modeName == mainModeId
+                        ? "Click a shortcut to change its keys or what it does."
+                        : "Active after a shortcut switches to the \(modeName) mode, until one switches back.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
         }
         .formStyle(.grouped)
+        .id(model.keyboardLayoutChanges) // The key labels follow the keyboard layout of macOS
+        .searchable(text: $search, placement: .toolbar, prompt: "Search shortcuts")
+        .toolbar {
+            ToolbarItemGroup(placement: .principal) {
+                Picker("Mode", selection: $modeName) {
+                    ForEach(model.settings.modes) { Text($0.name.capitalized).tag($0.name) }
+                }
+                .pickerStyle(.segmented)
+                .help("A mode is a set of shortcuts, active until a shortcut switches to another mode")
+                Menu {
+                    Button("New mode…") { isAddingMode = true }
+                    if modeName != mainModeId {
+                        Button("Remove the \(modeName.capitalized) mode", role: .destructive) {
+                            model.settings.modes.removeAll { $0.name == modeName }
+                            modeName = mainModeId
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .menuIndicator(.hidden)
+            }
+        }
         .sheet(isPresented: $isAddingMode) {
             NameSheet(title: "New mode", placeholder: "e.g. resize", name: $newModeName) {
                 let name = newModeName.trimmingCharacters(in: .whitespaces)
@@ -86,37 +83,42 @@ struct ShortcutsPane: View {
                 newModeName = ""
             }
         }
-        .onChange(of: modeName) { expanded = [] }
+        .onChange(of: modeName) { editing = nil }
     }
 
     private func row(_ modeIndex: Int, _ index: Int) -> some View {
-        ShortcutRow(
-            shortcut: $model.settings.modes[modeIndex].shortcuts[index],
-            isExpanded: Binding(
-                get: { expanded.contains(index) },
-                set: { if $0 { expanded.insert(index) } else { expanded.remove(index) } },
-            ),
-            keyNames: keyNames,
-            isRecording: $model.isRecordingShortcut,
-            problems: model.problems(at: "Shortcuts › \(modeName) › \(keyNames.notation(model.settings.modes[modeIndex].shortcuts[index].chord))"),
-            modes: model.settings.modes.map(\.name),
-            workspaces: model.settings.workspaces.persistent,
-            remove: {
-                model.settings.modes[modeIndex].shortcuts.remove(at: index)
-                expanded = []
-            },
+        let shortcut = model.settings.modes[modeIndex].shortcuts[index]
+        let keyNames = KeyNames(model.settings.general.keyboardLayout)
+        return ShortcutRow(
+            shortcut: shortcut,
+            problem: model.problems(at: "Shortcuts › \(modeName) › \(keyNames.notation(shortcut.chord))").first,
         )
+        .contentShape(Rectangle())
+        .onTapGesture { editing = index }
+        .popover(isPresented: Binding(get: { editing == index }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
+            ShortcutEditor(
+                shortcut: $model.settings.modes[modeIndex].shortcuts[index],
+                isRecording: $model.isRecordingShortcut,
+                modes: model.settings.modes.map(\.name),
+                workspaces: model.settings.workspaces.persistent,
+                remove: {
+                    editing = nil
+                    model.settings.modes[modeIndex].shortcuts.remove(at: index)
+                },
+            )
+        }
     }
 
     /// The matching shortcuts in a readable order: by action, then by parameter (directions in reading order, workspaces
     /// naturally sorted). The stored order doesn't change
     private func displayed(_ shortcuts: [Settings.Shortcut]) -> [Int] {
+        let keyNames = KeyNames(model.settings.general.keyboardLayout)
         let query = search.trimmingCharacters(in: .whitespaces).lowercased()
         return shortcuts.indices
             .filter { index in
                 guard !query.isEmpty else { return true }
                 let shortcut = shortcuts[index]
-                return keyNames.notation(shortcut.chord).contains(query) || keyNames.symbols(shortcut.chord).lowercased().contains(query)
+                return keyNames.notation(shortcut.chord).contains(query) || KeyLabels.symbols(shortcut.chord).lowercased().contains(query)
                     || shortcut.actions.contains { $0.summary.lowercased().contains(query) || $0.commandLine.lowercased().contains(query) }
             }
             .sorted { lhs, rhs in
@@ -127,6 +129,167 @@ struct ShortcutsPane: View {
                 if keyA != keyB { return keyA.localizedStandardCompare(keyB) == .orderedAscending }
                 return lhs < rhs
             }
+    }
+}
+
+/// A shortcut in the list: what it does, and its keys
+private struct ShortcutRow: View {
+    let shortcut: Settings.Shortcut
+    let problem: SettingsProblem?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            ActionIcon(action: shortcut.actions.first)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(shortcut.actions.first?.summary ?? "Does nothing")
+                    .foregroundStyle(shortcut.actions.isEmpty ? .secondary : .primary)
+                if shortcut.actions.count > 1 {
+                    Text("then " + shortcut.actions.dropFirst().map(\.summary).joined(separator: ", then "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .lineLimit(1)
+            Spacer(minLength: 12)
+            if let problem {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).help(problem.message)
+            }
+            KeyCaps(chord: shortcut.chord)
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+/// The keys of a shortcut, each on its own keycap: ⌃ ⌥ H
+struct KeyCaps: View {
+    let chord: KeyChord
+    var size: CGFloat = 12
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(Array(caps.enumerated()), id: \.offset) { _, cap in
+                Text(cap)
+                    .font(.system(size: size, weight: .medium, design: .rounded))
+                    .frame(minWidth: size * 1.2)
+                    .padding(.horizontal, size * 0.45)
+                    .padding(.vertical, size * 0.22)
+                    .background(
+                        RoundedRectangle(cornerRadius: size * 0.42, style: .continuous)
+                            .fill(.background.secondary)
+                            .shadow(color: .black.opacity(0.35), radius: 0, y: 1),
+                    )
+                    .overlay(RoundedRectangle(cornerRadius: size * 0.42, style: .continuous).strokeBorder(.separator, lineWidth: 0.5))
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(KeyLabels.symbols(chord))
+    }
+
+    private var caps: [String] {
+        var caps: [String] = []
+        if chord.modifiers.contains(.control) { caps.append("⌃") }
+        if chord.modifiers.contains(.option) { caps.append("⌥") }
+        if chord.modifiers.contains(.shift) { caps.append("⇧") }
+        if chord.modifiers.contains(.command) { caps.append("⌘") }
+        caps.append(KeyLabels.label(chord.key))
+        return caps
+    }
+}
+
+/// A small colored tile with what the action does: an arrow, a workspace name, …
+struct ActionIcon: View {
+    let action: Action?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous).fill(color.gradient)
+            switch action {
+                case .workspace(let name), .moveWindowToWorkspace(let name):
+                    Text(name)
+                        .font(.system(size: name.count > 2 ? 9 : 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .minimumScaleFactor(0.5)
+                        .padding(2)
+                default:
+                    Image(systemName: symbol).font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+            }
+            if case .moveWindowToWorkspace = action {
+                Image(systemName: "arrow.down.right")
+                    .font(.system(size: 7, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(2)
+            }
+        }
+        .frame(width: 24, height: 24)
+    }
+
+    private var color: Color {
+        switch action.map(ShortcutGroup.init(action:)) {
+            case .windows: .blue
+            case .workspaces: .teal
+            case .layout: .purple
+            case .other, nil: .gray
+        }
+    }
+
+    private var symbol: String {
+        switch action {
+            case .focus(let direction): "arrow.\(direction.rawValue)"
+            case .move(let direction): "arrow.\(direction.rawValue).square"
+            case .joinWith: "rectangle.split.2x1"
+            case .resize: "arrow.left.and.right"
+            case .workspaceBackAndForth: "arrow.uturn.backward"
+            case .moveWorkspaceToMonitor: "display.2"
+            case .layout: "square.grid.2x2"
+            case .fullscreen: "arrow.up.left.and.arrow.down.right"
+            case .flattenWorkspaceTree: "arrow.triangle.2.circlepath"
+            case .balanceSizes: "equal"
+            case .closeWindow, .closeAllWindowsButCurrent: "xmark"
+            case .enterMode: "switch.2"
+            case .reloadSettings: "arrow.clockwise"
+            case .moveMouse: "cursorarrow"
+            case .custom: "terminal"
+            case .workspace, .moveWindowToWorkspace, nil: "questionmark"
+        }
+    }
+}
+
+/// Edits a shortcut in a popover: its keys and what it does
+private struct ShortcutEditor: View {
+    @Binding var shortcut: Settings.Shortcut
+    @Binding var isRecording: Bool
+    let modes: [String]
+    let workspaces: [String]
+    let remove: () -> Void
+
+    var body: some View {
+        Form {
+            Section {
+                HStack {
+                    KeyCaps(chord: shortcut.chord, size: 16)
+                    Spacer()
+                    KeyChordRecorder(
+                        chord: Binding(get: { shortcut.chord }, set: { if let chord = $0 { shortcut.chord = chord } }),
+                        isRecording: $isRecording,
+                    )
+                }
+            } header: {
+                Text("Keys")
+            }
+            Section {
+                ActionListEditor(actions: $shortcut.actions, modes: modes, workspaces: workspaces)
+            } header: {
+                Text("Does")
+            }
+            Section {
+                Button("Delete the shortcut", role: .destructive, action: remove)
+                    .foregroundStyle(.red)
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 520)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -146,11 +309,15 @@ private enum ShortcutGroup: CaseIterable, Identifiable {
     }
 
     init(_ shortcut: Settings.Shortcut) {
-        self = switch shortcut.actions.first.map(ActionKind.init) {
+        self = shortcut.actions.first.map(ShortcutGroup.init(action:)) ?? .other
+    }
+
+    init(action: Action) {
+        self = switch ActionKind(action) {
             case .focus, .move, .joinWith, .resize, .fullscreen, .closeWindow, .closeAllWindowsButCurrent: .windows
             case .workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor: .workspaces
             case .layout, .flattenWorkspaceTree, .balanceSizes: .layout
-            case .enterMode, .reloadSettings, .moveMouse, .custom, nil: .other
+            case .enterMode, .reloadSettings, .moveMouse, .custom: .other
         }
     }
 }
@@ -164,50 +331,6 @@ extension Action {
             case .workspace(let name), .moveWindowToWorkspace(let name), .enterMode(let name): name
             default: commandLine
         }
-    }
-}
-
-private struct ShortcutRow: View {
-    @Binding var shortcut: Settings.Shortcut
-    @Binding var isExpanded: Bool
-    let keyNames: KeyNames
-    @Binding var isRecording: Bool
-    let problems: [SettingsProblem]
-    let modes: [String]
-    let workspaces: [String]
-    let remove: () -> Void
-
-    var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
-            ActionListEditor(actions: $shortcut.actions, modes: modes, workspaces: workspaces)
-            HStack {
-                Spacer()
-                Button("Remove the shortcut", role: .destructive, action: remove)
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(.red)
-            }
-        } label: {
-            HStack(spacing: 12) {
-                KeyChordRecorder(
-                    chord: Binding(get: { shortcut.chord }, set: { if let chord = $0 { shortcut.chord = chord } }),
-                    keyNames: keyNames,
-                    isRecording: $isRecording,
-                )
-                Text(summary)
-                    .lineLimit(1)
-                    .foregroundStyle(shortcut.actions.isEmpty ? .secondary : .primary)
-                Spacer()
-                if let problem = problems.first {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                        .help(problem.message)
-                }
-            }
-        }
-    }
-
-    private var summary: String {
-        shortcut.actions.isEmpty ? "Does nothing" : shortcut.actions.map(\.summary).joined(separator: ", then ")
     }
 }
 
