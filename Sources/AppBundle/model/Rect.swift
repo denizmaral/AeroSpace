@@ -54,4 +54,11 @@ extension Rect {
     var size: CGSize { CGSize(width: width, height: height) }
 
     func getDimension(_ orientation: Orientation) -> CGFloat { orientation == .h ? width : height }
+
+    /// nil if they don't overlap
+    func intersection(_ other: Rect) -> Rect? {
+        let minX = max(minX, other.minX), maxX = min(maxX, other.maxX)
+        let minY = max(minY, other.minY), maxY = min(maxY, other.maxY)
+        return minX < maxX && minY < maxY ? Rect(topLeftX: minX, topLeftY: minY, width: maxX - minX, height: maxY - minY) : nil
+    }
 }

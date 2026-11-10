@@ -58,8 +58,10 @@ private func windowSubjectRectOrReportError(_ target: LiveFocus, _ io: CmdIo) as
     // todo bug it's bad that we operate on the "ax physical" state directly. command seq won't work correctly
     //      focus <direction> command has the similar problem
     if let window: Window = target.windowOrNil {
-        // What the user sees (a window can be bigger than its tile), the tile until the window is laid out
-        if let rect = window.observedFrame ?? window.lastAppliedLayoutPhysicalRect {
+        // What the user sees (a window can be bigger than its tile and reach beyond the monitor: only the part on the
+        // monitor), the tile until the window is laid out
+        let observed = window.observedFrame.flatMap { frame in window.nodeMonitorInfo.map { frame.intersection($0.rect) } ?? frame }
+        if let rect = observed ?? window.lastAppliedLayoutPhysicalRect {
             return rect
         } else if let rect = try? await window.getAxRect(.nonCancellable) {
             return rect

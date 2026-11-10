@@ -108,10 +108,11 @@ open class Window: TreeNode, Hashable {
         sentFrame = frame
         frameGeneration &+= 1
         // Until it's read back: what the same request gave the previous time, otherwise what is sent (most windows accept it)
+        // The layout runs in a refresh session, which updates the focus border at its end
         if let lastReadBack, lastReadBack.request == frame {
-            setObservedFrame(lastReadBack.frame)
+            setObservedFrame(lastReadBack.frame, updatesFocusBorder: false)
         } else if let origin = topLeft ?? observedFrame?.topLeftCorner, let size = size ?? observedFrame?.size {
-            setObservedFrame(Rect(topLeftX: origin.x, topLeftY: origin.y, width: size.width, height: size.height))
+            setObservedFrame(Rect(topLeftX: origin.x, topLeftY: origin.y, width: size.width, height: size.height), updatesFocusBorder: false)
         }
         sendAxFrame(topLeft, size, readBack: readBack ? frameGeneration : nil)
     }
@@ -128,21 +129,22 @@ open class Window: TreeNode, Hashable {
     final func frameWasReadBack(_ frame: Rect, generation: UInt) {
         guard generation == frameGeneration else { return } // Sent again or moved meanwhile: a newer read back follows
         if let sentFrame { lastReadBack = (sentFrame, frame) }
-        setObservedFrame(frame)
+        // It arrives after the session that sent the frame (it doesn't matter if another session is running)
+        setObservedFrame(frame, updatesFocusBorder: true)
     }
 
     /// - Parameter frame: read from the window just now
     @MainActor
     final func observeFrame(_ frame: Rect) {
         frameGeneration &+= 1 // Newer than a read back that is under way
-        setObservedFrame(frame)
+        setObservedFrame(frame, updatesFocusBorder: false) // Read by the layout, in a refresh session
     }
 
     @MainActor
-    private func setObservedFrame(_ frame: Rect) {
+    private func setObservedFrame(_ frame: Rect, updatesFocusBorder: Bool) {
         if frame == observedFrame { return }
         observedFrame = frame
-        FocusBorderController.shared.windowFrameDidChange(self)
+        if updatesFocusBorder { FocusBorderController.shared.windowFrameDidChange(self) }
     }
 
     /// Use ``setAxFrame(_:_:readBack:)``

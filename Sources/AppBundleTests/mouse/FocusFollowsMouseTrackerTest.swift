@@ -99,7 +99,9 @@ struct FocusFollowsMouseTrackerTest {
         let floating = TestWindow.new(id: 4, parent: workspace.floatingWindowsContainer)
         var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [tiling], focused: tiling)
 
-        assertEquals(tracker.mouseMoved(over: [floating, tiling], focused: tiling, focusChanges: 0, now: at(0)), .leave)
+        // A floating window can be above the focused one (always on top): checked
+        assertEquals(tracker.mouseMoved(over: [floating, tiling], focused: tiling, focusChanges: 0, now: at(0)), .enter)
+        assertNil(tracker.checked(real: tiling, focused: tiling, focusChanges: 0, now: at(5)))
         assertEquals(tracker.mouseMoved(over: [floating], focused: tiling, focusChanges: 0, now: at(10)), .enter)
         assertEquals(tracker.checked(real: floating, focused: tiling, focusChanges: 0, now: at(15)), floating)
     }
@@ -165,6 +167,35 @@ struct FocusFollowsMouseTrackerTest {
         assertEquals(tracker.checked(real: first, focused: third, focusChanges: 3, now: at(5)), first)
         assertEquals(tracker.mouseMoved(over: [second], focused: third, focusChanges: 3, now: at(10)), .enter)
         assertEquals(tracker.checked(real: second, focused: first, focusChanges: 3, now: at(15)), second)
+    }
+
+    /// A window that floats above the focused one without being focused (always on top, a panel): which one is on top is
+    /// checked
+    @Test func testFloatingWindowAboveTheFocusedWindow() {
+        let workspace = Workspace.get(byName: name)
+        let (focused, _, _) = windows()
+        let panel = TestWindow.new(id: 4, parent: workspace.floatingWindowsContainer)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [focused], focused: focused)
+
+        assertEquals(tracker.mouseMoved(over: [panel, focused], focused: focused, focusChanges: 0, now: at(0)), .enter)
+        assertEquals(tracker.checked(real: panel, focused: focused, focusChanges: 0, now: at(5)), panel)
+        // Clicked into the panel, then out of it
+        assertEquals(tracker.mouseMoved(over: [focused], focused: panel, focusChanges: 1, now: at(100)), .enter)
+        assertEquals(tracker.checked(real: focused, focused: panel, focusChanges: 1, now: at(105)), focused)
+    }
+
+    /// An accordion is one place on the screen, its most recent window: the others only peek out by the accordion padding
+    @Test func testAccordionIsItsMostRecentWindow() async throws {
+        let workspace = Workspace.get(byName: name)
+        workspace.rootTilingContainer.layout = .accordion
+        let (first, second, third) = windows()
+        second.markAsMostRecentChild()
+        try await workspace.layoutWorkspace()
+
+        assertEquals(workspace.windowsUnderMouse(CGPoint(x: 5, y: 500)), [second]) // The padding of the first window
+        assertEquals(workspace.windowsUnderMouse(CGPoint(x: 960, y: 500)), [second])
+        assertEquals(workspace.windowsUnderMouse(CGPoint(x: 1915, y: 500)), [second]) // The padding of the last window
+        _ = (first, third)
     }
 
     /// The hit test sees what the user sees, not the tiles: App Store (left) is 1000 wide in its 960 wide tile

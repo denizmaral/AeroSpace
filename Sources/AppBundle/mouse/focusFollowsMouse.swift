@@ -31,7 +31,7 @@ import Common
                 focusFollowsTask?.cancel()
                 return
             case .enter: focusFollowsTask?.cancel()
-            case .recheck: break // No check is running (one at a time). The focus session of the previous one may still be: not canceled
+            case .recheck: break // No check is running (one at a time)
         }
         focusFollowsTask = Task.startUnstructured { @MainActor in
             // Ignores macOS menubar dropdown, but, unfortunately, it doesn't ignore non-native menu-like fake windows.
@@ -46,9 +46,12 @@ import Common
             guard let target = mouseTracker.checked(
                 real: real, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now,
             ) else { return }
-            try await runLightSession(.focusFollowsMouse, token) {
-                _ = target.focusWindow()
-                target.nativeFocus()
+            // Not canceled by later mouse moves: the tracker took the window as the one under the mouse, it wouldn't try again
+            Task.startUnstructured { @MainActor in
+                try await runLightSession(.focusFollowsMouse, token) {
+                    _ = target.focusWindow()
+                    target.nativeFocus()
+                }
             }
         }
     }
@@ -154,9 +157,13 @@ struct FocusFollowsMouseTracker {
         return real
     }
 
-    /// The window on top without accessibility calls: the focused window is in front of the others
+    /// The window on top without accessibility calls: the only one, or the focused one (it's in front of the others). Not
+    /// if another floating window is there: a window can float above the focused one without being focused (always on
+    /// top, a panel)
     private static func knownTop(_ windows: [Window], focused: Window?) -> Window? {
-        windows.first { $0 == focused } ?? (windows.count == 1 ? windows.first : nil)
+        if windows.count == 1 { return windows.first }
+        guard let focused, windows.contains(focused), !windows.contains(where: { $0 != focused && $0.isFloating }) else { return nil }
+        return focused
     }
 }
 
@@ -174,16 +181,20 @@ extension Workspace {
 extension TreeNode {
     @MainActor
     fileprivate func appendWindows(at location: CGPoint, to result: inout [Window]) {
-        for child in children {
+        if let window = self as? Window {
+            if window.lifeStatus.isInhabited, (window.observedFrame ?? window.lastAppliedLayoutPhysicalRect)?.contains(location) == true {
+                result.append(window)
+            }
+        } else if let accordion = self as? TilingContainer, accordion.layout == .accordion {
+            // One place on the screen: its most recent window. The others only peek out by the accordion padding
+            guard accordion.lastAppliedLayoutPhysicalRect?.contains(location) == true, let child = accordion.mostRecentInhabitedChild else { return }
             if let window = child as? Window {
-                if window.lifeStatus.isInhabited,
-                   (window.observedFrame ?? window.lastAppliedLayoutPhysicalRect)?.contains(location) == true
-                {
-                    result.append(window)
-                }
+                result.append(window)
             } else {
                 child.appendWindows(at: location, to: &result)
             }
+        } else {
+            for child in children { child.appendWindows(at: location, to: &result) }
         }
     }
 }

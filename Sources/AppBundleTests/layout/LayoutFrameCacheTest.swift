@@ -157,6 +157,27 @@ struct LayoutFrameCacheTest {
         assertEquals(appStore.observedFrame, readBack)
     }
 
+    /// The read back arrives after the session that sent the frame: it updates the focus border of the focused window, also
+    /// while another session is running. The expectation set by the layout doesn't (the session updates it at its end)
+    @Test func testReadBackOfTheFocusedWindowUpdatesTheFocusBorder() async throws {
+        let workspace = Workspace.get(byName: name)
+        let appStore = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        appStore.minimumSizeForTest = CGSize(width: 1000, height: 0)
+        let gitHub = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        gitHub.minimumSizeForTest = CGSize(width: 1000, height: 0)
+        #expect(appStore.focusWindow())
+        appStore.heldReadBacksForTest = []
+        gitHub.heldReadBacksForTest = []
+        let before = FocusBorderController.shared.readBackUpdates
+
+        try await workspace.layoutWorkspace()
+        assertEquals(FocusBorderController.shared.readBackUpdates, before)
+        gitHub.deliverReadBacksForTest()
+        assertEquals(FocusBorderController.shared.readBackUpdates, before) // Not the focused window
+        $refreshSessionEvent.withValue(.hotkeyBinding) { appStore.deliverReadBacksForTest() }
+        assertEquals(FocusBorderController.shared.readBackUpdates, before + 1)
+    }
+
     /// Floating windows are read by every layout
     @Test func testObservedFrameOfFloatingWindow() async throws {
         let workspace = Workspace.get(byName: name)

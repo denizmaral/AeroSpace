@@ -21,6 +21,8 @@ final class FocusBorderController {
     private var isHiddenForMouseDrag = false
     /// See ``update()``
     private var stackingRecheck: Task<(), any Error>? = nil
+    /// Updates for read backs of the focused window, see ``windowFrameDidChange(_:)``
+    private(set) var readBackUpdates: UInt = 0
 
     // periphery:ignore - the properties are only compared (Equatable)
     private struct Appearance: Equatable {
@@ -78,10 +80,11 @@ final class FocusBorderController {
         }
     }
 
-    /// The observed frame of a window changed, e.g. it was read back after a session (a refresh session updates the
-    /// border at its end anyway)
+    /// The frame of a window was read back after the refresh session that sent it
     func windowFrameDidChange(_ window: Window) {
-        if refreshSessionEvent == nil, window == globalFocus.windowOrNil { update() }
+        guard window == globalFocus.windowOrNil else { return }
+        readBackUpdates &+= 1
+        update()
     }
 
     private var spaceChangeRecheck: Task<(), any Error>? = nil
