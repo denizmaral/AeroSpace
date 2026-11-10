@@ -33,6 +33,7 @@ final class FocusBorderController {
         let border = config.focusBorder
         guard border.enabled,
               !isHiddenForMouseDrag,
+              !isHiddenForSpaceChange,
               TrayMenuModel.shared.isEnabled,
               !MissionControl.isActive,
               let window = globalFocus.windowOrNil as? MacWindow,
@@ -67,17 +68,21 @@ final class FocusBorderController {
     }
 
     private var spaceChangeRecheck: Task<(), any Error>? = nil
+    /// See ``hideAfterSpaceChange()``
+    private var isHiddenForSpaceChange = false
 
     /// macOS posts the Space change before its animation ends: the refresh session right after it still sees the windows
-    /// of the previous Space on screen and draws their border, and the panel follows into the new Space (e.g. the Space
-    /// of a native fullscreen window). Check again when the animation is over
+    /// of the previous Space on screen and drew their border, and the panel followed into the new Space (e.g. the Space
+    /// of a native fullscreen window). The border stays hidden during the animation and is checked when it's over
     func hideAfterSpaceChange() {
+        isHiddenForSpaceChange = true
         hide()
         spaceChangeRecheck?.cancel()
         spaceChangeRecheck = Task.startUnstructured { @MainActor in
             for delay in [700, 800] { // ms: after the animation, and once more for slow transitions
                 try await Task.sleep(for: .milliseconds(delay))
-                await self.update() // The singleton
+                self.isHiddenForSpaceChange = false // The singleton
+                await self.update()
             }
         }
     }
