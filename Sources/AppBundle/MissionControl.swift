@@ -43,16 +43,15 @@ enum MissionControl {
         if isActive && ContinuousClock.now - activeSince > .milliseconds(500) && !isOverlayOnScreen { exit() }
     }
 
-    /// The Mission Control overlay: a full display window of the Dock (or WindowManager since macOS 27) above the
-    /// normal windows. A single window list query, only for the fallbacks (switching Spaces inside Mission Control,
-    /// App Exposé and Show Desktop also activate apps and change Spaces)
+    /// The Mission Control backdrop of macOS 27: a full display WindowManager window at layer 19. (The Dock owns a full
+    /// display window at layer 20 all the time, it must not match.) A single window list query, only for the fallbacks:
+    /// switching Spaces inside Mission Control, App Exposé and Show Desktop also activate apps and change Spaces
     private static var isOverlayOnScreen: Bool {
         let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
         let screens = NSScreen.screens.map(\.frame.size)
         return windows.contains { info in
-            let owner = info[kCGWindowOwnerName as String] as? String
-            guard owner == "Dock" || owner == "WindowManager",
-                  (info[kCGWindowLayer as String] as? Int ?? 0) > 0,
+            guard info[kCGWindowOwnerName as String] as? String == "WindowManager",
+                  info[kCGWindowLayer as String] as? Int == 19,
                   let bounds = info[kCGWindowBounds as String] as? [String: CGFloat]
             else { return false }
             return screens.contains { abs($0.width - (bounds["Width"] ?? 0)) < 1 && abs($0.height - (bounds["Height"] ?? 0)) < 1 }
@@ -70,9 +69,10 @@ enum MissionControl {
         // Fallback in case the exit notification is missed
         exitFallbackTask?.cancel()
         exitFallbackTask = Task.startUnstructured { @MainActor in
-            repeat {
+            for _ in 0 ..< 5 { // At most 5 minutes, even if the overlay detection is wrong
                 try await Task.sleep(for: .seconds(60))
-            } while isOverlayOnScreen // E.g. Show Desktop can stay for a long time
+                if !isOverlayOnScreen { break } // E.g. Show Desktop can stay for a long time
+            }
             exit()
         }
     }
