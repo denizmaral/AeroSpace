@@ -3,12 +3,16 @@ import AppKit
 import Common
 
 final class TestWindow: Window, CustomStringConvertible {
-    private var _rect: Rect?
+    /// What the accessibility API reports as the frame of the window
+    var axRectForTest: Rect?
+    private(set) var axRectReadCount = 0
+    /// Runs at the await point of the next frame read
+    var onAxRectReadForTest: (@MainActor () -> Void)? = nil
     var isMacosFullscreenForTest = false
 
     @MainActor
     private init(_ id: OpaqueWindowId, _ parent: NonLeafTreeNodeObject, _ adaptiveWeight: CGFloat, _ rect: Rect?) {
-        _rect = rect
+        axRectForTest = rect
         super.init(id: id, TestApp.shared, lastFloatingSize: nil, parent: parent, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
     }
 
@@ -43,11 +47,16 @@ final class TestWindow: Window, CustomStringConvertible {
     override func getTitle(_ cm: CancellationMode) async throws -> String { description }
 
     @MainActor override func getAxRect(_ cm: CancellationMode) async throws -> Rect? { // todo change to not Optional
-        _rect
+        axRectReadCount += 1
+        if let hook = onAxRectReadForTest {
+            onAxRectReadForTest = nil
+            hook()
+        }
+        return axRectForTest
     }
 
     @MainActor override func getAxSize(_ cm: CancellationMode) async throws -> CGSize? {
-        _rect.map { CGSize(width: $0.width, height: $0.height) }
+        axRectForTest.map { CGSize(width: $0.width, height: $0.height) }
     }
 
     /// Runs at the await point of the next native state read (e.g. a notification arrives, or the session is canceled)

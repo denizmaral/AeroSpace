@@ -47,7 +47,9 @@ final class FocusBorderController {
         } catch {
             return // The session was canceled. The next session updates the border
         }
-        guard let windowRect, windowRect.width > 0, windowRect.height > 0 else { return hide() }
+        guard let windowRect = windowRect.flatMap({ focusBorderWindowRect($0, monitor: window.nodeMonitorInfo?.rect, borderWidth: border.width) }),
+              windowRect.width > 0, windowRect.height > 0
+        else { return hide() }
 
         let frame = focusBorderPanelFrame(windowRect: windowRect, borderWidth: border.width, mainMonitorHeight: mainMonitorInfo.height)
         let panel = getOrCreatePanel()
@@ -135,13 +137,27 @@ func focusBorderPanelFrame(windowRect: Rect, borderWidth: Int, mainMonitorHeight
     ).insetBy(dx: -width, dy: -width)
 }
 
+/// The rect that the border surrounds. A window that refuses to shrink to its tile can reach beyond the monitor (it's
+/// placed at the tile, App Store is at least 1000 wide): on that side the border follows the monitor edge, otherwise it's
+/// off screen
+func focusBorderWindowRect(_ window: Rect, monitor: Rect?, borderWidth: Int) -> Rect {
+    guard let monitor else { return window }
+    let width = CGFloat(borderWidth)
+    let minX = window.minX < monitor.minX ? monitor.minX + width : window.minX
+    let maxX = window.maxX > monitor.maxX ? monitor.maxX - width : window.maxX
+    let minY = window.minY < monitor.minY ? monitor.minY + width : window.minY
+    let maxY = window.maxY > monitor.maxY ? monitor.maxY - width : window.maxY
+    return Rect(topLeftX: minX, topLeftY: minY, width: maxX - minX, height: maxY - minY)
+}
+
 extension MacWindow {
-    /// The rect that the focus border surrounds, or nil if the border must be hidden
+    /// The frame of the window that the focus border surrounds, or nil if the border must be hidden
     @MainActor
     fileprivate func focusBorderRect() async throws -> Rect? {
         guard nodeWorkspace?.isVisible == true else { return nil }
         return switch windowParentCases {
-            case .tilingContainer: isFullscreen ? try await getAxRect(.cancellable) : lastAppliedLayoutPhysicalRect
+            // Not the rect of the last layout: the window can be bigger than its tile
+            case .tilingContainer: try await getAppliedFrame(.cancellable)
             case .floatingWindowsContainer: try await getAxRect(.cancellable)
             case .macosFullscreenWindowsContainer, .macosMinimizedWindowsContainer, .macosHiddenAppsWindowsContainer,
                  .macosPopupWindowsContainer, nil: nil

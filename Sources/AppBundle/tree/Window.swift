@@ -15,6 +15,10 @@ open class Window: TreeNode, Hashable {
     var lastLayoutFloatingRect: Rect? = nil
     /// See ``setAxFrame(_:_:)``
     private var sentFrame: SentFrame? = nil
+    /// See ``getAppliedFrame(_:)``
+    private var appliedFrame: Rect? = nil
+    /// Changes whenever the frame of the window may change: a frame is sent, or the sent frame is forgotten
+    private var frameGeneration: UInt = 0
     /// The native state (minimized, fullscreen) may have changed. See normalizeLayoutReason
     var isNativeStateCheckRequested: Bool = false
     /// The place in the tiling tree before a macOS native state. See ``enterMacosNativeState(_:prevParentKind:adaptiveWeight:)``
@@ -92,12 +96,35 @@ open class Window: TreeNode, Hashable {
         let frame = SentFrame(topLeft: topLeft, size: size)
         if frame == sentFrame { return }
         sentFrame = frame
+        forgetAppliedFrame()
         sendAxFrame(topLeft, size)
     }
 
     /// The next ``setAxFrame(_:_:)`` sends the frame even if it's the same as the previous one
     @MainActor
-    final func invalidateSentFrame() { sentFrame = nil }
+    final func invalidateSentFrame() {
+        sentFrame = nil
+        forgetAppliedFrame()
+    }
+
+    /// The frame that the window really has after the last sent frame. A window refuses a size smaller than its minimum:
+    /// e.g. App Store is at least 1000 wide, it's bigger than a 885 wide tile. One accessibility read after each frame
+    /// change of the window, nothing while the frame is the same. The read is queued after the pending frame job of the
+    /// app (see MacApp.setAxFrame), so it sees the frame that the app applied
+    @MainActor
+    final func getAppliedFrame(_ cm: CancellationMode) async throws -> Rect? {
+        if let appliedFrame { return appliedFrame }
+        let generation = frameGeneration
+        let rect = try await getAxRect(cm)
+        if generation == frameGeneration { appliedFrame = rect } // Not sent again meanwhile
+        return rect
+    }
+
+    @MainActor
+    private func forgetAppliedFrame() {
+        appliedFrame = nil
+        frameGeneration &+= 1
+    }
 
     /// Use ``setAxFrame(_:_:)``
     func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) { die("Not implemented") }
