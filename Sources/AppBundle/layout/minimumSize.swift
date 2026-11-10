@@ -169,22 +169,30 @@ extension Window {
 }
 
 extension TreeNode {
-    /// The minimum length of the tiling node along the orientation. 0 if unknown
+    /// The minimum length of the tiling node along the orientation, including what the layout takes from its windows
+    /// along the orientation: the inner gaps between tiles and the accordion paddings. 0 if unknown
+    ///
+    /// - Parameter innerGap: the inner gap along the orientation
     @MainActor
-    func minimumLength(_ orientation: Orientation) -> CGFloat {
+    func minimumLength(_ orientation: Orientation, innerGap: CGFloat = 0) -> CGFloat {
         switch tilingTreeNodeCasesOrDie() {
             case .window(let window):
                 let minimumSize = window.effectiveMinimumSize
                 return orientation == .h ? minimumSize.width : minimumSize.height
             case .tilingContainer(let container):
-                var sum: CGFloat = 0
-                var max: CGFloat = 0
-                for child in container.inhabitedChildren {
-                    let length = child.minimumLength(orientation)
-                    sum += length
-                    max = Swift.max(max, length)
+                let minimums = container.inhabitedChildren.map { $0.minimumLength(orientation, innerGap: innerGap) }
+                // Without minimums, the gaps and paddings alone must not constrain the layout
+                guard minimums.contains(where: { $0 > 0 }) else { return 0 }
+                guard container.orientation == orientation, minimums.count > 1 else { return minimums.max() ?? 0 }
+                switch container.layout {
+                    case .tiles:
+                        return minimums.reduce(0, +) + innerGap * CGFloat(minimums.count - 1)
+                    case .accordion: // See layoutAccordion: the first and the last child lose one padding, the others two
+                        let padding = CGFloat(config.accordionPadding)
+                        return minimums.indices.map { i in
+                            minimums[i] + (i == 0 || i == minimums.count - 1 ? padding : 2 * padding)
+                        }.max() ?? 0
                 }
-                return container.layout == .tiles && container.orientation == orientation ? sum : max
         }
     }
 }

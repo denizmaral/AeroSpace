@@ -153,6 +153,43 @@ struct MinimumSizeTest {
         assertEquals(window.effectiveMinimumSize, .zero)
     }
 
+    /// A nested accordion takes the padding from its windows: the container needs the minimum plus the padding
+    @Test func testAccordionPaddingIsPartOfTheMinimum() async throws {
+        let workspace = Workspace.get(byName: name)
+        var window: TestWindow!
+        workspace.rootTilingContainer.apply {
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                TilingContainer(parent: $0, adaptiveWeight: 1, .h, .accordion, index: INDEX_BIND_LAST).apply {
+                    window = TestWindow.new(id: 1, parent: $0)
+                    TestWindow.new(id: 2, parent: $0)
+                }
+                TestWindow.new(id: 3, parent: $0)
+            }
+            TestWindow.new(id: 4, parent: $0)
+        }
+        window.learnedMinimumSize = CGSize(width: 1300, height: 0)
+        #expect(window.focusWindow())
+        try await workspace.layoutWorkspace()
+        assertEquals(window.lastAppliedLayoutPhysicalRect?.width, 1300)
+    }
+
+    /// The inner gaps of a nested tiles container are taken from its windows too
+    @Test func testInnerGapsArePartOfTheMinimum() async throws {
+        config.gaps = Gaps(inner: .init(vertical: 10, horizontal: 10), outer: .zero)
+        let workspace = Workspace.get(byName: name)
+        var windows: [TestWindow] = []
+        workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newHTiles(parent: $0, adaptiveWeight: 1).apply {
+                windows.append(TestWindow.new(id: 2, parent: $0))
+                windows.append(TestWindow.new(id: 3, parent: $0))
+            }
+        }
+        for window in windows { window.learnedMinimumSize = CGSize(width: 700, height: 0) }
+        try await workspace.layoutWorkspace()
+        assertEquals(windows.map { $0.lastAppliedLayoutPhysicalRect?.width }, [700, 700])
+    }
+
     /// The accordion fallback is rendering only. Hit testing (focus-follows-mouse, drag & drop) must see the accordion
     @Test func testHitTestingInAccordionFallback() async throws {
         let workspace = Workspace.get(byName: name)

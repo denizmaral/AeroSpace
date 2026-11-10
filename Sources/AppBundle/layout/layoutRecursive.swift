@@ -137,7 +137,7 @@ extension TilingContainer {
         let weights = inhabitedChildren.map { $0.getWeight(orientation) }
         let minimums: [CGFloat] = context.hasMinimumSizes
             ? inhabitedChildren.indices.map { i in
-                let minimum = inhabitedChildren[i].minimumLength(orientation)
+                let minimum = inhabitedChildren[i].minimumLength(orientation, innerGap: rawGap)
                 return minimum > 0 ? minimum + gap(i) : 0
             }
             : []
