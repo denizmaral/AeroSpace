@@ -22,6 +22,7 @@ open class Window: TreeNode, Hashable {
     var minimumSizeCheckTask: Task<(), any Error>? = nil
     var isMinimumSizeRecheckRequested: Bool = false
     var isMinimumSizeRecheckAfterLayoutRequested: Bool = false
+    var lastMinimumSizeProbe: ContinuousClock.Instant? = nil
     /// The native state (minimized, fullscreen) may have changed. See normalizeLayoutReason
     var isNativeStateCheckRequested: Bool = false
     /// The place in the tiling tree before a macOS native state. See ``enterMacosNativeState(_:prevParentKind:adaptiveWeight:)``

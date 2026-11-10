@@ -54,6 +54,7 @@ func runHeavyCompleteRefreshSession(
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
             await FocusBorderController.shared.update()
             WindowPlacementStore.persistIfChanged()
+            globalFocus.windowOrNil?.probeMinimumSizeDropIfDue()
         }
     }
     switch res {
