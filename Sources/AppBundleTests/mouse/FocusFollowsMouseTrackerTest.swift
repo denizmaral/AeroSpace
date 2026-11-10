@@ -206,6 +206,20 @@ struct FocusFollowsMouseTrackerTest {
         assertEquals(tracker.checked(real: gitHub, focused: appStore, focusChanges: 0, now: at(15)), gitHub)
     }
 
+    /// Leaving App Store (focused, on top) into GitHub Desktop: the first mouse position is in the resize margin that macOS
+    /// hit tests around App Store, the check finds App Store. Checked again on the next moves: GitHub Desktop is focused
+    @Test func testCheckThatFindsAWindowNextToTheMouseIsRepeated() {
+        let (gitHub, appStore, _) = windows()
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], top: appStore)
+
+        assertEquals(tracker.mouseMoved(over: [gitHub], focused: appStore, focusChanges: 0, now: at(0), frontmost: { nil }), .enter)
+        assertNil(tracker.checked(real: appStore, focused: appStore, focusChanges: 0, now: at(5)))
+        assertEquals(tracker.mouseMoved(over: [gitHub], focused: appStore, focusChanges: 0, now: at(50), frontmost: { nil }), .stay)
+        assertEquals(tracker.mouseMoved(over: [gitHub], focused: appStore, focusChanges: 0, now: at(120), frontmost: { nil }), .recheck)
+        assertEquals(tracker.checked(real: gitHub, focused: appStore, focusChanges: 0, now: at(125)), gitHub)
+        assertEquals(tracker.mouseMoved(over: [gitHub], focused: gitHub, focusChanges: 0, now: at(1000), frontmost: { nil }), .stay)
+    }
+
     /// The hit test sees what the user sees, not the tiles: App Store (left) is 1000 wide in its 960 wide tile
     @Test func testWindowsUnderTheMouseAreFoundByTheirObservedFrames() async throws {
         let workspace = Workspace.get(byName: name)

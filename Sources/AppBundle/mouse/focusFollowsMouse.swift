@@ -160,8 +160,10 @@ struct FocusFollowsMouseTracker {
         let previous: Window?? = isRealWindowKnown ? .some(realWindow) : .none
         realWindow = real
         isRealWindowKnown = true
-        // E.g. a menu over the window: the window is focused when the menu is closed and the mouse moves
-        recheckAt = real == nil ? now + Self.recheckInterval : nil
+        // Checked again on the next mouse moves while the check doesn't find one of the windows under the mouse: a menu over
+        // the window (it's focused when the menu is closed), or the edge of a window next to it (macOS hit tests a margin
+        // around a window for resizing: the first mouse position after leaving a window can still be in it)
+        recheckAt = real.map { windowIds.contains($0.windowId) } == true ? nil : now + Self.recheckInterval
         guard let real, real != focused, previous.map({ real !== $0 }) ?? true, focusChanges == focusChangesAtCheckStart else { return nil }
         return real
     }
