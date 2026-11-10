@@ -398,11 +398,17 @@ struct KeyChordRecorder: View {
         .onDisappear(perform: stop)
     }
 
+    /// Esc alone cancels. Caps Lock (and fn, the numeric pad) isn't a modifier of a shortcut: with Caps Lock on, Esc was
+    /// recorded as the shortcut, and took the Esc key from every app
+    static func cancelsRecording(keyCode: UInt16, _ flags: NSEvent.ModifierFlags) -> Bool {
+        keyCode == 53 && KeyChord.Modifiers(flags).isEmpty
+    }
+
     private func start() {
         stop()
         isRecording = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 53, event.modifierFlags.isDisjoint(with: .deviceIndependentFlagsMask) { // Esc
+            if Self.cancelsRecording(keyCode: event.keyCode, event.modifierFlags) {
                 stop()
                 return nil
             }

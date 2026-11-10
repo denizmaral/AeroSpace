@@ -63,4 +63,14 @@ struct SettingsBindingTest {
         assertEquals(decoded, list)
         #expect(decoded.ids != list.ids)
     }
+
+    /// Esc cancels the recording of a shortcut, also with Caps Lock on (it was recorded as the shortcut then)
+    @Test func testEscCancelsTheRecordingOfAShortcut() {
+        assertEquals(KeyChordRecorder.cancelsRecording(keyCode: 53, []), true)
+        assertEquals(KeyChordRecorder.cancelsRecording(keyCode: 53, [.capsLock]), true)
+        assertEquals(KeyChordRecorder.cancelsRecording(keyCode: 53, [.capsLock, .function, .numericPad]), true)
+        assertEquals(KeyChordRecorder.cancelsRecording(keyCode: 53, [.control]), false) // ⌃Esc is a shortcut
+        assertEquals(KeyChordRecorder.cancelsRecording(keyCode: 53, [.capsLock, .shift]), false)
+        assertEquals(KeyChordRecorder.cancelsRecording(keyCode: 0, []), false) // A
+    }
 }
