@@ -67,6 +67,10 @@ struct ShortcutsPane: View {
                         title: "Move the window to a workspace", symbol: "macwindow.and.cursorarrow",
                         modifiers: $model.settings.workspaceShortcuts.moveWindowTo, defaultModifiers: [.control, .option, .shift],
                     )
+                    if model.settings.workspaceShortcuts.goTo != nil {
+                        Toggle("The shortcut of the workspace that is shown goes back to the previous one", isOn: $model.settings.workspaceShortcuts.goToTogglesBack)
+                            .help("Press the shortcut of a workspace twice to look at it and come back")
+                    }
                     ForEach(model.problems(at: "Shortcuts › \(mainModeId) › Workspaces"), id: \.message) { problem in
                         Label(problem.message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                     }
@@ -389,7 +393,7 @@ struct ActionIcon: View {
             case .reloadSettings: "arrow.clockwise"
             case .moveMouse: "cursorarrow"
             case .custom: "terminal"
-            case .workspace, .moveWindowToWorkspace, .moveWindowToWorkspaceAndFollow, nil: "questionmark"
+            case .workspace, .toggleWorkspace, .moveWindowToWorkspace, .moveWindowToWorkspaceAndFollow, nil: "questionmark"
         }
     }
 }
@@ -470,7 +474,8 @@ extension Action {
         switch self {
             case .focus(let direction), .move(let direction), .joinWith(let direction):
                 "\(CardinalDirection.allCases.firstIndex(of: direction) ?? 0)"
-            case .workspace(let name), .moveWindowToWorkspace(let name), .moveWindowToWorkspaceAndFollow(let name), .enterMode(let name): name
+            case .workspace(let name), .toggleWorkspace(let name), .moveWindowToWorkspace(let name), .moveWindowToWorkspaceAndFollow(let name),
+                 .enterMode(let name): name
             default: commandLine
         }
     }
@@ -490,6 +495,7 @@ extension Action {
             case .resize(let dimension, .subtract(let value)): "Shrink \(dimension.rawValue) by \(value)"
             case .resize(let dimension, .set(let value)): "Set \(dimension.rawValue) to \(value)"
             case .workspace(let name): "Go to workspace \(name)"
+            case .toggleWorkspace(let name): "Go to workspace \(name), or back"
             case .workspaceBackAndForth: "Previous workspace"
             case .moveWindowToWorkspace(let name): "Move the window to workspace \(name)"
             case .moveWindowToWorkspaceAndFollow(let name): "Move the window to workspace \(name) and go there"

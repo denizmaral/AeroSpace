@@ -118,6 +118,13 @@ the wrong window and things get slow.
 | A monitor in macOS fullscreen | The other monitor still works | The other monitor is black |
 | The menu bar | On every monitor | Only on the main monitor |
 
+### There and back with one shortcut
+
+With **The shortcut of the workspace that is shown goes back to the previous one** (Settings › Shortcuts, under the
+workspace shortcuts), pressing the shortcut of a workspace twice looks at it and comes back, like Hyprland's
+`workspace_back_and_forth`. A single shortcut can do the same for one workspace (the action "Go to a workspace", with
+**Again goes back**): a workspace for the things that you only look at for a moment, like a scratchpad.
+
 ## Multiple monitors
 
 - All monitors share one pool of workspaces, and each monitor shows one of them

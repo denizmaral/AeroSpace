@@ -66,6 +66,9 @@ struct Settings: Codable, Sendable, Equatable {
     @DecodableWithDefaults
     struct WorkspaceShortcuts: Codable, Sendable, Equatable {
         var goTo: KeyChord.Modifiers? = [.control, .option]
+        /// The shortcut of the workspace that is shown goes back to the previous workspace (Hyprland's
+        /// `workspace_back_and_forth`)
+        var goToTogglesBack = false
         var moveWindowTo: KeyChord.Modifiers? = [.control, .option, .shift]
     }
 

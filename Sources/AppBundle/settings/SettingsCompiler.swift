@@ -242,7 +242,8 @@ extension Settings {
             moveWindowTo = nil
         }
         var bindings: [String: HotkeyBinding] = [:]
-        for (modifiers, action) in [(goTo, Action.workspace), (moveWindowTo, Action.moveWindowToWorkspace)] {
+        let goToAction = workspaceShortcuts.goToTogglesBack ? Action.toggleWorkspace : Action.workspace
+        for (modifiers, action) in [(goTo, goToAction), (moveWindowTo, Action.moveWindowToWorkspace)] {
             guard let modifiers else { continue }
             for name in workspaces.persistent where name.count == 1 {
                 guard let key = keyForCharacter(name), case .cmd(let shell) = action(name).command else { continue }

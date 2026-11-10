@@ -18,7 +18,7 @@ struct SettingsTest {
             .cycleFocus(.next), .cycleFocus(.previous), .focusBackAndForth, .swap(.left), .swap(.up),
             .moveWindowToWorkspaceAndFollow("B"), .moveWindowToWorkspaceAndFollow("1#main"),
             .resize(.smart, .add(50)), .resize(.width, .subtract(50)), .resize(.height, .set(300)), .resize(.smartOpposite, .add(1)),
-            .workspace("T"), .workspace("1#main"), .workspace("A+B"), .workspaceBackAndForth,
+            .workspace("T"), .workspace("1#main"), .workspace("A+B"), .workspaceBackAndForth, .toggleWorkspace("T"), .toggleWorkspace("1#main"),
             .moveWindowToWorkspace("B"), .moveWindowToWorkspace("1#main"),
             .moveWorkspaceToMonitor(.next, wrapAround: false), .moveWorkspaceToMonitor(.prev, wrapAround: true),
             .layout([.tiles, .accordion]), .layout([.horizontal, .vertical]), .layout([.floating, .tiling]), .layout([.tiling]),

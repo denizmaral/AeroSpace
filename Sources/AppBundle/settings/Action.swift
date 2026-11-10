@@ -17,6 +17,9 @@ enum Action: Codable, Sendable, Equatable {
     case joinWith(CardinalDirection)
     case resize(ResizeCmdArgs.Dimension, ResizeAmount)
     case workspace(String)
+    /// Goes to the workspace, and back to the previous one if it's already shown: the same shortcut toggles, e.g. for a
+    /// workspace that is used like a scratchpad (Hyprland's `workspace_back_and_forth` and `togglespecialworkspace`)
+    case toggleWorkspace(String)
     case workspaceBackAndForth
     case moveWindowToWorkspace(String)
     /// Moves the window and goes there with it (Hyprland's `movetoworkspace`; ``moveWindowToWorkspace(_:)`` stays, like
@@ -89,6 +92,7 @@ enum Action: Codable, Sendable, Equatable {
                     case .set(let value): ["resize", dimension.rawValue, "\(value)"]
                 }
             case .workspace(let name): ["workspace", name]
+            case .toggleWorkspace(let name): ["workspace", "--auto-back-and-forth", name]
             case .workspaceBackAndForth: ["workspace-back-and-forth"]
             case .moveWindowToWorkspace(let name): ["move-node-to-workspace", name]
             case .moveWindowToWorkspaceAndFollow(let name): ["move-node-to-workspace", "--focus-follows-window", name]
@@ -137,7 +141,7 @@ enum Action: Codable, Sendable, Equatable {
                     case .set(let value): .set(value)
                 }
                 args = ResizeCmdArgs(rawArgs: rawArgs, dimension: dimension, units: units)
-            case .workspace(let name), .moveWindowToWorkspace(let name), .moveWindowToWorkspaceAndFollow(let name):
+            case .workspace(let name), .toggleWorkspace(let name), .moveWindowToWorkspace(let name), .moveWindowToWorkspaceAndFollow(let name):
                 // E.g. `next` would be a direction
                 let target: WorkspaceTarget
                 switch WorkspaceName.parse(name) {
@@ -146,6 +150,8 @@ enum Action: Codable, Sendable, Equatable {
                 }
                 args = switch self {
                     case .workspace: WorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target))
+                    case .toggleWorkspace:
+                        WorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target)).with(\._autoBackAndForth, true)
                     case .moveWindowToWorkspaceAndFollow:
                         MoveNodeToWorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target)).with(\.focusFollowsWindow, true)
                     default: MoveNodeToWorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target))

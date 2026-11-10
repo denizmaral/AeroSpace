@@ -111,7 +111,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .swap: .swap
             case .joinWith: .joinWith
             case .resize: .resize
-            case .workspace: .workspace
+            case .workspace, .toggleWorkspace: .workspace
             case .workspaceBackAndForth: .workspaceBackAndForth
             case .moveWindowToWorkspace, .moveWindowToWorkspaceAndFollow: .moveWindowToWorkspace
             case .moveWorkspaceToMonitor: .moveWorkspaceToMonitor
@@ -205,7 +205,12 @@ struct ActionEditor: View {
             case .swap(let direction): DirectionPicker(direction: direction) { action = .swap($0) }
             case .joinWith(let direction): DirectionPicker(direction: direction) { action = .joinWith($0) }
             case .resize(let dimension, let amount): ResizeEditor(dimension: dimension, amount: amount) { action = .resize($0, $1) }
-            case .workspace(let name): WorkspaceField(name: name, workspaces: workspaces) { action = .workspace($0) }
+            case .workspace(let name):
+                WorkspaceField(name: name, workspaces: workspaces) { action = .workspace($0) }
+                togglesBackToggle(name, isOn: false)
+            case .toggleWorkspace(let name):
+                WorkspaceField(name: name, workspaces: workspaces) { action = .toggleWorkspace($0) }
+                togglesBackToggle(name, isOn: true)
             case .moveWindowToWorkspace(let name):
                 WorkspaceField(name: name, workspaces: workspaces) { action = .moveWindowToWorkspace($0) }
                 followToggle(name, isOn: false)
@@ -247,6 +252,15 @@ struct ActionEditor: View {
             case .focusBackAndForth, .workspaceBackAndForth, .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent,
                  .reloadSettings:
                 EmptyView()
+        }
+    }
+
+    /// Going to a workspace: the same shortcut goes back to the previous workspace when it's already there
+    @ViewBuilder
+    private func togglesBackToggle(_ workspace: String, isOn: Bool) -> some View {
+        if context == .shortcut || isOn {
+            Toggle("Again goes back", isOn: Binding(get: { isOn }, set: { action = $0 ? .toggleWorkspace(workspace) : .workspace(workspace) }))
+                .help("When the workspace is already shown, the shortcut goes back to the previous one: it toggles, like a scratchpad")
         }
     }
 

@@ -65,4 +65,25 @@ struct WorkspaceShortcutsTest {
         assertEquals(problems.map(\.message), ["It's also the shortcut of a workspace"])
         assertEquals(commands(config, [.control, .option], .one), "focus left") // The explicit shortcut wins
     }
+
+    /// "The shortcut of the workspace that is shown goes back to the previous one" (Hyprland's workspace_back_and_forth)
+    @Test func testTheShortcutOfTheShownWorkspaceGoesBack() async throws {
+        var settings = settings(["1", "T"])
+        assertEquals(commands(settings.compile(keyForCharacter: qwerty).config, [.control, .option], .t), "workspace T")
+        settings.workspaceShortcuts.goToTogglesBack = true
+        let (config, problems) = settings.compile(keyForCharacter: qwerty)
+        assertEquals(problems, [])
+        assertEquals(commands(config, [.control, .option], .t), "workspace --auto-back-and-forth T")
+        assertEquals(commands(config, [.control, .option, .shift], .t), "move-node-to-workspace T")
+
+        // The action of a single shortcut does the same: there, and back again
+        guard case .cmd(let toggle) = Action.toggleWorkspace("T").command else { throw CancellationError() }
+        #expect(Workspace.get(byName: "1").focusWorkspace())
+        await checkOnFocusChangedCallbacks_nonCancellable()
+        _ = await toggle.run(.defaultEnv, .emptyStdin)
+        assertEquals(globalFocus.workspace.name, "T")
+        await checkOnFocusChangedCallbacks_nonCancellable() // What a session does: the previous workspace is known
+        _ = await toggle.run(.defaultEnv, .emptyStdin)
+        assertEquals(globalFocus.workspace.name, "1")
+    }
 }
