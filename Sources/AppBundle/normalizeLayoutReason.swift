@@ -7,18 +7,26 @@
     // - when AX notifies about a native state change (e.g. "Minimize All"), see refreshObs, or AeroSpace changes it
     // - when they are already in a native macOS state (the user can leave it)
     // - at most every 5 seconds, as a safety net
-    let start = ContinuousClock.now
-    let checkInvisible = lastInvisibleWindowsNativeStateCheck.map { start - $0 >= .seconds(5) } ?? true
+    // The timestamp is recorded before the checks: sessions are often canceled by newer events, a timestamp recorded
+    // after the checks would never be recorded during bursts of events. Notified windows are checked anyway
+    let now = ContinuousClock.now
+    let checkInvisible = lastInvisibleWindowsNativeStateCheck.map { now - $0 >= .seconds(5) } ?? true
+    if checkInvisible { lastInvisibleWindowsNativeStateCheck = now }
     for workspace in Workspace.all {
         let windows: [Window] = workspace.isVisible || checkInvisible
             ? workspace.allLeafWindowsRecursive
             : workspace.allLeafWindowsRecursive.filter { $0.layoutReason != .standard || $0.isNativeStateCheckRequested }
         if windows.isEmpty { continue }
-        try await _normalizeLayoutReason(workspace: workspace, windows: windows)
-        for window in windows { window.isNativeStateCheckRequested = false }
+        // Clear the requests before the AX reads: a notification during the reads requests a new check
+        let requested = windows.filter(\.isNativeStateCheckRequested)
+        for window in requested { window.isNativeStateCheckRequested = false }
+        do {
+            try await _normalizeLayoutReason(workspace: workspace, windows: windows)
+        } catch {
+            for window in requested { window.isNativeStateCheckRequested = true } // Not checked, e.g. the session is canceled
+            throw error
+        }
     }
-    // After the checks: the session may be canceled in the middle
-    if checkInvisible { lastInvisibleWindowsNativeStateCheck = start }
     try await _normalizeLayoutReason(workspace: globalFocus.workspace, windows: macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self))
     try await validateStillPopups()
 }

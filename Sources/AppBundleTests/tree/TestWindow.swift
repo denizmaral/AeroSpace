@@ -71,7 +71,16 @@ final class TestWindow: Window, CustomStringConvertible {
         return _rect.map { CGSize(width: $0.width, height: $0.height) }
     }
 
-    override func isMacosFullscreen(_ cm: CancellationMode) async throws -> Bool { isMacosFullscreenForTest }
+    /// Runs at the await point of the next native state read (e.g. a notification arrives, or the session is canceled)
+    var onNativeStateReadForTest: (@MainActor () throws -> Void)? = nil
+
+    @MainActor override func isMacosFullscreen(_ cm: CancellationMode) async throws -> Bool {
+        if let hook = onNativeStateReadForTest {
+            onNativeStateReadForTest = nil
+            try hook()
+        }
+        return isMacosFullscreenForTest
+    }
 }
 
 extension OpaqueWindowId: ExpressibleByIntegerLiteral {
