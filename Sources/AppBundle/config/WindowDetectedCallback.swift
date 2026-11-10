@@ -28,9 +28,6 @@ struct WindowMatcher: Withable, Equatable {
         if let duringStartup, duringStartup != isStartup {
             return false
         }
-        if let windowTitleRegexSubstring, (try? await window.getTitle(.nonCancellable))?.contains(caseInsensitiveRegex: windowTitleRegexSubstring) != true {
-            return false
-        }
         if let appId, appId != window.app.rawAppBundleId {
             return false
         }
@@ -38,6 +35,11 @@ struct WindowMatcher: Withable, Equatable {
             return false
         }
         if let workspace, workspace != window.nodeWorkspace?.name {
+            return false
+        }
+        // Last: the title is an accessibility round trip to the app, the other conditions cost nothing. A rule for the
+        // title of another app's windows doesn't ask this app
+        if let windowTitleRegexSubstring, (try? await window.getTitle(.nonCancellable))?.contains(caseInsensitiveRegex: windowTitleRegexSubstring) != true {
             return false
         }
         return true

@@ -33,4 +33,18 @@ struct OnWindowDetectedTest {
         assertEquals((Workspace.get(byName: "b").rootTilingContainer.children.singleOrNil() as? Window)?.windowId, 2)
         assertEquals((workspaceA.rootTilingContainer.children.singleOrNil() as? Window)?.windowId, 1)
     }
+
+    /// The title is read from the app (an accessibility round trip): only if the other conditions hold
+    @Test func testTheTitleIsReadLast() async throws {
+        let window = TestWindow.new(id: 1, parent: Workspace.get(byName: name).rootTilingContainer)
+        let title = try CaseInsensitiveRegex.new("testwindow\\(1\\)").get()
+
+        assertEquals(await WindowMatcher(appId: "com.apple.mail", windowTitleRegexSubstring: title).matches(window), false)
+        assertEquals(await WindowMatcher(windowTitleRegexSubstring: title, workspace: "other").matches(window), false)
+        assertEquals(await WindowMatcher(windowTitleRegexSubstring: title, duringStartup: true).matches(window), false)
+        assertEquals(window.titleReadsForTest, 0)
+
+        assertEquals(await WindowMatcher(appId: "com.denizmaral.MarSpace.test-app", windowTitleRegexSubstring: title).matches(window), true)
+        assertEquals(window.titleReadsForTest, 1)
+    }
 }

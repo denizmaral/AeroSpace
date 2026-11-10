@@ -65,7 +65,13 @@ final class TestWindow: Window, CustomStringConvertible {
         unbindAsClosed() // The same as MacWindow.garbageCollect
     }
 
-    override func getTitle(_ cm: CancellationMode) async throws -> String { description }
+    /// The title is an accessibility round trip to the app
+    private(set) var titleReadsForTest = 0
+
+    override func getTitle(_ cm: CancellationMode) async throws -> String {
+        titleReadsForTest += 1
+        return description
+    }
 
     @MainActor override func getAxRect(_ cm: CancellationMode) async throws -> Rect? { // todo change to not Optional
         axRectForTest
