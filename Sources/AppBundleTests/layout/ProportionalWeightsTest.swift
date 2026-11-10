@@ -624,4 +624,56 @@ struct ProportionalWeightsTest {
         try await setFullscreen([window4], false, workspace)
         assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(3), .window(4), .window(5), .window(2)]))
     }
+
+    /// 1 leaves (the root takes the orientation of v), then 3 leaves the new root. 1 comes back first and wraps the
+    /// children again: 3 comes back into the wrapper, between its old siblings
+    @Test func testWindowThatLeftAfterTheRootFlattenComesBackIntoTheWrapper() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window3: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0, adaptiveWeight: 600)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1320).apply {
+                TestWindow.new(id: 2, parent: $0, adaptiveWeight: 300)
+                window3 = TestWindow.new(id: 3, parent: $0, adaptiveWeight: 400)
+                TestWindow.new(id: 4, parent: $0, adaptiveWeight: 379)
+            }
+        }
+        try await workspace.layoutWorkspace()
+        let before = rects(workspace)
+        try await setFullscreen([window1], true, workspace)
+        try await setFullscreen([window3], true, workspace)
+        try await setFullscreen([window1], false, workspace)
+        try await setFullscreen([window3], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3), .window(4)])]))
+        assertEquals(rects(workspace), before)
+    }
+
+    /// 2 leaves v, then 1 leaves the root (the root takes the children of v). In any order, 2 comes back with its old
+    /// share next to its old siblings
+    @Test(arguments: [false, true])
+    func testWindowOfTheFlattenedContainerKeepsItsShare(reversedReturn: Bool) async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window2: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0, adaptiveWeight: 500)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1420).apply {
+                window2 = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 200)
+                TestWindow.new(id: 3, parent: $0, adaptiveWeight: 600)
+                TestWindow.new(id: 4, parent: $0, adaptiveWeight: 279)
+            }
+        }
+        try await workspace.layoutWorkspace()
+        let before = rects(workspace)
+        try await setFullscreen([window2], true, workspace)
+        try await setFullscreen([window1], true, workspace)
+        for window in reversedReturn ? [window2!, window1!] : [window1!, window2!] {
+            try await setFullscreen([window], false, workspace)
+        }
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3), .window(4)])]))
+        assertEquals(rects(workspace), before)
+    }
 }

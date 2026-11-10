@@ -134,7 +134,7 @@ extension Window {
         guard let parent = slot.parent, parent.lifeStatus == .alive, parent.nodeWorkspace === workspace else { return false }
         if slot.needsRootRewrap(parent) {
             // The root has only the wrapper and the window then: both get their old weights
-            rewrapRoot(parent, as: slot)
+            rewrapRoot(parent, as: slot, of: self)
             bind(to: parent, adaptiveWeight: slot.adaptiveWeight, index: slot.isAfterNeighbor ? INDEX_BIND_LAST : 0)
             return true
         }
@@ -147,7 +147,7 @@ extension Window {
            let awaySlot = away.tilingSlot
         {
             // Wrap the children of the root again on behalf of the window that is still away
-            let wrapper = rewrapRoot(parent, as: awaySlot)
+            let wrapper = rewrapRoot(parent, as: awaySlot, of: away)
             away.tilingSlot?.neighbor = wrapper
         }
         bind(
@@ -201,7 +201,12 @@ extension Window {
         let neighborParent = (neighbor.parent as? TilingContainer).orDie()
         let neighborIndex = neighbor.ownIndex(in: .all).orDie()
         if neighborParent.orientation == slot.orientation {
-            bind(to: neighborParent, adaptiveWeight: WEIGHT_AUTO, index: neighborIndex + (isAfterNeighbor ? 1 : 0))
+            // E.g. the root took the children of the flattened parent: the window gets its old share among them
+            bind(
+                to: neighborParent,
+                adaptiveWeight: restoredWeight(slot.adaptiveWeight, siblings: slot.siblings, in: neighborParent),
+                index: neighborIndex + (isAfterNeighbor ? 1 : 0),
+            )
         } else {
             let neighborBinding = neighbor.unbindFromParent()
             let container = TilingContainer(
@@ -291,10 +296,10 @@ private func tilingNeighbor(ofAwayNeighborsOf slot: TilingSlot, _ isTiling: (Tre
 }
 
 /// Wraps the children that `root` took from the flattened container again (see ``TilingSlot/needsRootRewrap(_:)``), and
-/// gives `root` the orientation and layout it had when the window of `slot` left
+/// gives `root` the orientation and layout it had when `flattener` (the window of `slot`) left
 @MainActor
 @discardableResult
-private func rewrapRoot(_ root: TilingContainer, as slot: TilingSlot) -> TilingContainer {
+private func rewrapRoot(_ root: TilingContainer, as slot: TilingSlot, of flattener: Window) -> TilingContainer {
     let children = root.children
     let container = TilingContainer(parent: root, adaptiveWeight: slot.neighborAdaptiveWeight, root.orientation, root.layout, index: 0)
     for child in children {
@@ -303,6 +308,17 @@ private func rewrapRoot(_ root: TilingContainer, as slot: TilingSlot) -> TilingC
     }
     root.changeOrientation(slot.orientation)
     root.layout = slot.layout
+    // The windows that left the root while it had the children of the flattened container (after `flattener`, with its
+    // orientation and layout, and they didn't flatten the root themselves) come back to the wrapper
+    if let workspace = root.nodeWorkspace {
+        for window in allAwayWindows(of: workspace) where window !== flattener {
+            guard let other = window.tilingSlot, other.parent === root, !other.isRootFlattened,
+                  other.orientation == container.orientation, other.layout == container.layout,
+                  other.siblings.contains(where: { $0.node === flattener && $0.isAway })
+            else { continue }
+            window.tilingSlot?.parent = container
+        }
+    }
     return container
 }
 
