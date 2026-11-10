@@ -38,17 +38,26 @@ import Common
         focusFollowsTask = Task.startUnstructured { @MainActor in
             // Ignores macOS menubar dropdown, but, unfortunately, it doesn't ignore non-native menu-like fake windows.
             // todo: It would be cool to somehow reuse isWindowHeuristic logic here
-            if await isAxWindowUnderMouse(location) == false {
-                // E.g. a menu or a popover is over the window. Retry a bit later, not on every mouse move: each check is
-                // an AX call. The task is canceled if the mouse enters another window meanwhile
-                try await Task.sleep(for: .milliseconds(150))
-                if windowUnderMouse === window { windowUnderMouse = nil }
-                return
+            let target: Window?
+            switch await axWindowUnderMouse(location) {
+                case .notAWindow:
+                    // E.g. a menu or a popover is over the window. Retry a bit later, not on every mouse move: each check
+                    // is an AX call. The task is canceled if the mouse enters another window meanwhile
+                    try await Task.sleep(for: .milliseconds(150))
+                    if windowUnderMouse === window { windowUnderMouse = nil }
+                    return
+                case .window(let nativeWindowId, let pid):
+                    // The rects of the last layout don't know the z-order (e.g. a floating window behind a tiling one):
+                    // the window that is really on top. Nothing if AeroSpace doesn't manage it
+                    target = Window.get(byNativeId: nativeWindowId, pid: pid)
+                case .unknown:
+                    target = window
             }
             try checkCancellation()
+            guard let target, target != globalFocus.windowOrNil else { return }
             try await runLightSession(.focusFollowsMouse, token) {
-                _ = window.focusWindow()
-                window.nativeFocus()
+                _ = target.focusWindow()
+                target.nativeFocus()
             }
         }
     }
@@ -74,13 +83,24 @@ extension Workspace {
     }
 }
 
+private enum AxElementUnderMouse {
+    /// The topmost window at the location
+    case window(nativeWindowId: CGWindowID, pid: pid_t)
+    /// E.g. a menu or a popover
+    case notAWindow
+    /// The accessibility API failed
+    case unknown
+}
+
 @concurrent
-private nonisolated func isAxWindowUnderMouse(_ location: CGPoint) async -> Bool? {
+private nonisolated func axWindowUnderMouse(_ location: CGPoint) async -> AxElementUnderMouse {
     let systemwide = AXUIElementCreateSystemWide()
     var element: AXUIElement?
-    if unsafe AXUIElementCopyElementAtPosition(systemwide, Float(location.x), Float(location.y), &element) != .success {
-        return nil
-    }
-    guard let element else { return nil }
-    return element.get(Ax.parentWindowRecursive) != nil || element.get(Ax.roleAttr) == kAXWindowRole
+    guard unsafe AXUIElementCopyElementAtPosition(systemwide, Float(location.x), Float(location.y), &element) == .success,
+          let element
+    else { return .unknown }
+    let window = element.get(Ax.roleAttr) == kAXWindowRole ? element : element.get(Ax.parentWindowRecursive)
+    guard let window else { return .notAWindow }
+    guard let nativeWindowId = window.containingNativeWindowId(), let pid = window.pid else { return .unknown }
+    return .window(nativeWindowId: nativeWindowId, pid: pid)
 }
