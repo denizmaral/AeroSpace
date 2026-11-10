@@ -530,6 +530,26 @@ struct WindowRulesPane: View {
                     Label("Add a rule", systemImage: "plus")
                 }
             }
+            Section {
+                if model.settings.appWorkspaces.isEmpty {
+                    Text("No app yet").foregroundStyle(.secondary)
+                }
+                ForEach(model.settings.appWorkspaces.ids, id: \.self) { id in
+                    AppWorkspaceRow(
+                        appWorkspace: $model.settings.appWorkspaces.element(id, or: Settings.AppWorkspace(bundleId: "", workspace: "")),
+                        workspaces: model.settings.workspaces.persistent,
+                    ) {
+                        let name = model.settings.appWorkspaces[id: id].map { AppCatalog.name(of: $0.bundleId) } ?? "The app"
+                        model.removing("Forget App", "\(name) forgotten") { $0.appWorkspaces[id: id] = nil }
+                    }
+                }
+            } header: {
+                Text("Apps on their workspace")
+            } footer: {
+                Text("Move a window of an app to a workspace with a shortcut: the app opens there the next time. A rule for the app comes first.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
@@ -565,6 +585,36 @@ extension WindowRulesPane {
         )
     }
 }
+/// An app and the workspace where it opens
+private struct AppWorkspaceRow: View {
+    @Binding var appWorkspace: Settings.AppWorkspace
+    let workspaces: [String]
+    let forget: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(nsImage: AppCatalog.icon(of: appWorkspace.bundleId)).resizable().frame(width: 22, height: 22)
+            Text(AppCatalog.name(of: appWorkspace.bundleId)).lineLimit(1)
+            Spacer(minLength: 12)
+            Text("opens on").foregroundStyle(.secondary)
+            Picker("", selection: $appWorkspace.workspace) {
+                // The workspace may not be persistent (anymore)
+                ForEach(workspaces.contains(appWorkspace.workspace) ? workspaces : [appWorkspace.workspace] + workspaces, id: \.self) {
+                    Text("Workspace \($0)").tag($0)
+                }
+            }
+            .labelsHidden()
+            .fixedSize()
+            Button(action: forget) {
+                Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help("Forget the app: it opens on the focused workspace")
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 private struct WindowRuleRow: View {
     let rule: Settings.WindowRule
     let hasProblem: Bool

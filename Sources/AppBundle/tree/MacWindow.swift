@@ -27,8 +27,8 @@ final class MacWindow: Window {
         let rect = try await macApp.getAxRect(windowId, .cancellable)
         // The window is known from the previous run (AeroSpace was restarted, or the window was invisible until now)
         let previousPlacement = WindowPlacementStore.previousPlacement(of: windowId, macApp)
-        // An app that the user moved to a workspace opens there again (see AppWorkspaceStore)
-        let appWorkspace = AppWorkspaceStore.workspace(
+        // An app opens on the workspace where the user put it (see Settings.appWorkspaces)
+        let appWorkspace = appWorkspace(
             forNewWindowOf: macApp.rawAppBundleId,
             // Its first window, or the windows that it opens (or restores) while it's launched
             appIsStarting: !allWindowsMap.values.contains { $0.macApp === macApp } ||
@@ -345,7 +345,8 @@ func onWindowDetected(_ env: CmdEnv, _ io: CmdIo, _ window: Window) async -> Int
     ))
     var lastExitCode = Int32ExitCode.succ
     for callback in config.onWindowDetected where await callback.matches(window) {
-        lastExitCode = await callback.run.run(env.withWindowId(window.windowId), io)
+        // A move by a rule isn't a move by the user: the app isn't remembered on that workspace
+        lastExitCode = await WindowRuleContext.$isRunning.withValue(true) { await callback.run.run(env.withWindowId(window.windowId), io) }
         if !callback.checkFurtherCallbacks {
             return lastExitCode
         }

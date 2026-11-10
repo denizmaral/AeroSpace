@@ -11,7 +11,11 @@ import Observation
 @MainActor
 @Observable
 final class SettingsStore {
-    static let shared = SettingsStore(repository: .applicationSupport, applyToEngine: { await applySettingsToEngine($0) })
+    /// Tests never touch the settings of the user, nor the engine through it
+    static let shared = SettingsStore(
+        repository: isUnitTest ? nil : .applicationSupport,
+        applyToEngine: { if !isUnitTest { await applySettingsToEngine($0) } },
+    )
 
     /// Writing goes through ``update(_:_:)``: a change made through a binding of the settings window is a transaction too
     var settings: Settings {
@@ -120,6 +124,19 @@ final class SettingsStore {
     private func registerUndo(restoring value: Settings, _ actionName: String) {
         undoManager?.registerUndo(withTarget: self) { store in store.restore(value, actionName) }
         undoManager?.setActionName(actionName)
+    }
+
+    /// The user moved a window of the app to a workspace (a shortcut): the app opens there the next time. Not an edit of
+    /// the settings window: not undoable there. Nothing is remembered for an app that a window rule places
+    func remember(_ bundleId: String, onWorkspace workspace: String) {
+        guard !current.hasRulePlacing(bundleId) else { return }
+        var value = current
+        if let index = value.appWorkspaces.firstIndex(where: { $0.bundleId == bundleId }) {
+            value.appWorkspaces[index].workspace = workspace
+        } else {
+            value.appWorkspaces.append(Settings.AppWorkspace(bundleId: bundleId, workspace: workspace))
+        }
+        if value != current { set(value) }
     }
 
     // MARK: Saving and applying

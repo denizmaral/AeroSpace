@@ -20,6 +20,7 @@ struct Settings: Codable, Sendable, Equatable {
     var windowRules: IdentifiedList<WindowRule> = []
     var workspaces = Workspaces()
     var automation = Automation()
+    var appWorkspaces: IdentifiedList<AppWorkspace> = []
 
     struct General: Codable, Sendable, Equatable {
         var startAtLogin = false
@@ -102,6 +103,13 @@ struct Settings: Codable, Sendable, Equatable {
     struct MonitorAssignment: Codable, Sendable, Equatable {
         var workspace: String
         var monitors: [MonitorSelector]
+    }
+
+    /// The app opens on the workspace when it's launched (its first windows). Remembered when the user moves a window of the
+    /// app to a workspace with a shortcut; a window rule that places the app comes first
+    struct AppWorkspace: Codable, Sendable, Equatable {
+        var bundleId: String
+        var workspace: String
     }
 
     struct Automation: Codable, Sendable, Equatable {
@@ -197,12 +205,23 @@ extension Settings {
         windowRules = try container.decodeIfPresent(IdentifiedList<WindowRule>.self, forKey: .windowRules) ?? defaults.windowRules
         workspaces = try container.decodeIfPresent(Workspaces.self, forKey: .workspaces) ?? defaults.workspaces
         automation = try container.decodeIfPresent(Automation.self, forKey: .automation) ?? defaults.automation
+        appWorkspaces = try container.decodeIfPresent(IdentifiedList<AppWorkspace>.self, forKey: .appWorkspaces) ?? []
     }
 }
 
 extension Settings.Shortcut {
     /// Just added, without an action yet: it's shown, and the engine skips it (it doesn't take its keys)
     var isComplete: Bool { !actions.isEmpty }
+}
+
+extension Settings {
+    /// A window rule moves the windows of the app to a workspace: where the app opens isn't remembered, the rule decides
+    func hasRulePlacing(_ bundleId: String) -> Bool {
+        windowRules.contains { rule in
+            rule.isComplete && rule.condition.appBundleId == bundleId &&
+                rule.actions.contains { if case .moveWindowToWorkspace = $0 { true } else { false } }
+        }
+    }
 }
 
 extension Settings.WindowRule {

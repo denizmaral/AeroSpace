@@ -48,6 +48,8 @@ struct Config: Withable {
     var accordionPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
+    /// Bundle id → the workspace where the app opens (MarSpace settings)
+    var appWorkspaces: [String: String] = [:]
     var execOnWorkspaceChange: [String] = [] // todo deprecate
     var keyMapping = KeyMapping()
     var execConfig: ExecConfig = ExecConfig()

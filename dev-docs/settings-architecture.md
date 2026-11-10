@@ -1,6 +1,6 @@
 # Settings architecture
 
-Status: phases 1 and 2 done (2026-11-10), phase 3 next.
+Status: phases 1 to 3 done (2026-11-10), phase 4 next.
 
 ## Why
 
@@ -22,7 +22,8 @@ from that seam:
 ## Decision
 
 Keep AeroSpace's window engine (tree, layout, commands): it's solid and it isn't the problem. Replace the configuration
-layer with MarSpace's own: a typed domain, one owner, derived engine state applied by diff.
+layer with MarSpace's own: a typed domain, one owner, derived engine state applied by diff. Simple over clever: no
+migration of AeroSpace's configuration, no TOML, defaults written in Swift.
 
 ```
  Settings window ─┐                                    ┌─▶ HotkeyService        (diff by chord)
@@ -66,10 +67,11 @@ Every phase is one commit and one deploy, and must reproduce the compiled result
    complete/incomplete as a domain state
 2. **Engine snapshot, applied by diff**: hotkeys, window rules, login item, focus follows mouse; no wholesale `config`
    swap, no reset of all hotkeys
-3. **App workspaces in the settings**: migrate `AppWorkspaces.plist` (dropping entries that a window rule covers), record
-   only moves made by the user, show and edit them in the settings window
-4. **Typed commands**: actions run as typed commands, the command line stays for custom actions and display
-5. **TOML out of the runtime**: the parser only serves the one-time import
+3. **App workspaces in the settings**: recorded only for moves made by the user, shown and edited in the settings window
+   (the hidden file of before isn't migrated)
+4. **No AeroSpace legacy**: no TOML import at the first launch, no TOML parser and default config at runtime, no
+   migration of older settings, no `--config-path`. The default settings are written in Swift
+5. **Typed commands** (if still worth it then): actions run as typed commands, the command line stays for custom actions
 
 ## Backlog (UX QA, after phase 1)
 

@@ -43,6 +43,7 @@ extension Settings {
         let border = appearance.focusBorder
         config.focusBorder = FocusBorder(enabled: border.isEnabled, color: border.color.runtimeColor, width: border.width, radius: border.radius)
 
+        config.appWorkspaces = Dictionary(appWorkspaces.map { ($0.bundleId, $0.workspace) }, uniquingKeysWith: { _, last in last })
         config.persistentWorkspaces = OrderedSet(workspaces.persistent.filter { name in
             guard case .failure(let message) = WorkspaceName.parse(name) else { return true }
             problems.append(.init(location: "Workspaces › \(name)", message: message))
