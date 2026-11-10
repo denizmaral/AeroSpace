@@ -55,6 +55,12 @@ open class Window: TreeNode, Hashable {
     @MainActor
     @discardableResult
     override func bind(to newParent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) -> BindingData? {
+        // Placed somewhere else (e.g. moved by a command) while in a macOS native state: it doesn't go back to its old place
+        if tilingSlot != nil,
+           !(newParent is MacosFullscreenWindowsContainer || newParent is MacosHiddenAppsWindowsContainer || newParent is MacosMinimizedWindowsContainer)
+        {
+            tilingSlot = nil
+        }
         let result = super.bind(to: newParent, adaptiveWeight: adaptiveWeight, index: index)
         // Another workspace. Global containers (e.g. minimized windows) don't count, the window comes back
         if let learned = learnedMinimumSizeWorkspace, let workspace = nodeWorkspace?.name, workspace != learned {

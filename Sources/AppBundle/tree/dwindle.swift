@@ -260,15 +260,16 @@ extension Window {
     @MainActor
     func returnWeightToDwindleSplitAnchor() {
         defer { dwindleSplitAnchor = nil }
+        // The window may be closed while it's in a macOS native state itself: its place in the tree is in the slot
         guard let anchor = dwindleSplitAnchor,
-              let parent = parent as? TilingContainer,
+              let (parent, weight) = (parent as? TilingContainer).map({ ($0, getWeight($0.orientation)) }) ?? tilingSlotPlace,
               parent.layout == .tiles
         else { return }
         let orientation = parent.orientation
         if anchor.parent === parent {
-            anchor.setWeight(orientation, anchor.getWeight(orientation) + getWeight(orientation))
+            anchor.setWeight(orientation, anchor.getWeight(orientation) + weight)
         } else if let anchor = anchor as? Window { // E.g. the anchor is in native fullscreen. It gets the weight when it comes back
-            anchor.addWeightToTilingSlot(getWeight(orientation), of: parent)
+            anchor.addWeightToTilingSlot(weight, of: parent)
         }
     }
 }
