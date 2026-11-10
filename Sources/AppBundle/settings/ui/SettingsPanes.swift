@@ -354,7 +354,8 @@ struct ActionIcon: View {
             case .workspaceBackAndForth: "arrow.uturn.backward"
             case .moveWorkspaceToMonitor: "display.2"
             case .layout: "square.grid.2x2"
-            case .fullscreen: "arrow.up.left.and.arrow.down.right"
+            case .fullscreen, .enterFullscreen: "arrow.up.left.and.arrow.down.right"
+            case .exitFullscreen: "arrow.down.right.and.arrow.up.left"
             case .flattenWorkspaceTree: "arrow.triangle.2.circlepath"
             case .balanceSizes: "equal"
             case .closeWindow, .closeAllWindowsButCurrent: "xmark"
@@ -463,6 +464,10 @@ extension Action {
             case .layout(let options): "Layout: " + options.map(\.rawValue).joined(separator: " / ")
             case .fullscreen(.marSpace): "Fullscreen"
             case .fullscreen(.macOSNative): "macOS fullscreen"
+            case .enterFullscreen(.marSpace): "Enter fullscreen"
+            case .enterFullscreen(.macOSNative): "Enter macOS fullscreen"
+            case .exitFullscreen(.marSpace): "Exit fullscreen"
+            case .exitFullscreen(.macOSNative): "Exit macOS fullscreen"
             case .flattenWorkspaceTree: "Reset the layout"
             case .balanceSizes: "Balance the sizes"
             case .closeWindow: "Close the window"
@@ -617,7 +622,7 @@ private struct WindowRuleEditor: View {
                 Text("When a window opens")
             }
             Section {
-                ActionListEditor(actions: $rule.actions, modes: modes, workspaces: workspaces)
+                ActionListEditor(actions: $rule.actions, modes: modes, workspaces: workspaces, context: .event)
                 Toggle("Check the next rules too", isOn: $rule.checkFurtherRules)
             } header: {
                 Text("Then")
@@ -812,6 +817,7 @@ struct AutomationPane: View {
                 actions: Binding(get: { model.settings.automation[keyPath: keyPath] }, set: { model.settings.automation[keyPath: keyPath] = $0 }),
                 modes: model.settings.modes.map(\.name),
                 workspaces: model.settings.workspaces.persistent,
+                context: .event,
             )
             ForEach(model.problems(at: location), id: \.message) { problem in
                 Label(problem.message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)

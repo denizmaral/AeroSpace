@@ -5,11 +5,18 @@ import SwiftUI
 
 // MARK: - Actions
 
+/// Where actions run: a shortcut, or an event (a window rule, an automation). It decides the defaults: a shortcut toggles
+/// the fullscreen, an event makes the window fullscreen (it may run again for a window that already is)
+enum ActionContext {
+    case shortcut, event
+}
+
 /// Edits a list of actions that run one after the other
 struct ActionListEditor: View {
     @Binding var actions: [Action]
     let modes: [String]
     let workspaces: [String]
+    var context: ActionContext = .shortcut
 
     var body: some View {
         ForEach(actions.indices, id: \.self) { index in
@@ -17,7 +24,7 @@ struct ActionListEditor: View {
                 if actions.count > 1 {
                     Text("\(index + 1).").monospacedDigit().foregroundStyle(.secondary)
                 }
-                ActionEditor(action: $actions[index], modes: modes, workspaces: workspaces)
+                ActionEditor(action: $actions[index], modes: modes, workspaces: workspaces, context: context)
                 Button {
                     actions.remove(at: index)
                 } label: {
@@ -90,7 +97,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .moveWindowToWorkspace: .moveWindowToWorkspace
             case .moveWorkspaceToMonitor: .moveWorkspaceToMonitor
             case .layout: .layout
-            case .fullscreen: .fullscreen
+            case .fullscreen, .enterFullscreen, .exitFullscreen: .fullscreen
             case .flattenWorkspaceTree: .flattenWorkspaceTree
             case .balanceSizes: .balanceSizes
             case .closeWindow: .closeWindow
@@ -103,7 +110,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
     }
 
     /// The action of the kind with sensible parameters. A custom command starts with the command line of the previous action
-    func defaultAction(previous: Action, mode: String, workspace: String) -> Action {
+    func defaultAction(previous: Action, mode: String, workspace: String, context: ActionContext) -> Action {
         switch self {
             case .focus: .focus(.left)
             case .move: .move(.left)
@@ -114,7 +121,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .moveWindowToWorkspace: .moveWindowToWorkspace(workspace)
             case .moveWorkspaceToMonitor: .moveWorkspaceToMonitor(.next, wrapAround: true)
             case .layout: .layout([.tiles, .accordion])
-            case .fullscreen: .fullscreen(.marSpace)
+            case .fullscreen: context == .shortcut ? .fullscreen(.marSpace) : .enterFullscreen(.marSpace)
             case .flattenWorkspaceTree: .flattenWorkspaceTree
             case .balanceSizes: .balanceSizes
             case .closeWindow: .closeWindow
@@ -132,6 +139,7 @@ struct ActionEditor: View {
     @Binding var action: Action
     let modes: [String]
     let workspaces: [String]
+    var context: ActionContext = .shortcut
 
     var body: some View {
         HStack(spacing: 8) {
@@ -140,7 +148,9 @@ struct ActionEditor: View {
                     if group > 0 { Divider() }
                     ForEach(ActionKind.groups[group]) { kind in
                         Button(kind.title) {
-                            action = kind.defaultAction(previous: action, mode: modes.first ?? mainModeId, workspace: workspaces.first ?? "1")
+                            action = kind.defaultAction(
+                                previous: action, mode: modes.first ?? mainModeId, workspace: workspaces.first ?? "1", context: context,
+                            )
                         }
                     }
                 }
@@ -170,13 +180,8 @@ struct ActionEditor: View {
                 .labelsHidden().fixedSize()
                 Toggle("Wrap around", isOn: Binding(get: { wrapAround }, set: { action = .moveWorkspaceToMonitor(step, wrapAround: $0) }))
             case .layout(let options): LayoutOptionsEditor(options: options) { action = .layout($0) }
-            case .fullscreen(let kind):
-                Picker("", selection: Binding(get: { kind }, set: { action = .fullscreen($0) })) {
-                    Text("MarSpace").tag(Action.FullscreenKind.marSpace)
-                    Text("macOS").tag(Action.FullscreenKind.macOSNative)
-                }
-                .pickerStyle(.segmented).labelsHidden().fixedSize()
-                .help("MarSpace: the window fills its workspace. macOS: the window gets its own Space, like the green button")
+            case .fullscreen(let kind), .enterFullscreen(let kind), .exitFullscreen(let kind):
+                FullscreenEditor(action: $action, kind: kind)
             case .enterMode(let name):
                 Picker("", selection: Binding(get: { name }, set: { action = .enterMode($0) })) {
                     ForEach(Set(modes + [name]).sorted(), id: \.self) { Text($0).tag($0) }
@@ -474,5 +479,45 @@ enum AppCatalog {
             image.draw(in: rect)
             return true
         }
+    }
+}
+
+/// MarSpace or macOS fullscreen, and whether the action toggles it, enters it or exits it
+private struct FullscreenEditor: View {
+    @Binding var action: Action
+    let kind: Action.FullscreenKind
+
+    private enum Change: Hashable { case toggle, enter, exit }
+
+    private var change: Change {
+        switch action {
+            case .enterFullscreen: .enter
+            case .exitFullscreen: .exit
+            default: .toggle
+        }
+    }
+
+    private func make(_ kind: Action.FullscreenKind, _ change: Change) -> Action {
+        switch change {
+            case .toggle: .fullscreen(kind)
+            case .enter: .enterFullscreen(kind)
+            case .exit: .exitFullscreen(kind)
+        }
+    }
+
+    var body: some View {
+        Picker("", selection: Binding(get: { change }, set: { action = make(kind, $0) })) {
+            Text("Toggle").tag(Change.toggle)
+            Text("Enter").tag(Change.enter)
+            Text("Exit").tag(Change.exit)
+        }
+        .labelsHidden().fixedSize()
+        .help("Enter: nothing happens if the window is already fullscreen")
+        Picker("", selection: Binding(get: { kind }, set: { action = make($0, change) })) {
+            Text("MarSpace").tag(Action.FullscreenKind.marSpace)
+            Text("macOS").tag(Action.FullscreenKind.macOSNative)
+        }
+        .pickerStyle(.segmented).labelsHidden().fixedSize()
+        .help("MarSpace: the window fills its workspace. macOS: the window gets its own Space, like the green button")
     }
 }

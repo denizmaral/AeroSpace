@@ -51,6 +51,7 @@ struct SettingsTest {
             .focus(.up), .move(.down), .joinWith(.right), .resize(.width, .add(50)), .resize(.height, .set(300)),
             .workspace("T"), .workspace("my space"), .workspaceBackAndForth, .moveWindowToWorkspace("B"),
             .moveWorkspaceToMonitor(.prev, wrapAround: false), .layout([.floating, .tiling]), .fullscreen(.macOSNative),
+            .enterFullscreen(.macOSNative), .exitFullscreen(.marSpace),
             .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent, .enterMode("service"),
             .reloadSettings, .moveMouse(.windowLazyCenter),
         ]
@@ -70,6 +71,24 @@ struct SettingsTest {
             assertEquals(Action(commandLine: line), .custom(line))
         }
         assertEquals(Action(commandLine: "layout   tiles  accordion"), .layout([.tiles, .accordion]))
+    }
+
+    /// A window rule runs again for a window that is detected again (e.g. after a restart): a toggle took a fullscreen window
+    /// out of its fullscreen. Rules of the second schema enter the fullscreen, shortcuts still toggle it
+    @Test func testWindowRulesOfTheSecondSchemaEnterTheFullscreen() {
+        var settings = Settings()
+        settings.schemaVersion = 2
+        settings.modes = [Settings.BindingMode(name: mainModeId, shortcuts: [
+            Settings.Shortcut(chord: KeyChord([.command, .shift], .f), actions: [.fullscreen(.marSpace)]),
+        ])]
+        settings.windowRules = [Settings.WindowRule(
+            condition: .init(appBundleId: "app.zen-browser.zen"),
+            actions: [.moveWindowToWorkspace("B"), .fullscreen(.macOSNative)],
+        )]
+        SettingsMigration.migrate(&settings)
+        assertEquals(settings.windowRules[0].actions, [.moveWindowToWorkspace("B"), .enterFullscreen(.macOSNative)])
+        assertEquals(settings.modes[0].shortcuts[0].actions, [.fullscreen(.marSpace)])
+        assertEquals(settings.compile().config.onWindowDetected.first?.run.shellOfCommandsDescription, "move-node-to-workspace B; macos-native-fullscreen on")
     }
 
     /// Every gap and border value distinct, so that no field can be mixed up with another

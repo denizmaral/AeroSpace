@@ -9,7 +9,8 @@ import HotKey
 /// names, app bundle ids, title patterns, and custom command lines (the escape hatch for anything without a typed action)
 struct Settings: Codable, Sendable, Equatable {
     /// 2: the shortcuts of the workspaces are generated (``workspaceShortcuts``)
-    static let currentSchemaVersion = 2
+    /// 3: window rules enter the fullscreen instead of toggling it
+    static let currentSchemaVersion = 3
 
     var schemaVersion = Settings.currentSchemaVersion
     var general = General()

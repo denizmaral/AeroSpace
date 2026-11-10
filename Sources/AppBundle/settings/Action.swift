@@ -16,7 +16,11 @@ enum Action: Codable, Sendable, Equatable {
     case moveWorkspaceToMonitor(MonitorStep, wrapAround: Bool)
     /// Cycles through the layouts: e.g. tiles and accordion, horizontal and vertical, floating and tiling
     case layout([LayoutOption])
+    /// Toggles the fullscreen
     case fullscreen(FullscreenKind)
+    /// Nothing if the window is already fullscreen: e.g. a window rule for a window that is detected again
+    case enterFullscreen(FullscreenKind)
+    case exitFullscreen(FullscreenKind)
     case flattenWorkspaceTree
     case balanceSizes
     case closeWindow
@@ -46,6 +50,8 @@ enum Action: Codable, Sendable, Equatable {
         case marSpace
         /// The window gets its own macOS Space (the green window button)
         case macOSNative
+
+        var command: String { self == .marSpace ? "fullscreen" : "macos-native-fullscreen" }
     }
 
     /// The command line that the action compiles to
@@ -66,8 +72,9 @@ enum Action: Codable, Sendable, Equatable {
             case .moveWorkspaceToMonitor(let step, let wrapAround):
                 wrapAround ? "move-workspace-to-monitor --wrap-around \(step.rawValue)" : "move-workspace-to-monitor \(step.rawValue)"
             case .layout(let options): (["layout"] + options.map(\.rawValue)).joined(separator: " ")
-            case .fullscreen(.marSpace): "fullscreen"
-            case .fullscreen(.macOSNative): "macos-native-fullscreen"
+            case .fullscreen(let kind): kind.command
+            case .enterFullscreen(let kind): "\(kind.command) on"
+            case .exitFullscreen(let kind): "\(kind.command) off"
             case .flattenWorkspaceTree: "flatten-workspace-tree"
             case .balanceSizes: "balance-sizes"
             case .closeWindow: "close"
@@ -124,6 +131,13 @@ enum Action: Codable, Sendable, Equatable {
                 return options.count == args.count ? .layout(options) : nil
             case ("fullscreen", 0): return .fullscreen(.marSpace)
             case ("macos-native-fullscreen", 0): return .fullscreen(.macOSNative)
+            case ("fullscreen", 1), ("macos-native-fullscreen", 1):
+                let kind: FullscreenKind = name == "fullscreen" ? .marSpace : .macOSNative
+                switch args[0] {
+                    case "on": return .enterFullscreen(kind)
+                    case "off": return .exitFullscreen(kind)
+                    default: return nil
+                }
             case ("flatten-workspace-tree", 0): return .flattenWorkspaceTree
             case ("balance-sizes", 0): return .balanceSizes
             case ("close", 0): return .closeWindow

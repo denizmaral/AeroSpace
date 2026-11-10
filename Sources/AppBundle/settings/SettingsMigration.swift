@@ -6,6 +6,7 @@ import Foundation
 enum SettingsMigration {
     static func migrate(_ settings: inout Settings) {
         if settings.schemaVersion < 2 { foldWorkspaceShortcuts(&settings) }
+        if settings.schemaVersion < 3 { enterFullscreenInWindowRules(&settings) }
         settings.schemaVersion = Settings.currentSchemaVersion
     }
 
@@ -31,5 +32,17 @@ enum SettingsMigration {
         }
         settings.workspaceShortcuts.goTo = fold { if case .workspace(let name) = $0 { name } else { nil } }
         settings.workspaceShortcuts.moveWindowTo = fold { if case .moveWindowToWorkspace(let name) = $0 { name } else { nil } }
+    }
+
+    /// A window rule that toggled the fullscreen enters it now. A rule runs again for a window that is detected again (e.g.
+    /// after a restart): a toggle took a fullscreen window out of its fullscreen
+    static func enterFullscreenInWindowRules(_ settings: inout Settings) {
+        for rule in settings.windowRules.indices {
+            for index in settings.windowRules[rule].actions.indices {
+                if case .fullscreen(let kind) = settings.windowRules[rule].actions[index] {
+                    settings.windowRules[rule].actions[index] = .enterFullscreen(kind)
+                }
+            }
+        }
     }
 }
