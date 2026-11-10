@@ -1,5 +1,8 @@
 import AppKit
 import Common
+import os
+
+private let windowsLogger = Logger(subsystem: aeroSpaceAppId, category: "windows")
 
 // Potential alternative implementation
 // https://github.com/swiftlang/swift-evolution/blob/main/proposals/0392-custom-actor-executors.md
@@ -383,11 +386,31 @@ final class MacApp: AbstractApp {
         if let backgroundTabId = noLongerAlive.singleOrNil()?.key,
            let frontmostTabId = becameAlive.singleOrNil()?.key
         {
+            guard mayBeTabsOfOneGroup(backgroundTabId, frontmostTabId) else {
+                windowsLogger.info("not a native tab swap (different frames): \(backgroundTabId) -> \(frontmostTabId)")
+                return
+            }
+            windowsLogger.info("native tab swap: \(backgroundTabId) -> \(frontmostTabId)")
             let tabGroupWindowId = getOrRegisterOpaqueWindowId(backgroundTabId)
             windowIdMapping.put(tabGroupWindowId, frontmostTabId)
             aliveOrInvisible[backgroundTabId] = nil
             bgTabsScheduledForPrune.insert(backgroundTabId)
         }
+    }
+
+    /// The tabs of a native tab group share the frame. A window that goes native fullscreen (to its own Space) and the
+    /// other window of the app (on the previous Space) swap their visibility the same way, but their frames differ: they
+    /// must not be merged into one window (the fullscreen window was registered again as a new window when it came back)
+    private func mayBeTabsOfOneGroup(_ first: UInt32, _ second: UInt32) -> Bool {
+        let infos = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] ?? []
+        func bounds(_ id: UInt32) -> CGRect? {
+            guard let info = infos.first(where: { ($0[kCGWindowNumber as String] as? Int) == Int(id) }),
+                  let bounds = info[kCGWindowBounds as String] as? NSDictionary
+            else { return nil }
+            return CGRect(dictionaryRepresentation: bounds)
+        }
+        guard let a = bounds(first), let b = bounds(second) else { return true } // Unknown: a tab swap, as before
+        return abs(a.minX - b.minX) <= 2 && abs(a.minY - b.minY) <= 2 && abs(a.width - b.width) <= 2 && abs(a.height - b.height) <= 2
     }
 
     private func destroy() async {
