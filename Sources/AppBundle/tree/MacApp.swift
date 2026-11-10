@@ -349,14 +349,15 @@ final class MacApp: AbstractApp {
                 var aliveWindowIds: Set<UInt32> = []
                 // Second line of defence against lock screen. See the first line of defence: closedWindowsCache
                 // Second and third lines of defence are technically needed only to avoid potential flickering
+                let listed = axApp.threadGuarded.get(Ax.windowsAttr) ?? []
                 if frontmostAppBundleId != lockScreenAppBundleId {
-                    aliveOrInvisible = try aliveOrInvisible.filter {
+                    aliveOrInvisible = try aliveOrInvisible.filterExisting(listed: Set(listed.map(\.windowId))) {
                         try job.checkCancellation()
-                        return $0.value.ax.containingNativeWindowId() != nil
+                        return $0.ax.containingNativeWindowId() != nil
                     }
                 }
 
-                for (id, window) in axApp.threadGuarded.get(Ax.windowsAttr) ?? [] {
+                for (id, window) in listed {
                     try job.checkCancellation()
                     try aliveOrInvisible.getOrRegisterAxWindow(windowId: id, window, nsApp, job)
                     aliveWindowIds.insert(id)
@@ -492,6 +493,15 @@ extension [UInt32: AxWindow] {
         } else {
             return nil
         }
+    }
+}
+
+extension Dictionary where Key == UInt32 {
+    /// The windows (by their native id) that still exist: a window that its app lists does, only the others are asked
+    /// (a window on another macOS Space or a background tab isn't listed). Asking is an accessibility call per window,
+    /// in every refresh session
+    func filterExisting(listed: Set<UInt32>, isWindow: (Value) throws -> Bool) rethrows -> [UInt32: Value] {
+        try filter { try listed.contains($0.key) || isWindow($0.value) }
     }
 }
 
