@@ -29,6 +29,7 @@ import Common
             over: windows, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now,
             frontmost: { frontmostWindow(of: windows) },
         )
+        if move != .stay { focusLogger.info("ffm \(String(describing: move), privacy: .public) over \(windows.map(\.windowId.description).joined(separator: ","), privacy: .public)") }
         switch move {
             case .stay: return
             case .leave:
@@ -47,9 +48,9 @@ import Common
                 case .unknown: windows.count == 1 ? windows.first : nil
             }
             try checkCancellation()
-            guard let target = mouseTracker.checked(
-                real: real, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now,
-            ) else { return }
+            let target = mouseTracker.checked(real: real, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now)
+            focusLogger.info("ffm checked: real \(real?.windowId.description ?? "nil", privacy: .public), focused \(globalFocus.windowOrNil?.windowId.description ?? "nil", privacy: .public), focus changes \(focusChangesByOtherMeans), focuses \(target?.windowId.description ?? "nothing", privacy: .public)")
+            guard let target else { return }
             // Not canceled by later mouse moves: the tracker took the window as the one under the mouse, it wouldn't try again
             Task.startUnstructured { @MainActor in
                 try await runLightSession(.focusFollowsMouse, token) {

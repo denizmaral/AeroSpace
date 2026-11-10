@@ -10,6 +10,8 @@ import Common
         return
     }
     if nativeFocused?.windowId != lastKnownNativeFocusedWindowId {
+        let event = refreshSessionEvent?.description ?? "none"
+        focusLogger.info("takes over the macOS focus \(nativeFocused?.windowId.description ?? "nil", privacy: .public) (was \(lastKnownNativeFocusedWindowId?.description ?? "nil", privacy: .public)), session \(event, privacy: .public)")
         _ = nativeFocused?.focusWindow()
         lastKnownNativeFocusedWindowId = nativeFocused?.windowId
     }
