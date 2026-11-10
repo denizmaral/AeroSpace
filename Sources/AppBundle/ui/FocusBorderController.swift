@@ -36,7 +36,8 @@ final class FocusBorderController {
               TrayMenuModel.shared.isEnabled,
               !MissionControl.isActive,
               let window = globalFocus.windowOrNil as? MacWindow,
-              let nativeWindowId = window.macApp.nativeWindowId(of: window.windowId)
+              let nativeWindowId = window.macApp.nativeWindowId(of: window.windowId),
+              isOnActiveSpace(nativeWindowId)
         else { return hide() }
 
         let windowRect: Rect?
@@ -88,6 +89,14 @@ final class FocusBorderController {
         self.panel = panel
         return panel
     }
+}
+
+/// The windows of other macOS Spaces aren't on screen, e.g. the windows of the desktop while a native fullscreen window
+/// has its own Space: AeroSpace may focus one of them, and the panel (it moves to the active Space) drew its border over
+/// the fullscreen window. A window server query, no accessibility calls
+private func isOnActiveSpace(_ nativeWindowId: UInt32) -> Bool {
+    let info = (CGWindowListCopyWindowInfo([.optionIncludingWindow], CGWindowID(nativeWindowId)) as? [[String: Any]])?.first
+    return info?[kCGWindowIsOnscreen as String] as? Bool ?? true
 }
 
 /// Frame of the border panel in Cocoa coordinates (the origin is at the bottom left corner of the main monitor).
