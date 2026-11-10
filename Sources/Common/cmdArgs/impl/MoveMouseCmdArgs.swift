@@ -25,7 +25,7 @@ func parseMoveMouseCmdArgs(_ args: StrArrSlice) -> ParsedCmd<MoveMouseCmdArgs> {
         }
 }
 
-public enum MouseTarget: String, CaseIterable, Sendable {
+public enum MouseTarget: String, CaseIterable, Sendable, Codable {
     case monitorLazyCenter = "monitor-lazy-center"
     case monitorForceCenter = "monitor-force-center"
 

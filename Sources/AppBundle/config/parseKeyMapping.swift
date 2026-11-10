@@ -19,7 +19,7 @@ struct KeyMapping: Withable, Equatable, Sendable {
         self.rawKeyNotationToKeyCode = rawKeyNotationToKeyCode
     }
 
-    fileprivate var preset: Preset = .qwerty
+    fileprivate(set) var preset: Preset = .qwerty
     fileprivate var rawKeyNotationToKeyCode: [String: Key] = [:]
 
     func resolve() -> [String: Key] {

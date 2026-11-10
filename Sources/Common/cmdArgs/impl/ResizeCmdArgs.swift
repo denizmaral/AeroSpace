@@ -26,7 +26,7 @@ public struct ResizeCmdArgs: CmdArgs {
         self.units = .initialized(units)
     }
 
-    public enum Dimension: String, CaseIterable, Equatable, Sendable {
+    public enum Dimension: String, CaseIterable, Equatable, Sendable, Codable {
         case width, height, smart
         case smartOpposite = "smart-opposite"
     }

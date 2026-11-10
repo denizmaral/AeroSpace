@@ -1,4 +1,4 @@
-public enum CardinalDirection: String, CaseIterable, Equatable, Sendable {
+public enum CardinalDirection: String, CaseIterable, Equatable, Sendable, Codable {
     case left, down, up, right
 
     public var orientation: Orientation { self == .up || self == .down ? .v : .h }

@@ -57,6 +57,8 @@ struct ReloadConfigResult {
         syncStartAtLogin()
         syncFocusFollowsMouse(config)
         syncConfigFileWatcher()
+        // Not for the check of the bundled default config at startup
+        if forceConfigUrl == nil { mirrorIntoSettings(tomlConfigAt: result.configUrl) }
     }
 
     if warningsAsErrors {
