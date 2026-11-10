@@ -365,6 +365,84 @@ struct DwindleConcurrentDetectionTest {
         #expect(dwindleSplitQueue.isEmpty)
     }
 
+    /// The anchor is wrapped into new containers twice before the split of the last window
+    @Test func testThreeWindowsInReverseOrder() async throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TestWindow.new(id: 2, parent: $0)
+        }
+        for (window, split) in try await detect([3, 4, 5], workspace).reversed() { window.applyDwindleSplit(split) }
+        workspace.normalizeContainers()
+        // The same as one after another: 3 splits 2, 4 splits 3, 5 splits 4
+        assertEquals(root.layoutDescription, .h_tiles([
+            .window(1),
+            .v_tiles([.window(2), .h_tiles([.window(3), .v_tiles([.window(4), .window(5)])])]),
+        ]))
+        #expect(dwindleSplitQueue.isEmpty)
+    }
+
+    /// The user moves a window between the anchor and the new window while its callbacks are suspended. The split
+    /// doesn't apply anymore, the move must not be undone
+    @Test func testUserMoveIsNotUndone() async throws {
+        let workspace = Workspace.get(byName: name)
+        var window12: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 10, parent: $0)
+            window12 = TestWindow.new(id: 12, parent: $0)
+        }
+        root.children.first?.markAsMostRecentChild() // Window 3 is put between 10 and 12
+        let detected = try await detect([3], workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(10), .window(3), .window(12)]))
+        assertEquals(window12.focusWindow(), true)
+        await parseCommand("move left").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        detected[0].0.applyDwindleSplit(detected[0].1)
+        workspace.normalizeContainers()
+        assertEquals(root.layoutDescription, .h_tiles([.window(10), .window(12), .window(3)]))
+    }
+
+    /// The user floats and tiles the anchor again while the callbacks of the new window are suspended
+    @Test func testAnchorTiledAgainMeanwhile() async throws {
+        let workspace = Workspace.get(byName: name)
+        var window12: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 10, parent: $0)
+            TestWindow.new(id: 11, parent: $0)
+            window12 = TestWindow.new(id: 12, parent: $0) // The most recent
+        }
+        let detected = try await detect([3], workspace)
+        assertEquals(window12.focusWindow(), true)
+        await parseCommand("layout floating").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        workspace.normalizeContainers()
+        await parseCommand("layout tiling").cmdOrDie.run(.defaultEnv, .emptyStdin) // Splits window 3
+        workspace.normalizeContainers()
+        detected[0].0.applyDwindleSplit(detected[0].1)
+        workspace.normalizeContainers()
+        // The same as one after another: 3 splits 12 (640x1080, tall), then 12 is tiled again next to 3
+        assertEquals(root.layoutDescription, .h_tiles([.window(10), .window(11), .v_tiles([.window(3), .window(12)])]))
+    }
+
+    /// The callbacks of a window detected on workspace A are suspended. Splits on workspace B don't wait for it
+    @Test func testPendingSplitOfAnotherWorkspaceDoesntBlock() async throws {
+        let workspaceA = Workspace.get(byName: "a")
+        let workspaceB = Workspace.get(byName: "b")
+        var window8: TestWindow!
+        workspaceA.rootTilingContainer.apply {
+            window8 = TestWindow.new(id: 8, parent: $0)
+            TestWindow.new(id: 1, parent: $0)
+        }
+        let rootB = workspaceB.rootTilingContainer.apply {
+            TestWindow.new(id: 5, parent: $0)
+            TestWindow.new(id: 6, parent: $0)
+        }
+        let detected = try await detect([3], workspaceA)
+        await parseCommand("move-node-to-workspace b").cmdOrDie.run(.defaultEnv.withWindowId(window8.windowId), .emptyStdin)
+        workspaceB.normalizeContainers()
+        assertEquals(rootB.layoutDescription, .h_tiles([.window(5), .v_tiles([.window(6), .window(8)])]))
+        detected[0].1?.discard()
+        #expect(dwindleSplitQueue.isEmpty)
+    }
+
     /// E.g. on-window-detected of window 3 moves it to another workspace. Its split is never applied, nothing waits for it
     @Test func testStaleSplitDoesntBlockLaterSplits() async throws {
         let workspace = Workspace.get(byName: name)

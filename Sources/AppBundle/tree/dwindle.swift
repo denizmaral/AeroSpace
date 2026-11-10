@@ -84,9 +84,11 @@ extension TreeNode {
 /// callbacks that may move the window to another workspace). If the window is bound again in the meantime (moved,
 /// floated, re-tiled), the captured split is stale and it's not applied.
 ///
-/// Several windows may be detected at the same time: the callbacks of one window suspend, and another session detects
-/// the next window meanwhile. The splits are applied in the order of capturing, and every split ignores the windows
-/// that were detected after it. The result is the same as if the windows were detected one after another
+/// Several windows may be detected at the same time: the callbacks of one window suspend (e.g. a title matcher reads the
+/// title), and another session detects the next window meanwhile. The splits of a workspace are applied in the order of
+/// capturing, and every split ignores the windows that were detected after it. The result is the same as if the windows
+/// were detected one after another, unless something else changes the tree meanwhile (e.g. the callbacks of the earlier
+/// window move it away: the later window was already put next to it)
 @MainActor
 final class DwindleSplit {
     fileprivate let window: Window
@@ -124,18 +126,28 @@ final class DwindleSplit {
 
 @MainActor
 private func applyReadyDwindleSplits() {
-    while let split = dwindleSplitQueue.first {
+    // The workspaces with a split that waits for its owner. Splits of other workspaces don't wait for it
+    var blocked: [Workspace] = []
+    var index = 0
+    while index < dwindleSplitQueue.count {
+        let split = dwindleSplitQueue[index]
+        let workspace = split.window.nodeWorkspace
+        let isBlocked = workspace.map { workspace in blocked.contains { $0 === workspace } } ?? false
         switch split.state {
-            case .captured where !split.isStale: return // Wait for the owner. A stale split is never applied
+            case .captured where !split.isStale: // Wait for the owner. A stale split is never applied
+                if let workspace { blocked.append(workspace) }
+                index += 1
+            case .ready where isBlocked:
+                index += 1
             case .captured, .done:
                 split.state = .done
-                dwindleSplitQueue.removeFirst()
+                dwindleSplitQueue.remove(at: index)
             case .ready:
                 split.state = .done
-                dwindleSplitQueue.removeFirst()
+                dwindleSplitQueue.remove(at: index)
                 if split.isStale { continue }
                 // The windows that were detected after this one don't exist yet from the point of view of the split
-                let later = dwindleSplitQueue.filter { $0.state != .done && !$0.isStale }.map(\.window)
+                let later = dwindleSplitQueue[index...].filter { $0.state != .done && !$0.isStale }.map(\.window)
                 split.window.split(split.anchor, ignoring: later)
         }
     }
@@ -178,11 +190,23 @@ extension Window {
               anchor.tilingTreeNodeCasesOrDie().isInhabited,
               anchor.nodeWorkspace === nodeWorkspace
         else { return }
-        // An earlier split may have moved the anchor (e.g. into a new container). Follow it, the same as a window that
-        // is detected after the earlier one
-        if self.parent !== parent || ownIndex(in: .all) != anchor.ownIndex(in: .all).map({ $0 + 1 }) {
+        // The anchor may have a later split itself (e.g. it was floated and tiled again meanwhile)
+        let later = later.filter { $0 !== anchor }
+        if self.parent === parent {
+            // Only the windows that were detected later may be between the anchor and the window. Anything else means
+            // that the tree was changed meanwhile (e.g. the user moved a window), the split doesn't apply anymore
+            guard let index = ownIndex(in: .all),
+                  let anchorIndex = anchor.ownIndex(in: .all),
+                  anchorIndex < index,
+                  parent.children[(anchorIndex + 1) ..< index].allSatisfy({ node in later.contains { $0 === node } })
+            else { return }
+        } else if parent.parentsWithSelf.contains(where: { $0 === self.parent }) {
+            // Earlier splits put the anchor into new containers. Follow it, the same as a window that is detected after
+            // the earlier windows
             unbindFromParent()
             bind(to: parent, adaptiveWeight: WEIGHT_AUTO, index: anchor.ownIndex(in: .all).orDie() + 1)
+        } else {
+            return // The anchor was moved elsewhere
         }
         let ignored: [TreeNode] = [self] + later
 
