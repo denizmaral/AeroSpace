@@ -102,6 +102,10 @@ enum SettingsImport {
         for key in ["exec-on-workspace-change", "exec"] where raw[key] != nil {
             problems.append("\(key): not supported, it was left out")
         }
+        // Like settings of the first schema: the workspace shortcuts come from the shortcuts of the config
+        settings.schemaVersion = 1
+        settings.workspaceShortcuts = Settings.WorkspaceShortcuts(goTo: nil, moveWindowTo: nil)
+        SettingsMigration.migrate(&settings)
         return (settings, problems)
     }
 

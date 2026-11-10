@@ -8,12 +8,14 @@ import HotKey
 /// Typed throughout: actions, keys, layouts and directions are enums. Strings are only user data: workspace and mode
 /// names, app bundle ids, title patterns, and custom command lines (the escape hatch for anything without a typed action)
 struct Settings: Codable, Sendable, Equatable {
-    static let currentSchemaVersion = 1
+    /// 2: the shortcuts of the workspaces are generated (``workspaceShortcuts``)
+    static let currentSchemaVersion = 2
 
     var schemaVersion = Settings.currentSchemaVersion
     var general = General()
     var appearance = Appearance()
     var modes: [BindingMode] = [BindingMode(name: mainModeId)]
+    var workspaceShortcuts = WorkspaceShortcuts()
     var windowRules: [WindowRule] = []
     var workspaces = Workspaces()
     var automation = Automation()
@@ -50,6 +52,13 @@ struct Settings: Codable, Sendable, Equatable {
             var width = 4
             var radius = 12
         }
+    }
+
+    /// Shortcuts for every workspace whose name is one key (1 … 9, A … Z): these modifiers and the key that types the name on
+    /// the keyboard layout of macOS. nil: no such shortcuts
+    struct WorkspaceShortcuts: Codable, Sendable, Equatable {
+        var goTo: KeyChord.Modifiers? = [.control, .option]
+        var moveWindowTo: KeyChord.Modifiers? = [.control, .option, .shift]
     }
 
     struct BindingMode: Codable, Sendable, Equatable, Identifiable {
@@ -171,3 +180,21 @@ extension NewWindowPlacement: Codable {}
 extension Layout: Codable {}
 extension DefaultContainerOrientation: Codable {}
 extension KeyMapping.Preset: Codable {}
+
+extension Settings {
+    /// Settings of an older MarSpace miss newer fields: they get their defaults (a migration may fill them, see
+    /// ``SettingsMigration``)
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = Settings()
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        general = try container.decodeIfPresent(General.self, forKey: .general) ?? defaults.general
+        appearance = try container.decodeIfPresent(Appearance.self, forKey: .appearance) ?? defaults.appearance
+        modes = try container.decodeIfPresent([BindingMode].self, forKey: .modes) ?? defaults.modes
+        workspaceShortcuts = try container.decodeIfPresent(WorkspaceShortcuts.self, forKey: .workspaceShortcuts)
+            ?? WorkspaceShortcuts(goTo: nil, moveWindowTo: nil)
+        windowRules = try container.decodeIfPresent([WindowRule].self, forKey: .windowRules) ?? defaults.windowRules
+        workspaces = try container.decodeIfPresent(Workspaces.self, forKey: .workspaces) ?? defaults.workspaces
+        automation = try container.decodeIfPresent(Automation.self, forKey: .automation) ?? defaults.automation
+    }
+}

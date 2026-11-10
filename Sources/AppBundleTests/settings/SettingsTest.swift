@@ -30,7 +30,10 @@ struct SettingsTest {
             mode.shortcuts.first { $0.chord == KeyChord(modifiers, key) }?.actions
         }
         assertEquals(actions(main, [.control, .option], .h), [.focus(.left)])
-        assertEquals(actions(main, [.control, .option, .shift], .b), [.moveWindowToWorkspace("B")])
+        // The 61 shortcuts of the workspaces (30 go to, 31 move) are generated now: the same modifiers, the key of the name
+        assertEquals(settings.workspaceShortcuts, Settings.WorkspaceShortcuts(goTo: [.control, .option], moveWindowTo: [.control, .option, .shift]))
+        assertNil(actions(main, [.control, .option, .shift], .b))
+        assertEquals(main.shortcuts.count, 16)
         assertEquals(actions(main, [.command, .shift], .f), [.fullscreen(.marSpace)])
         assertEquals(actions(main, [.control, .option], .minus), [.resize(.smart, .subtract(50))])
         assertEquals(actions(main, [.control, .option, .shift], .tab), [.moveWorkspaceToMonitor(.next, wrapAround: true)])
@@ -115,11 +118,24 @@ struct SettingsTest {
         assertEquals(expected.errors, [], sourceLocation: sourceLocation)
         let imported = SettingsImport.settings(fromToml: toml)
         assertEquals(imported.problems, [], sourceLocation: sourceLocation)
-        let (config, problems) = imported.settings.compile()
+        // QWERTY, like the configs: the shortcuts of the workspaces use the keyboard layout of macOS otherwise
+        let (config, problems) = imported.settings.compile(keyForCharacter: { getKeysPreset(.qwerty)[$0.lowercased()] })
         assertEquals(problems, [], sourceLocation: sourceLocation)
         let original = expected.config
 
-        assertEquals(config.modes, original.modes, sourceLocation: sourceLocation)
+        // Every shortcut of the config, with the same commands. Generated workspace shortcuts may come in addition (e.g. a
+        // workspace that had a move shortcut but no go-to shortcut)
+        assertEquals(Set(config.modes.keys), Set(original.modes.keys), sourceLocation: sourceLocation)
+        for (name, mode) in original.modes {
+            let compiled = config.modes[name]?.bindings ?? [:]
+            for (key, binding) in mode.bindings {
+                assertEquals(compiled[key], binding, additionalMsg: "\(name) \(key)", sourceLocation: sourceLocation)
+            }
+            for (key, binding) in compiled where mode.bindings[key] == nil {
+                let isWorkspace = binding.commands.flatten().allSatisfy { $0 is WorkspaceCommand || $0 is MoveNodeToWorkspaceCommand }
+                #expect(isWorkspace && name == mainModeId, "unexpected \(name) \(key)", sourceLocation: sourceLocation)
+            }
+        }
         assertEquals(config.onWindowDetected, original.onWindowDetected, sourceLocation: sourceLocation)
         assertEquals(config.gaps, original.gaps, sourceLocation: sourceLocation)
         assertEquals(config.focusBorder, original.focusBorder, sourceLocation: sourceLocation)

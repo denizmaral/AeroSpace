@@ -392,7 +392,7 @@ struct AppPicker: View {
     var body: some View {
         HStack(spacing: 8) {
             Menu {
-                ForEach(Self.runningApps, id: \.bundleId) { app in
+                ForEach(AppCatalog.runningApps, id: \.bundleId) { app in
                     Button {
                         bundleId = app.bundleId
                         isTyping = false
@@ -407,7 +407,7 @@ struct AppPicker: View {
                 }
             } label: {
                 if let bundleId {
-                    Label { Text(Self.name(of: bundleId)) } icon: { Image(nsImage: Self.icon(of: bundleId)) }
+                    Label { Text(AppCatalog.name(of: bundleId)) } icon: { Image(nsImage: AppCatalog.icon(of: bundleId)) }
                 } else {
                     Text("Any app")
                 }
@@ -422,36 +422,57 @@ struct AppPicker: View {
             }
         }
     }
+}
 
-    /// The name of an installed app, otherwise its bundle id
-    static func name(of bundleId: String) -> String {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else { return bundleId }
-        return FileManager.default.displayName(atPath: url.path).replacing(".app", with: "")
-    }
-
-    private static func icon(of bundleId: String) -> NSImage {
-        let icon = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId).map { NSWorkspace.shared.icon(forFile: $0.path) }
-            ?? NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil) ?? NSImage()
-        icon.size = NSSize(width: 16, height: 16)
-        return icon
-    }
-
-    private struct RunningApp {
+/// Names and icons of apps. Asking Launch Services is slow and an app icon holds all its sizes (up to 1024 px): each icon
+/// is drawn once into a small bitmap, names and icons are cached, the running apps are listed at most every 2 seconds
+@MainActor
+enum AppCatalog {
+    struct App {
         let bundleId: String
         let name: String
         let icon: NSImage
     }
 
-    @MainActor
-    private static var runningApps: [RunningApp] {
-        NSWorkspace.shared.runningApplications
+    private static var names: [String: String] = [:]
+    private static var icons: [String: NSImage] = [:]
+    private static var running: (date: Date, apps: [App])? = nil
+
+    static func name(of bundleId: String) -> String {
+        if let name = names[bundleId] { return name }
+        let name = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)
+            .map { FileManager.default.displayName(atPath: $0.path).replacing(".app", with: "") } ?? bundleId
+        names[bundleId] = name
+        return name
+    }
+
+    static func icon(of bundleId: String) -> NSImage {
+        if let icon = icons[bundleId] { return icon }
+        let source = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId).map { NSWorkspace.shared.icon(forFile: $0.path) }
+        let icon = thumbnail(source ?? NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil) ?? NSImage())
+        icons[bundleId] = icon
+        return icon
+    }
+
+    static var runningApps: [App] {
+        if let running, running.date.timeIntervalSinceNow > -2 { return running.apps }
+        let apps = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
-            .compactMap { app in
+            .compactMap { app -> App? in
                 guard let bundleId = app.bundleIdentifier else { return nil }
-                let icon = app.icon ?? NSImage()
-                icon.size = NSSize(width: 16, height: 16)
-                return RunningApp(bundleId: bundleId, name: app.localizedName ?? bundleId, icon: icon)
+                return App(bundleId: bundleId, name: app.localizedName ?? name(of: bundleId), icon: icon(of: bundleId))
             }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        running = (Date(), apps)
+        return apps
+    }
+
+    /// 16 pt (32 px for Retina): the only size shown
+    private static func thumbnail(_ image: NSImage) -> NSImage {
+        let size = NSSize(width: 16, height: 16)
+        return NSImage(size: size, flipped: false) { rect in
+            image.draw(in: rect)
+            return true
+        }
     }
 }

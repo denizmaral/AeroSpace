@@ -15,8 +15,11 @@ struct SettingsProblem: Equatable, Sendable, CustomStringConvertible {
 
 extension Settings {
     /// The runtime config. Actions go through the command parser of the engine (``Action/commandLine``)
+    ///
+    /// - Parameter keyForCharacter: the key that types a character, for the shortcuts of the workspaces. The keyboard layout
+    ///   of macOS by default
     @MainActor
-    func compile() -> (config: Config, problems: [SettingsProblem]) {
+    func compile(keyForCharacter: @MainActor (String) -> Key? = { KeyLabels.key(typing: $0) }) -> (config: Config, problems: [SettingsProblem]) {
         var problems: [SettingsProblem] = []
         var config = Config()
         config.configVersion = .max
@@ -51,9 +54,10 @@ extension Settings {
             }
         }
 
-        let keyNames = KeyNames(general.keyboardLayout)
+        let keyNames = KeyNames.of(general.keyboardLayout)
+        let workspaceBindings = workspaceShortcutBindings(keyNames, keyForCharacter, &problems)
         for mode in modes {
-            var bindings: [String: HotkeyBinding] = [:]
+            var bindings: [String: HotkeyBinding] = mode.name == mainModeId ? workspaceBindings : [:]
             for shortcut in mode.shortcuts {
                 let notation = keyNames.notation(shortcut.chord)
                 let location = "Shortcuts › \(mode.name) › \(notation)"
@@ -63,8 +67,9 @@ extension Settings {
                     compileActions(shortcut.actions, location, &problems),
                     descriptionWithKeyNotation: notation,
                 )
-                if bindings[binding.descriptionWithKeyCode] != nil {
-                    problems.append(.init(location: location, message: "The shortcut is used twice"))
+                if let existing = bindings[binding.descriptionWithKeyCode] {
+                    let isWorkspaceShortcut = mode.name == mainModeId && workspaceBindings[binding.descriptionWithKeyCode] == existing
+                    problems.append(.init(location: location, message: isWorkspaceShortcut ? "It's also the shortcut of a workspace" : "The shortcut is used twice"))
                 }
                 bindings[binding.descriptionWithKeyCode] = binding
             }
@@ -174,6 +179,17 @@ extension KeyChord.Modifiers {
 struct KeyNames {
     private let nameOfKey: [Key: String]
 
+    @MainActor private static var cache: [KeyMapping.Preset: KeyNames] = [:]
+
+    /// Built once per preset: it sorts the whole preset
+    @MainActor
+    static func of(_ preset: KeyMapping.Preset) -> KeyNames {
+        if let names = cache[preset] { return names }
+        let names = KeyNames(preset)
+        cache[preset] = names
+        return names
+    }
+
     init(_ preset: KeyMapping.Preset) {
         var nameOfKey: [Key: String] = [:]
         // Several names can stand for one key: the shortest, then alphabetically first
@@ -194,5 +210,41 @@ struct KeyNames {
         if chord.modifiers.contains(.shift) { parts.append("shift") }
         parts.append(name(chord.key))
         return parts.joined(separator: "-")
+    }
+}
+
+extension Settings {
+    /// Go to / move the window to every workspace whose name is one key. Workspaces without such a key are left out
+    @MainActor
+    private func workspaceShortcutBindings(
+        _ keyNames: KeyNames,
+        _ keyForCharacter: @MainActor (String) -> Key?,
+        _ problems: inout [SettingsProblem],
+    ) -> [String: HotkeyBinding] {
+        let location = "Shortcuts › \(mainModeId) › Workspaces"
+        var goTo = workspaceShortcuts.goTo
+        var moveWindowTo = workspaceShortcuts.moveWindowTo
+        if goTo?.isEmpty == true || moveWindowTo?.isEmpty == true {
+            problems.append(.init(location: location, message: "A modifier key is needed: a key alone would be taken from typing"))
+            if goTo?.isEmpty == true { goTo = nil }
+            if moveWindowTo?.isEmpty == true { moveWindowTo = nil }
+        }
+        if let goTo, goTo == moveWindowTo {
+            problems.append(.init(location: location, message: "Going to a workspace and moving a window there need different modifier keys"))
+            moveWindowTo = nil
+        }
+        var bindings: [String: HotkeyBinding] = [:]
+        for (modifiers, action) in [(goTo, Action.workspace), (moveWindowTo, Action.moveWindowToWorkspace)] {
+            guard let modifiers else { continue }
+            for name in workspaces.persistent where name.count == 1 {
+                guard let key = keyForCharacter(name),
+                      case .cmd(let shell) = parseCommand(action(name).commandLine, allowExecAndForget: false, allowEval: false)
+                else { continue }
+                let chord = KeyChord(modifiers, key)
+                let binding = HotkeyBinding(modifiers.eventFlags, key, shell, descriptionWithKeyNotation: keyNames.notation(chord))
+                bindings[binding.descriptionWithKeyCode] = binding
+            }
+        }
+        return bindings
     }
 }

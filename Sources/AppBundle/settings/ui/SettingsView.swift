@@ -5,6 +5,9 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var model: SettingsModel
     @State private var pane: SettingsPane? = .general
+    /// A pane is built when it's shown the first time and kept: switching back is instant. The others are never built
+    @State private var visited: Set<SettingsPane> = [.general]
+    @State private var shortcutsState = ShortcutsPaneState()
 
     var body: some View {
         NavigationSplitView {
@@ -15,9 +18,23 @@ struct SettingsView: View {
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
         } detail: {
-            SettingsPaneView(model: model, pane: pane ?? .general)
-                .navigationTitle((pane ?? .general).title)
+            let current = pane ?? .general
+            ZStack {
+                ForEach(SettingsPane.allCases) { item in
+                    if visited.contains(item) {
+                        SettingsPaneView(model: model, pane: item, shortcutsState: shortcutsState)
+                            .opacity(item == current ? 1 : 0)
+                            .allowsHitTesting(item == current)
+                            .accessibilityHidden(item != current)
+                    }
+                }
+            }
+            .navigationTitle(current.title)
+            .toolbar {
+                if current == .shortcuts { ShortcutsToolbar(state: shortcutsState, model: model) }
+            }
         }
+        .onChange(of: pane) { visited.insert(pane ?? .general) }
         .frame(minWidth: 820, minHeight: 580)
     }
 }
@@ -25,12 +42,13 @@ struct SettingsView: View {
 struct SettingsPaneView: View {
     @Bindable var model: SettingsModel
     let pane: SettingsPane
+    let shortcutsState: ShortcutsPaneState
 
     var body: some View {
         switch pane {
             case .general: GeneralPane(general: $model.settings.general)
             case .appearance: AppearancePane(appearance: $model.settings.appearance)
-            case .shortcuts: ShortcutsPane(model: model)
+            case .shortcuts: ShortcutsPane(model: model, state: shortcutsState)
             case .windowRules: WindowRulesPane(model: model)
             case .workspaces: WorkspacesPane(workspaces: $model.settings.workspaces)
             case .automation: AutomationPane(model: model)

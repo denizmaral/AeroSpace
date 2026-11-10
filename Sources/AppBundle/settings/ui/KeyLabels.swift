@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import Common
 import HotKey
 
 /// The labels of the keys on the current keyboard layout of macOS (QWERTZ, AZERTY, Dvorak, …): a shortcut is stored by its
@@ -16,9 +17,39 @@ enum KeyLabels {
         return result + label(chord.key)
     }
 
+    /// Per key code, for the current keyboard layout: asking the layout is expensive, a list shows hundreds of keys
+    private static var labels: [UInt32: String] = [:]
+
+    /// The key that types the character, per character, for the current keyboard layout
+    private static var keysByLabel: [String: Key]? = nil
+
+    /// The keyboard layout of macOS changed
+    static func layoutChanged() {
+        labels = [:]
+        keysByLabel = nil
+    }
+
+    /// The key that types the character (a letter, a digit, …) on the keyboard layout of macOS. Not the keypad
+    static func key(typing character: String) -> Key? {
+        if keysByLabel == nil {
+            var keys: [String: Key] = [:]
+            let keypad = UInt32(kVK_ANSI_KeypadDecimal) ... UInt32(kVK_ANSI_Keypad9)
+            for code in UInt32(0) ..< 128 where !keypad.contains(code) {
+                guard let key = Key(carbonKeyCode: code), special[key] == nil else { continue }
+                let label = label(key)
+                if keys[label] == nil { keys[label] = key }
+            }
+            keysByLabel = keys
+        }
+        return keysByLabel?[character.uppercased()]
+    }
+
     static func label(_ key: Key) -> String {
         if let special = special[key] { return special }
-        return typedCharacter(key.carbonKeyCode).map { $0.uppercased() } ?? key.description
+        if let label = labels[key.carbonKeyCode] { return label }
+        let label = typedCharacter(key.carbonKeyCode).map { $0.uppercased() } ?? key.description
+        labels[key.carbonKeyCode] = label
+        return label
     }
 
     private static let special: [Key: String] = [
@@ -45,5 +76,20 @@ enum KeyLabels {
         guard status == noErr, length > 0 else { return nil }
         let text = String(decoding: characters.prefix(length), as: UTF16.self).trimmingCharacters(in: .whitespacesAndNewlines.union(.controlCharacters))
         return text.isEmpty ? nil : text
+    }
+}
+
+/// When the keyboard layout of macOS changes, the key labels follow it, and so do the keys of the workspace shortcuts (the
+/// key that types the name of the workspace): the settings are applied again
+@MainActor
+func startObservingKeyboardLayout() {
+    DistributedNotificationCenter.default().addObserver(
+        forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String), object: nil, queue: .main,
+    ) { _ in
+        MainActor.assumeIsolated {
+            KeyLabels.layoutChanged()
+            SettingsWindowController.shared.keyboardLayoutChanged()
+            Task.startUnstructured { _ = await reloadConfig_nonCancellable(args: ReloadConfigCmdArgs(rawArgs: []).with(\.noGui, true)) }
+        }
     }
 }

@@ -1,5 +1,4 @@
 import AppKit
-import Carbon
 import Common
 import SwiftUI
 
@@ -28,11 +27,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
                 },
             )
             self.model = model
-            DistributedNotificationCenter.default().addObserver(
-                forName: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String), object: nil, queue: .main,
-            ) { _ in
-                MainActor.assumeIsolated { model.keyboardLayoutChanges &+= 1 }
-            }
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))
             window.title = "\(aeroSpaceAppName) Settings"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
@@ -47,6 +41,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    /// The key labels follow the keyboard layout of macOS
+    func keyboardLayoutChanged() {
+        model?.keyboardLayoutChanges &+= 1
     }
 
     func windowWillClose(_ notification: Notification) {

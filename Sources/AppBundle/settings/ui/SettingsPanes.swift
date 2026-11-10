@@ -3,18 +3,79 @@ import SwiftUI
 
 // MARK: - Shortcuts
 
+/// The mode and the search of the shortcut list. Owned by the settings window: its toolbar edits them, and switching panes
+/// doesn't render the list again
+@MainActor
+@Observable
+final class ShortcutsPaneState {
+    var modeName = mainModeId
+    var search = ""
+    var isAddingMode = false
+}
+
+/// The toolbar of the window while the shortcuts are shown
+struct ShortcutsToolbar: ToolbarContent {
+    @Bindable var state: ShortcutsPaneState
+    @Bindable var model: SettingsModel
+
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .principal) {
+            Picker("Mode", selection: $state.modeName) {
+                ForEach(model.settings.modes) { Text($0.name.capitalized).tag($0.name) }
+            }
+            .pickerStyle(.segmented)
+            .help("A mode is a set of shortcuts, active until a shortcut switches to another mode")
+            Menu {
+                Button("New mode…") { state.isAddingMode = true }
+                if state.modeName != mainModeId {
+                    Button("Remove the \(state.modeName.capitalized) mode", role: .destructive) {
+                        model.settings.modes.removeAll { $0.name == state.modeName }
+                        state.modeName = mainModeId
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuIndicator(.hidden)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            TextField("Search", text: $state.search, prompt: Text("Search shortcuts"))
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 180)
+        }
+    }
+}
+
 struct ShortcutsPane: View {
     @Bindable var model: SettingsModel
-    @State private var modeName = mainModeId
-    @State private var search = ""
+    /// The mode and the search: the toolbar of the window edits them (see ``ShortcutsToolbar``)
+    @Bindable var state: ShortcutsPaneState
     @State private var editing: Int? = nil
     @State private var newModeName = ""
-    @State private var isAddingMode = false
 
-    private var modeIndex: Int? { model.settings.modes.firstIndex { $0.name == modeName } }
+    private var modeIndex: Int? { model.settings.modes.firstIndex { $0.name == state.modeName } }
 
     var body: some View {
-        Form {
+        List {
+            if state.modeName == mainModeId, state.search.isEmpty {
+                Section {
+                    WorkspaceShortcutRow(
+                        title: "Go to a workspace", symbol: "square.grid.2x2", modifiers: $model.settings.workspaceShortcuts.goTo,
+                        defaultModifiers: [.control, .option],
+                    )
+                    WorkspaceShortcutRow(
+                        title: "Move the window to a workspace", symbol: "macwindow.and.cursorarrow",
+                        modifiers: $model.settings.workspaceShortcuts.moveWindowTo, defaultModifiers: [.control, .option, .shift],
+                    )
+                    ForEach(model.problems(at: "Shortcuts › \(mainModeId) › Workspaces"), id: \.message) { problem in
+                        Label(problem.message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    }
+                } header: {
+                    Text("Workspaces")
+                } footer: {
+                    Text(workspaceFooter).font(.footnote).foregroundStyle(.secondary)
+                }
+            }
             if let modeIndex {
                 let shortcuts = model.settings.modes[modeIndex].shortcuts
                 let displayed = displayed(shortcuts)
@@ -29,7 +90,7 @@ struct ShortcutsPane: View {
                     }
                 }
                 if displayed.isEmpty {
-                    ContentUnavailableView.search(text: search)
+                    ContentUnavailableView.search(text: state.search)
                 }
                 Section {
                     Button {
@@ -39,59 +100,39 @@ struct ShortcutsPane: View {
                         Label("Add a shortcut", systemImage: "plus")
                     }
                 } footer: {
-                    Text(modeName == mainModeId
+                    Text(state.modeName == mainModeId
                         ? "Click a shortcut to change its keys or what it does."
-                        : "Active after a shortcut switches to the \(modeName) mode, until one switches back.")
+                        : "Active after a shortcut switches to the \(state.modeName) mode, until one switches back.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
         }
-        .formStyle(.grouped)
+        .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .background(Color(nsColor: .windowBackgroundColor))
         .id(model.keyboardLayoutChanges) // The key labels follow the keyboard layout of macOS
-        .searchable(text: $search, placement: .toolbar, prompt: "Search shortcuts")
-        .toolbar {
-            ToolbarItemGroup(placement: .principal) {
-                Picker("Mode", selection: $modeName) {
-                    ForEach(model.settings.modes) { Text($0.name.capitalized).tag($0.name) }
-                }
-                .pickerStyle(.segmented)
-                .help("A mode is a set of shortcuts, active until a shortcut switches to another mode")
-                Menu {
-                    Button("New mode…") { isAddingMode = true }
-                    if modeName != mainModeId {
-                        Button("Remove the \(modeName.capitalized) mode", role: .destructive) {
-                            model.settings.modes.removeAll { $0.name == modeName }
-                            modeName = mainModeId
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .menuIndicator(.hidden)
-            }
-        }
-        .sheet(isPresented: $isAddingMode) {
+        .sheet(isPresented: $state.isAddingMode) {
             NameSheet(title: "New mode", placeholder: "e.g. resize", name: $newModeName) {
                 let name = newModeName.trimmingCharacters(in: .whitespaces)
                 if !name.isEmpty, !model.settings.modes.contains(where: { $0.name == name }) {
                     model.settings.modes.append(Settings.BindingMode(name: name, shortcuts: [
                         Settings.Shortcut(chord: KeyChord([], .escape), actions: [.enterMode(mainModeId)]),
                     ]))
-                    modeName = name
+                    state.modeName = name
                 }
                 newModeName = ""
             }
         }
-        .onChange(of: modeName) { editing = nil }
+        .onChange(of: state.modeName) { editing = nil }
     }
 
     private func row(_ modeIndex: Int, _ index: Int) -> some View {
         let shortcut = model.settings.modes[modeIndex].shortcuts[index]
-        let keyNames = KeyNames(model.settings.general.keyboardLayout)
+        let keyNames = KeyNames.of(model.settings.general.keyboardLayout)
         return ShortcutRow(
             shortcut: shortcut,
-            problem: model.problems(at: "Shortcuts › \(modeName) › \(keyNames.notation(shortcut.chord))").first,
+            problem: model.problems(at: "Shortcuts › \(state.modeName) › \(keyNames.notation(shortcut.chord))").first,
         )
         .contentShape(Rectangle())
         .onTapGesture { editing = index }
@@ -112,8 +153,8 @@ struct ShortcutsPane: View {
     /// The matching shortcuts in a readable order: by action, then by parameter (directions in reading order, workspaces
     /// naturally sorted). The stored order doesn't change
     private func displayed(_ shortcuts: [Settings.Shortcut]) -> [Int] {
-        let keyNames = KeyNames(model.settings.general.keyboardLayout)
-        let query = search.trimmingCharacters(in: .whitespaces).lowercased()
+        let keyNames = KeyNames.of(model.settings.general.keyboardLayout)
+        let query = state.search.trimmingCharacters(in: .whitespaces).lowercased()
         return shortcuts.indices
             .filter { index in
                 guard !query.isEmpty else { return true }
@@ -129,6 +170,77 @@ struct ShortcutsPane: View {
                 if keyA != keyB { return keyA.localizedStandardCompare(keyB) == .orderedAscending }
                 return lhs < rhs
             }
+    }
+}
+
+extension ShortcutsPane {
+    /// Which workspaces get shortcuts, with an example on the keyboard layout of macOS
+    private var workspaceFooter: String {
+        let names = model.settings.workspaces.persistent.filter { $0.count == 1 }
+        guard let example = names.last else {
+            return "Workspaces named with one key (1 … 9, A … Z) get these shortcuts. Add them under Workspaces."
+        }
+        let modifiers = model.settings.workspaceShortcuts.goTo.map { KeyLabels.symbols(KeyChord($0, .a)).dropLast() } ?? ""
+        let list = names.count > 12 ? "\(names.prefix(6).joined(separator: " ")) … \(names.suffix(3).joined(separator: " "))" : names.joined(separator: " ")
+        return "For the workspaces \(list): the modifier keys and the key of the name, e.g. \(modifiers)\(example) goes to workspace \(example)."
+    }
+}
+
+/// The shortcuts of all workspaces at once: modifier keys, plus the key of the name of the workspace
+private struct WorkspaceShortcutRow: View {
+    let title: String
+    let symbol: String
+    @Binding var modifiers: KeyChord.Modifiers?
+    let defaultModifiers: KeyChord.Modifiers
+
+    private static let all: [(modifier: KeyChord.Modifiers, symbol: String, name: String)] = [
+        (.control, "⌃", "Control"), (.option, "⌥", "Option"), (.shift, "⇧", "Shift"), (.command, "⌘", "Command"),
+    ]
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 24, height: 24)
+                .background(Color.teal.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            Text(title).foregroundStyle(modifiers == nil ? .secondary : .primary)
+            Spacer(minLength: 12)
+            if let modifiers {
+                HStack(spacing: 3) {
+                    ForEach(Self.all, id: \.symbol) { item in
+                        let isOn = modifiers.contains(item.modifier)
+                        Button {
+                            self.modifiers = modifiers.symmetricDifference(item.modifier)
+                        } label: {
+                            Text(item.symbol)
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .frame(width: 22, height: 20)
+                                .foregroundStyle(isOn ? Color.white : Color.secondary)
+                                .background(isOn ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.background.secondary), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                                .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(.separator, lineWidth: 0.5))
+                        }
+                        .buttonStyle(.plain)
+                        .help("\(item.name): \(isOn ? "on" : "off")")
+                        .accessibilityLabel(item.name)
+                        .accessibilityAddTraits(isOn ? .isSelected : [])
+                    }
+                    Text("+").foregroundStyle(.tertiary).padding(.horizontal, 2)
+                    Text("1…Z")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.secondary)
+                        .frame(height: 20)
+                        .padding(.horizontal, 6)
+                        .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(.tertiary, style: StrokeStyle(lineWidth: 1, dash: [3, 2])))
+                        .help("The key of the name of the workspace")
+                }
+            }
+            Toggle(title, isOn: Binding(get: { modifiers != nil }, set: { modifiers = $0 ? defaultModifiers : nil }))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+        .padding(.vertical, 2)
     }
 }
 
@@ -173,11 +285,11 @@ struct KeyCaps: View {
                     .frame(minWidth: size * 1.2)
                     .padding(.horizontal, size * 0.45)
                     .padding(.vertical, size * 0.22)
-                    .background(
-                        RoundedRectangle(cornerRadius: size * 0.42, style: .continuous)
-                            .fill(.background.secondary)
-                            .shadow(color: .black.opacity(0.35), radius: 0, y: 1),
-                    )
+                    .background(.background.secondary, in: RoundedRectangle(cornerRadius: size * 0.42, style: .continuous))
+                    // The raised edge of a key, without a shadow (a shadow is drawn offscreen, for every key of the list)
+                    .overlay(alignment: .bottom) {
+                        RoundedRectangle(cornerRadius: size * 0.42, style: .continuous).fill(.black.opacity(0.3)).frame(height: 1).padding(.horizontal, 2)
+                    }
                     .overlay(RoundedRectangle(cornerRadius: size * 0.42, style: .continuous).strokeBorder(.separator, lineWidth: 0.5))
             }
         }
@@ -367,73 +479,130 @@ extension Action {
 
 struct WindowRulesPane: View {
     @Bindable var model: SettingsModel
+    @State private var editing: Int? = nil
 
     var body: some View {
-        Form {
+        List {
             Section {
-                Text("When a window opens, the first rule that matches it runs its actions, e.g. Terminal goes to workspace T.")
+                ForEach(model.settings.windowRules.indices, id: \.self) { index in
+                    WindowRuleRow(rule: model.settings.windowRules[index], hasProblem: !model.problems(at: "Window rules › \(index + 1)").isEmpty)
+                        .contentShape(Rectangle())
+                        .onTapGesture { editing = index }
+                        .popover(isPresented: Binding(get: { editing == index }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
+                            WindowRuleEditor(
+                                rule: $model.settings.windowRules[index],
+                                problems: model.problems(at: "Window rules › \(index + 1)"),
+                                modes: model.settings.modes.map(\.name),
+                                workspaces: model.settings.workspaces.persistent,
+                                remove: {
+                                    editing = nil
+                                    model.settings.windowRules.remove(at: index)
+                                },
+                            )
+                        }
+                }
+                .onMove { model.settings.windowRules.move(fromOffsets: $0, toOffset: $1) }
+            } header: {
+                Text("When a window opens, the first rule that matches it runs")
+            } footer: {
+                Text("Drag the rules to change their order. Click a rule to change it.")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
-            }
-            ForEach(model.settings.windowRules.indices, id: \.self) { index in
-                WindowRuleSection(
-                    rule: $model.settings.windowRules[index],
-                    problems: model.problems(at: "Window rules › \(index + 1)"),
-                    modes: model.settings.modes.map(\.name),
-                    workspaces: model.settings.workspaces.persistent,
-                    canMoveUp: index > 0,
-                    canMoveDown: index < model.settings.windowRules.count - 1,
-                    move: { offset in model.settings.windowRules.swapAt(index, index + offset) },
-                    remove: { model.settings.windowRules.remove(at: index) },
-                )
             }
             Section {
                 Button {
                     model.settings.windowRules.append(Settings.WindowRule(actions: [.moveWindowToWorkspace(model.settings.workspaces.persistent.first ?? "1")]))
+                    editing = model.settings.windowRules.count - 1
                 } label: {
-                    Label("Add a rule", systemImage: "plus.circle.fill")
+                    Label("Add a rule", systemImage: "plus")
                 }
-                .buttonStyle(.borderless)
             }
         }
-        .formStyle(.grouped)
+        .listStyle(.inset)
+        .scrollContentBackground(.hidden)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
-private struct WindowRuleSection: View {
+/// A rule in the list: the app (and the other conditions), then what happens
+private struct WindowRuleRow: View {
+    let rule: Settings.WindowRule
+    let hasProblem: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Group {
+                if let bundleId = rule.condition.appBundleId {
+                    Image(nsImage: AppCatalog.icon(of: bundleId)).resizable()
+                } else {
+                    Image(systemName: "macwindow").resizable().scaledToFit().foregroundStyle(.secondary).padding(2)
+                }
+            }
+            .frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(rule.condition.appBundleId.map(AppCatalog.name(of:)) ?? "Any app")
+                if let conditions {
+                    Text(conditions).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .lineLimit(1)
+            Spacer(minLength: 12)
+            if hasProblem {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            }
+            HStack(spacing: 6) {
+                ForEach(Array(rule.actions.enumerated()), id: \.offset) { _, action in
+                    HStack(spacing: 5) {
+                        ActionIcon(action: action).scaleEffect(0.85)
+                        Text(action.summary).font(.callout).foregroundStyle(.secondary)
+                    }
+                }
+                if rule.checkFurtherRules {
+                    Image(systemName: "arrow.down.to.line").foregroundStyle(.tertiary).help("The next rules are checked too")
+                }
+            }
+            .lineLimit(1)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var conditions: String? {
+        let condition = rule.condition
+        let parts = [
+            condition.windowTitlePattern.map { "title contains \($0)" },
+            condition.appNamePattern.map { "app name contains \($0)" },
+            condition.workspace.map { "on workspace \($0)" },
+            condition.duringStartup.map { $0 ? "while MarSpace starts" : "not while MarSpace starts" },
+        ].compactMap(\.self)
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+}
+
+/// Edits a rule in a popover
+private struct WindowRuleEditor: View {
     @Binding var rule: Settings.WindowRule
     let problems: [SettingsProblem]
     let modes: [String]
     let workspaces: [String]
-    let canMoveUp: Bool
-    let canMoveDown: Bool
-    let move: (Int) -> Void
     let remove: () -> Void
 
     var body: some View {
-        Section {
-            LabeledContent("When") { AppPicker(bundleId: $rule.condition.appBundleId) }
-            if rule.condition.windowTitlePattern != nil {
-                OptionalTextRow(title: "and the window title contains", placeholder: "Regular expression", value: $rule.condition.windowTitlePattern)
-            }
-            if rule.condition.appNamePattern != nil {
-                OptionalTextRow(title: "and the app name contains", placeholder: "Regular expression", value: $rule.condition.appNamePattern)
-            }
-            if rule.condition.workspace != nil {
-                OptionalTextRow(title: "and the workspace is", placeholder: "Workspace", value: $rule.condition.workspace)
-            }
-            if let duringStartup = rule.condition.duringStartup {
-                Toggle("and MarSpace is starting", isOn: Binding(get: { duringStartup }, set: { rule.condition.duringStartup = $0 }))
-            }
-            ActionListEditor(actions: $rule.actions, modes: modes, workspaces: workspaces)
-            Toggle("Check the next rules too", isOn: $rule.checkFurtherRules)
-            ForEach(problems, id: \.message) { problem in
-                Label(problem.message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            }
-        } header: {
-            HStack {
-                Text(rule.condition.appBundleId.map { "\(AppPicker.name(of: $0)) opens a window" } ?? "A window opens")
-                Spacer()
-                Menu {
+        Form {
+            Section {
+                LabeledContent("App") { AppPicker(bundleId: $rule.condition.appBundleId) }
+                if rule.condition.windowTitlePattern != nil {
+                    OptionalTextRow(title: "Window title contains", placeholder: "Regular expression", value: $rule.condition.windowTitlePattern)
+                }
+                if rule.condition.appNamePattern != nil {
+                    OptionalTextRow(title: "App name contains", placeholder: "Regular expression", value: $rule.condition.appNamePattern)
+                }
+                if rule.condition.workspace != nil {
+                    OptionalTextRow(title: "On workspace", placeholder: "Workspace", value: $rule.condition.workspace)
+                }
+                if let duringStartup = rule.condition.duringStartup {
+                    Toggle("Only while MarSpace starts", isOn: Binding(get: { duringStartup }, set: { rule.condition.duringStartup = $0 }))
+                }
+                Menu("Add a condition") {
                     Button("Window title") { rule.condition.windowTitlePattern = rule.condition.windowTitlePattern ?? "" }
                         .disabled(rule.condition.windowTitlePattern != nil)
                     Button("App name") { rule.condition.appNamePattern = rule.condition.appNamePattern ?? "" }
@@ -442,18 +611,29 @@ private struct WindowRuleSection: View {
                         .disabled(rule.condition.workspace != nil)
                     Button("While MarSpace starts") { rule.condition.duringStartup = rule.condition.duringStartup ?? true }
                         .disabled(rule.condition.duringStartup != nil)
-                } label: {
-                    Image(systemName: "line.3.horizontal.decrease.circle")
                 }
-                .menuIndicator(.hidden)
                 .fixedSize()
-                .help("Add a condition")
-                Button { move(-1) } label: { Image(systemName: "chevron.up") }.disabled(!canMoveUp).help("Check it earlier")
-                Button { move(1) } label: { Image(systemName: "chevron.down") }.disabled(!canMoveDown).help("Check it later")
-                Button(role: .destructive, action: remove) { Image(systemName: "trash") }.help("Remove the rule")
+            } header: {
+                Text("When a window opens")
             }
-            .buttonStyle(.borderless)
+            Section {
+                ActionListEditor(actions: $rule.actions, modes: modes, workspaces: workspaces)
+                Toggle("Check the next rules too", isOn: $rule.checkFurtherRules)
+            } header: {
+                Text("Then")
+            }
+            if !problems.isEmpty {
+                Section {
+                    ForEach(problems, id: \.message) { Label($0.message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange) }
+                }
+            }
+            Section {
+                Button("Delete the rule", role: .destructive, action: remove).foregroundStyle(.red)
+            }
         }
+        .formStyle(.grouped)
+        .frame(width: 540)
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

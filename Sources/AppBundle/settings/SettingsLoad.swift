@@ -9,7 +9,11 @@ import Common
 @MainActor
 func loadSettings(store: SettingsStore = .applicationSupport) -> (settings: Settings, notices: [String]) {
     switch store.load() {
-        case .loaded(let settings):
+        case .loaded(var settings):
+            if settings.schemaVersion < Settings.currentSchemaVersion {
+                SettingsMigration.migrate(&settings)
+                try? store.save(settings)
+            }
             return (settings, [])
         case .restoredFromBackup(let settings, let damaged):
             return (settings, ["The settings were damaged, the last good settings were restored. The damaged file is kept at \(damaged.path)"])
