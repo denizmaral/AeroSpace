@@ -98,9 +98,37 @@ private nonisolated func axWindowUnderMouse(_ location: CGPoint) async -> AxElem
     var element: AXUIElement?
     guard unsafe AXUIElementCopyElementAtPosition(systemwide, Float(location.x), Float(location.y), &element) == .success,
           let element
-    else { return .unknown }
+    else { return topmostWindow(at: location).map { .window(nativeWindowId: $0.id, pid: $0.pid) } ?? .unknown }
     let window = element.get(Ax.roleAttr) == kAXWindowRole ? element : element.get(Ax.parentWindowRecursive)
-    guard let window else { return .notAWindow }
-    guard let nativeWindowId = window.containingNativeWindowId(), let pid = window.pid else { return .unknown }
+    guard let window else {
+        // The element has no window: a menu or a popover, or the content of System Settings (it's drawn by other
+        // processes, its elements have no window attribute). The topmost window of the app at the location tells
+        guard let pid = element.pid, let topmost = topmostWindow(at: location, of: pid) else { return .notAWindow }
+        return topmost.layer == 0 ? .window(nativeWindowId: topmost.id, pid: pid) : .notAWindow
+    }
+    guard let nativeWindowId = window.containingNativeWindowId(), let pid = window.pid else {
+        return topmostWindow(at: location).map { .window(nativeWindowId: $0.id, pid: $0.pid) } ?? .unknown
+    }
     return .window(nativeWindowId: nativeWindowId, pid: pid)
+}
+
+/// The front most window at the location: of the app `pid` (any layer: its menus and popovers too), or of any other app
+/// than AeroSpace (the focus border) in the normal layer. The window server knows the z-order, no accessibility calls
+private nonisolated func topmostWindow(at location: CGPoint, of pid: pid_t? = nil) -> (id: CGWindowID, pid: pid_t, layer: Int)? {
+    let infos = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+    let ownPid = ProcessInfo.processInfo.processIdentifier
+    for info in infos { // Front to back
+        guard let owner = info[kCGWindowOwnerPID as String] as? Int32, owner != ownPid,
+              let layer = info[kCGWindowLayer as String] as? Int,
+              let id = info[kCGWindowNumber as String] as? Int,
+              let bounds = (info[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0) }),
+              bounds.contains(location)
+        else { continue }
+        if let pid {
+            if owner == pid { return (CGWindowID(id), owner, layer) }
+        } else if layer == 0 {
+            return (CGWindowID(id), owner, layer)
+        }
+    }
+    return nil
 }
