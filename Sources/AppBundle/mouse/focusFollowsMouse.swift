@@ -281,8 +281,27 @@ private func frontmostWindow(of windows: [Window]) -> Window? {
     return nil
 }
 
+/// A window of MarSpace (the settings window, the menu) is the front most window under the mouse. One behind other windows
+/// doesn't count. The window server is asked only when one of them is under the mouse at all
 /// - Parameter cocoaLocation: in screen coordinates of AppKit (the origin at the bottom left)
 @MainActor
 private func isOverOwnWindow(_ cocoaLocation: CGPoint) -> Bool {
-    NSApp.windows.contains { $0.isVisible && !$0.ignoresMouseEvents && $0.frame.contains(cocoaLocation) } // Not the focus border
+    let own = Set(NSApp.windows.lazy // Not the focus border: it ignores the mouse
+        .filter { $0.isVisible && !$0.ignoresMouseEvents && $0.frame.contains(cocoaLocation) }
+        .map(\.windowNumber))
+    guard !own.isEmpty else { return false }
+    let location = cocoaLocation.withYAxisFlipped
+    let ownPid = ProcessInfo.processInfo.processIdentifier
+    let infos = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+    for info in infos { // Front to back
+        guard let number = info[kCGWindowNumber as String] as? Int,
+              let bounds = (info[kCGWindowBounds as String] as? NSDictionary).flatMap({ CGRect(dictionaryRepresentation: $0) }),
+              bounds.contains(location)
+        else { continue }
+        if own.contains(number) { return true }
+        // Another app's window in the normal layer is in front. Other layers (the menu bar, the Dock) and MarSpace's
+        // other windows (the focus border) don't decide
+        if info[kCGWindowOwnerPID as String] as? Int32 != ownPid, info[kCGWindowLayer as String] as? Int == 0 { return false }
+    }
+    return true // Not in the list (yet): as before, MarSpace's window is under the mouse
 }

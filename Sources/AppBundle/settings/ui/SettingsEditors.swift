@@ -24,9 +24,9 @@ struct ActionListEditor: View {
                 if actions.count > 1 {
                     Text("\(index + 1).").monospacedDigit().foregroundStyle(.secondary)
                 }
-                ActionEditor(action: $actions[index], modes: modes, workspaces: workspaces, context: context)
+                ActionEditor(action: $actions.element(index), modes: modes, workspaces: workspaces, context: context)
                 Button {
-                    actions.remove(at: index)
+                    if actions.indices.contains(index) { actions.remove(at: index) }
                 } label: {
                     Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
                 }
@@ -519,5 +519,17 @@ private struct FullscreenEditor: View {
         }
         .pickerStyle(.segmented).labelsHidden().fixedSize()
         .help("MarSpace: the window fills its workspace. macOS: the window gets its own Space, like the green button")
+    }
+}
+
+extension Binding {
+    /// The element at the index, as long as it exists. A view of a row that was just removed (its popover closing, its text
+    /// field ending the editing) reads the last value and writes nothing, instead of reading past the end
+    func element<Element: Sendable>(_ index: Int) -> Binding<Element> where Value == [Element] {
+        let last = wrappedValue[index]
+        return Binding<Element>(
+            get: { wrappedValue.indices.contains(index) ? wrappedValue[index] : last },
+            set: { if wrappedValue.indices.contains(index) { wrappedValue[index] = $0 } },
+        )
     }
 }

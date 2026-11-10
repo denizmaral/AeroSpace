@@ -87,6 +87,39 @@ struct WorkspaceShortcutsTest {
         assertEquals(store.load(), .loaded(migrated)) // Saved
     }
 
+    /// A fold that would change what a shortcut does, or leave a lasting problem, isn't made
+    @Test func testFoldsThatChangeAShortcutAreNotMade() {
+        func migrated(_ persistent: [String], _ shortcuts: [Settings.Shortcut]) -> Settings {
+            var settings = settings(persistent)
+            settings.schemaVersion = 1
+            settings.workspaceShortcuts = .init(goTo: nil, moveWindowTo: nil)
+            settings.modes = [Settings.BindingMode(name: mainModeId, shortcuts: shortcuts)]
+            SettingsMigration.migrate(&settings)
+            return settings
+        }
+        // Going to and moving to with the same modifiers: alt-2 would go to workspace 2 instead of moving the window there
+        let same = migrated(["1", "2"], [
+            Settings.Shortcut(chord: KeyChord([.option], .one), actions: [.workspace("1")]),
+            Settings.Shortcut(chord: KeyChord([.option], .two), actions: [.moveWindowToWorkspace("2")]),
+        ])
+        assertEquals(same.workspaceShortcuts, .init(goTo: nil, moveWindowTo: nil))
+        assertEquals(same.modes[0].shortcuts.count, 2)
+        // alt-1 does more than going to workspace 1: the generated alt-1 would collide with it
+        let more = migrated(["1", "2"], [
+            Settings.Shortcut(chord: KeyChord([.option], .one), actions: [.workspace("1"), .moveMouse(.monitorLazyCenter)]),
+            Settings.Shortcut(chord: KeyChord([.option], .two), actions: [.workspace("2")]),
+        ])
+        assertNil(more.workspaceShortcuts.goTo)
+        assertEquals(more.compile(keyForCharacter: qwerty).problems, [])
+        // Workspace H, and alt-h focuses: the generated alt-h would take it
+        let h = migrated(["1", "H"], [
+            Settings.Shortcut(chord: KeyChord([.option], .one), actions: [.workspace("1")]),
+            Settings.Shortcut(chord: KeyChord([.option], .h), actions: [.focus(.left)]),
+        ])
+        assertNil(h.workspaceShortcuts.goTo)
+        assertEquals(commands(h.compile(keyForCharacter: qwerty).config, [.option], .h), "focus left")
+    }
+
     /// Different modifiers for the same kind of shortcut: they stay as they are
     @Test func testInconsistentShortcutsAreNotFolded() {
         var settings = settings(["1", "2"])

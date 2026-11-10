@@ -76,9 +76,13 @@ enum SettingsImport {
 
         settings.windowRules = (raw["on-window-detected"]?.asArrayOrNil ?? []).enumerated().compactMap { index, rawRule in
             guard let rule = rawRule.asDictOrNil else { return nil }
-            let condition = rule["if"]?.asDictOrNil ?? [:]
-            if condition.isEmpty, rule["if"] != nil {
-                problems.append("on-window-detected[\(index)]: only conditions on the app, the window title and the workspace are supported")
+            // A condition that isn't taken over completely would match more windows (a missing one: every window). The
+            // rule is left out then. E.g. `if = 'test %{app-bundle-id} = …'`, a shell condition
+            let supported: Set = ["app-id", "app-name-regex-substring", "window-title-regex-substring", "workspace", "during-aerospace-startup"]
+            guard let condition = rule["if"]?.asDictOrNil, Set(condition.keys).isSubset(of: supported) else {
+                problems.append("on-window-detected[\(index)]: left out. Only conditions on the app, the window title, the workspace and " +
+                    "the startup are supported, as a table (if.app-id = '…'). Add it again as a window rule in the settings")
+                return nil
             }
             return Settings.WindowRule(
                 condition: Settings.WindowCondition(
@@ -113,6 +117,11 @@ enum SettingsImport {
     private static func actions(_ raw: OrderedJson) -> [Action] {
         if let line = raw.asStringOrNil { return line.isEmpty ? [] : [Action(commandLine: line)] }
         return (raw.asArrayOrNil ?? []).compactMap { $0.asStringOrNil.map(Action.init(commandLine:)) }
+    }
+
+    /// The text is TOML (not necessarily a valid config)
+    static func isToml(_ toml: String) -> Bool {
+        (try? TOMLTable(source: toml)) != nil
     }
 
     private static func rawTable(_ toml: String) -> OrderedJson.JsonDict {

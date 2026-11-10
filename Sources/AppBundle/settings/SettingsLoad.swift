@@ -24,17 +24,36 @@ func loadSettings(store: SettingsStore = .applicationSupport, dryRun: Bool = fal
         case .unreadable(let reason):
             return (defaultSettings(), ["\(reason). The default settings are used meanwhile. The file is never overwritten: a change in the settings keeps it aside."])
         case .none:
-            let url = if case .file(let url) = findCustomConfigUrl() { url } else { defaultConfigUrl }
-            let imported = SettingsImport.settings(fromToml: (try? String(contentsOf: url, encoding: .utf8)) ?? "")
-            if dryRun { return (imported.settings, []) }
-            do {
-                try store.save(imported.settings)
-            } catch {
-                return (imported.settings, ["The settings can't be saved: \(error.localizedDescription)"])
+            return switch findCustomConfigUrl() {
+                case .file(let url): importSettings(from: url, store: store, dryRun: dryRun)
+                case .ambiguousConfigError(let urls):
+                    importSettings(from: urls[0], store: store, dryRun: dryRun, notes: [
+                        "There are several AeroSpace configs: \(urls.map(\.path).joined(separator: ", ")). \(urls[0].path) was taken over.",
+                    ])
+                case .noCustomConfigExists: importSettings(from: defaultConfigUrl, store: store, dryRun: dryRun)
             }
-            let notes = imported.problems.isEmpty ? [] : ["The settings were taken over from \(url.path) with these notes:"] + imported.problems
-            return (imported.settings, notes)
     }
+}
+
+/// The first launch: the settings are taken over from an AeroSpace TOML config, once. A config that can't be read is not
+/// taken over and nothing is saved: the next launch tries again (e.g. after it was fixed)
+@MainActor
+func importSettings(from url: URL, store: SettingsStore, dryRun: Bool, notes: [String] = []) -> (settings: Settings, notices: [String]) {
+    guard let toml = try? String(contentsOf: url, encoding: .utf8), SettingsImport.isToml(toml) else {
+        return (defaultSettings(), notes + [
+            "\(url.path) can't be read as a TOML config. The default settings are used meanwhile. MarSpace takes the config over " +
+                "at its next launch, unless the settings are changed before.",
+        ])
+    }
+    let imported = SettingsImport.settings(fromToml: toml)
+    if dryRun { return (imported.settings, notes) }
+    do {
+        try store.save(imported.settings)
+    } catch {
+        return (imported.settings, notes + ["The settings can't be saved: \(error.localizedDescription)"])
+    }
+    let problems = imported.problems.isEmpty ? [] : ["The settings were taken over from \(url.path) with these notes:"] + imported.problems
+    return (imported.settings, notes + problems)
 }
 
 /// The bundled default config, as settings

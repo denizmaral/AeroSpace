@@ -32,16 +32,32 @@ enum KeyLabels {
     /// The key that types the character (a letter, a digit, …) on the keyboard layout of macOS. Not the keypad
     static func key(typing character: String) -> Key? {
         if keysByLabel == nil {
-            var keys: [String: Key] = [:]
             let keypad = UInt32(kVK_ANSI_KeypadDecimal) ... UInt32(kVK_ANSI_Keypad9)
-            for code in UInt32(0) ..< 128 where !keypad.contains(code) {
-                guard let key = Key(carbonKeyCode: code), special[key] == nil else { continue }
-                let label = label(key)
-                if keys[label] == nil { keys[label] = key }
+            let labels = (UInt32(0) ..< 128).compactMap { code -> (Key, String)? in
+                guard !keypad.contains(code), let key = Key(carbonKeyCode: code), special[key] == nil else { return nil }
+                return (key, label(key))
             }
-            keysByLabel = keys
+            keysByLabel = keysByCharacter(labels)
         }
         return keysByLabel?[character.uppercased()]
+    }
+
+    /// The key that types each character, from the label of every key (in key code order: the first key wins). A letter or a
+    /// digit that no key types without modifiers (the digits of AZERTY, the Latin letters of a Cyrillic layout) is the key at
+    /// its place on a US keyboard, unless that key types another letter or digit
+    nonisolated static func keysByCharacter(_ labels: [(key: Key, label: String)]) -> [String: Key] {
+        var keys: [String: Key] = [:]
+        for (key, label) in labels where keys[label] == nil {
+            keys[label] = key
+        }
+        let latin = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".map(String.init))
+        let labelOfKey = Dictionary(labels.map { ($0.key, $0.label) }, uniquingKeysWith: { first, _ in first })
+        let us = getKeysPreset(.qwerty)
+        for character in latin.sorted() where keys[character] == nil {
+            guard let key = us[character.lowercased()], let label = labelOfKey[key], !latin.contains(label) else { continue }
+            keys[character] = key
+        }
+        return keys
     }
 
     static func label(_ key: Key) -> String {

@@ -1,5 +1,6 @@
 import Common
 import Foundation
+import HotKey
 
 /// Brings settings of an older MarSpace (and imported configs) to the current schema
 @MainActor
@@ -12,12 +13,16 @@ enum SettingsMigration {
 
     /// The shortcuts of the main mode that go to (or move the window to) a persistent workspace with the key of its name,
     /// all with the same modifiers, become ``Settings/workspaceShortcuts``. The key is matched by its name in the keyboard
-    /// preset that they were written with (`ctrl-alt-z` for workspace Z), not by the keyboard layout of macOS
+    /// preset that they were written with (`ctrl-alt-z` for workspace Z), not by the keyboard layout of macOS.
+    ///
+    /// A fold is kept only if every shortcut still runs the same commands and no problem appears: e.g. not if an explicit
+    /// shortcut would take a generated one, or if going to and moving to had the same modifiers. A workspace that had no
+    /// shortcut may get one
     static func foldWorkspaceShortcuts(_ settings: inout Settings) {
         guard let main = settings.modes.firstIndex(where: { $0.name == mainModeId }) else { return }
         let keyNames = KeyNames.of(settings.general.keyboardLayout)
         let persistent = Set(settings.workspaces.persistent)
-        func fold(_ workspace: (Action) -> String?) -> KeyChord.Modifiers? {
+        func fold(_ settings: inout Settings, _ workspace: (Action) -> String?) -> KeyChord.Modifiers? {
             let shortcuts = settings.modes[main].shortcuts
             let folded = shortcuts.indices.filter { index in
                 let shortcut = shortcuts[index]
@@ -30,8 +35,26 @@ enum SettingsMigration {
             settings.modes[main].shortcuts.remove(atOffsets: IndexSet(folded))
             return only
         }
-        settings.workspaceShortcuts.goTo = fold { if case .workspace(let name) = $0 { name } else { nil } }
-        settings.workspaceShortcuts.moveWindowTo = fold { if case .moveWindowToWorkspace(let name) = $0 { name } else { nil } }
+        func folded(goTo: Bool, moveWindowTo: Bool) -> Settings {
+            var result = settings
+            if goTo { result.workspaceShortcuts.goTo = fold(&result) { if case .workspace(let name) = $0 { name } else { nil } } }
+            if moveWindowTo {
+                result.workspaceShortcuts.moveWindowTo = fold(&result) { if case .moveWindowToWorkspace(let name) = $0 { name } else { nil } }
+            }
+            return result
+        }
+        let presetKeys = getKeysPreset(settings.general.keyboardLayout)
+        let keyOfName: @MainActor (String) -> Key? = { presetKeys[$0.lowercased()] }
+        let before = settings.compile(keyForCharacter: keyOfName)
+        let oldBindings = before.config.modes[mainModeId]?.bindings ?? [:]
+        for candidate in [folded(goTo: true, moveWindowTo: true), folded(goTo: true, moveWindowTo: false), folded(goTo: false, moveWindowTo: true)] {
+            let after = candidate.compile(keyForCharacter: keyOfName)
+            let newBindings = after.config.modes[mainModeId]?.bindings ?? [:]
+            if after.problems.count <= before.problems.count, oldBindings.allSatisfy({ newBindings[$0.key] == $0.value }) {
+                settings = candidate
+                return
+            }
+        }
     }
 
     /// A window rule that toggled the fullscreen enters it now. A rule runs again for a window that is detected again (e.g.

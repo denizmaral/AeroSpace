@@ -138,13 +138,15 @@ struct ShortcutsPane: View {
         .onTapGesture { editing = index }
         .popover(isPresented: Binding(get: { editing == index }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
             ShortcutEditor(
-                shortcut: $model.settings.modes[modeIndex].shortcuts[index],
+                shortcut: $model.settings.modes.element(modeIndex).shortcuts.element(index),
                 isRecording: $model.isRecordingShortcut,
                 modes: model.settings.modes.map(\.name),
                 workspaces: model.settings.workspaces.persistent,
                 remove: {
                     editing = nil
-                    model.settings.modes[modeIndex].shortcuts.remove(at: index)
+                    if model.settings.modes.indices.contains(modeIndex), model.settings.modes[modeIndex].shortcuts.indices.contains(index) {
+                        model.settings.modes[modeIndex].shortcuts.remove(at: index)
+                    }
                 },
             )
         }
@@ -495,13 +497,13 @@ struct WindowRulesPane: View {
                         .onTapGesture { editing = index }
                         .popover(isPresented: Binding(get: { editing == index }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
                             WindowRuleEditor(
-                                rule: $model.settings.windowRules[index],
+                                rule: $model.settings.windowRules.element(index),
                                 problems: model.problems(at: "Window rules › \(index + 1)"),
                                 modes: model.settings.modes.map(\.name),
                                 workspaces: model.settings.workspaces.persistent,
                                 remove: {
                                     editing = nil
-                                    model.settings.windowRules.remove(at: index)
+                                    if model.settings.windowRules.indices.contains(index) { model.settings.windowRules.remove(at: index) }
                                 },
                             )
                         }
@@ -692,8 +694,8 @@ struct WorkspacesPane: View {
 
             Section {
                 ForEach(workspaces.monitorAssignments.indices, id: \.self) { index in
-                    MonitorAssignmentRow(assignment: $workspaces.monitorAssignments[index]) {
-                        workspaces.monitorAssignments.remove(at: index)
+                    MonitorAssignmentRow(assignment: $workspaces.monitorAssignments.element(index)) {
+                        if workspaces.monitorAssignments.indices.contains(index) { workspaces.monitorAssignments.remove(at: index) }
                     }
                 }
                 Button {

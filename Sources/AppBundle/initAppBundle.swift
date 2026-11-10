@@ -76,8 +76,9 @@ private let serverHelp = """
     OPTIONS:
       -h, --help              Print help
       -v, --version           Print AeroSpace.app version
-      --config-path <path>    Config path. It will take priority over ~/.aerospace.toml
-                              and ${XDG_CONFIG_HOME}/aerospace/aerospace.toml
+      --config-path <path>    An AeroSpace config to take over at the first launch (MarSpace has no
+                              settings yet). It takes priority over ~/.aerospace.toml and
+                              ${XDG_CONFIG_HOME}/aerospace/aerospace.toml
       --read-only             Disable window management.
                               Useful if you want to use only debug-windows or other query commands.
     """

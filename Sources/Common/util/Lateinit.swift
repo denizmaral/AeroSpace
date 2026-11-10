@@ -9,13 +9,6 @@ public enum Lateinit<T> {
             case .uninitialized: die("Property is not initialized")
         }
     }
-
-    public var isInitialized: Bool {
-        return switch self {
-            case .initialized: true
-            case .uninitialized: false
-        }
-    }
 }
 
 extension Lateinit: Equatable where T: Equatable {

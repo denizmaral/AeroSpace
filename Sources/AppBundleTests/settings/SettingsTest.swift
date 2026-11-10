@@ -200,3 +200,49 @@ struct SettingsTest {
         }
     }
 }
+
+/// The first launch takes the AeroSpace config over once. What can't be taken over completely is left out, loudly
+@MainActor
+@Suite(.serializedGlobally)
+struct SettingsImportTest {
+    init() { setUpWorkspacesForTests() }
+
+    private let directory = FileManager.default.temporaryDirectory.appending(path: "SettingsImportTest-\(UUID().uuidString)")
+
+    /// A shell condition (recommended by AeroSpace's guide) or no condition: the rule would match every window
+    @Test func testRulesWhoseConditionCantBeTakenOverAreLeftOut() {
+        let imported = SettingsImport.settings(fromToml: """
+            [[on-window-detected]]
+            if = 'test %{app-bundle-id} = org.alacritty'
+            run = 'move-node-to-workspace T'
+
+            [[on-window-detected]]
+            run = 'layout floating'
+
+            [[on-window-detected]]
+            if.app-id = 'com.apple.Terminal'
+            run = 'move-node-to-workspace T'
+            """)
+        assertEquals(imported.settings.windowRules.map(\.condition.appBundleId), ["com.apple.Terminal"])
+        assertEquals(imported.problems.count(where: { $0.contains("left out") }), 2)
+    }
+
+    /// Not saved: the next launch tries again, e.g. after the config was fixed
+    @Test func testAConfigThatIsNotTomlIsNotTakenOver() throws {
+        let store = SettingsStore(directory: directory)
+        let url = directory.appending(path: "aerospace.toml")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        for content in [Data("[mode.main.binding\nalt-h = 'focus left'".utf8), Data([0xFF, 0xFE, 0x00, 0x41])] {
+            try content.write(to: url)
+            let (settings, notices) = importSettings(from: url, store: store, dryRun: false)
+            assertEquals(settings, defaultSettings())
+            #expect(notices.first?.contains("can't be read as a TOML config") == true)
+            assertEquals(store.load(), .none)
+        }
+
+        try Data("[mode.main.binding]\nalt-h = 'focus left'".utf8).write(to: url)
+        let (imported, _) = importSettings(from: url, store: store, dryRun: false)
+        assertEquals(imported.modes.first?.shortcuts.first?.actions, [.focus(.left)])
+        assertEquals(store.load(), .loaded(imported))
+    }
+}
