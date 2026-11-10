@@ -43,7 +43,11 @@ extension Settings {
         let border = appearance.focusBorder
         config.focusBorder = FocusBorder(enabled: border.isEnabled, color: border.color.runtimeColor, width: border.width, radius: border.radius)
 
-        config.persistentWorkspaces = OrderedSet(workspaces.persistent)
+        config.persistentWorkspaces = OrderedSet(workspaces.persistent.filter { name in
+            guard case .failure(let message) = WorkspaceName.parse(name) else { return true }
+            problems.append(.init(location: "Workspaces › \(name)", message: message))
+            return false
+        })
         for assignment in workspaces.monitorAssignments {
             config.workspaceToMonitorForceAssignment[assignment.workspace] = assignment.monitors.compactMap { selector in
                 let description = selector.runtimeDescription
@@ -99,6 +103,11 @@ extension Settings {
 private func compileActions(_ actions: [Action], _ location: String, _ problems: inout [SettingsProblem]) -> Shell<any Command>? {
     var shells: [Shell<any Command>] = []
     for action in actions {
+        // E.g. a workspace named `next` would be a direction, `Mail Box` a quoted line that the parser refuses
+        if let name = action.workspaceName, case .failure(let message) = WorkspaceName.parse(name) {
+            problems.append(.init(location: location, message: message))
+            continue
+        }
         switch parseCommand(action.commandLine, allowExecAndForget: true, allowEval: false) {
             case .cmd(let shell): shells.append(shell)
             case .help: problems.append(.init(location: location, message: "'\(action.commandLine)' only prints a help text"))
@@ -106,6 +115,15 @@ private func compileActions(_ actions: [Action], _ location: String, _ problems:
         }
     }
     return shells.count == actions.count ? .newCompound(shells, Shell<any Command>.seq) : nil
+}
+
+extension Action {
+    fileprivate var workspaceName: String? {
+        switch self {
+            case .workspace(let name), .moveWindowToWorkspace(let name): name
+            default: nil
+        }
+    }
 }
 
 extension BorderColor {

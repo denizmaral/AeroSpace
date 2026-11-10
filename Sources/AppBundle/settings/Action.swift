@@ -105,8 +105,8 @@ enum Action: Codable, Sendable, Equatable {
     }
 
     private static func candidate(_ line: String) -> Action? {
-        // Quotes, sequences, pipes and conditions are custom command lines
-        if line.contains(where: { "'\";&|()$`\\".contains($0) }) { return nil }
+        // Quotes, sequences, pipes, conditions and comments are custom command lines
+        if line.contains(where: { "'\";&|()$`\\#".contains($0) }) { return nil }
         let words = line.split(separator: " ").map(String.init)
         guard let name = words.first else { return nil }
         let args = Array(words.dropFirst())
@@ -120,9 +120,9 @@ enum Action: Codable, Sendable, Equatable {
                 if raw.hasPrefix("+") { return UInt(raw.dropFirst()).map { .resize(dimension, .add($0)) } }
                 if raw.hasPrefix("-") { return UInt(raw.dropFirst()).map { .resize(dimension, .subtract($0)) } }
                 return UInt(raw).map { .resize(dimension, .set($0)) }
-            case ("workspace", 1) where !args[0].hasPrefix("-"): return .workspace(args[0])
+            case ("workspace", 1) where args[0].isWorkspaceName: return .workspace(args[0]) // Not `next`: a direction
             case ("workspace-back-and-forth", 0): return .workspaceBackAndForth
-            case ("move-node-to-workspace", 1) where !args[0].hasPrefix("-"): return .moveWindowToWorkspace(args[0])
+            case ("move-node-to-workspace", 1) where args[0].isWorkspaceName: return .moveWindowToWorkspace(args[0])
             case ("move-workspace-to-monitor", 1): return MonitorStep(rawValue: args[0]).map { .moveWorkspaceToMonitor($0, wrapAround: false) }
             case ("move-workspace-to-monitor", 2) where args[0] == "--wrap-around":
                 return MonitorStep(rawValue: args[1]).map { .moveWorkspaceToMonitor($0, wrapAround: true) }
@@ -142,7 +142,7 @@ enum Action: Codable, Sendable, Equatable {
             case ("balance-sizes", 0): return .balanceSizes
             case ("close", 0): return .closeWindow
             case ("close-all-windows-but-current", 0): return .closeAllWindowsButCurrent
-            case ("mode", 1): return .enterMode(args[0])
+            case ("mode", 1) where !args[0].hasPrefix("-"): return .enterMode(args[0]) // Not `--help`
             case ("reload-config", 0): return .reloadSettings
             case ("move-mouse", 1): return MouseTarget(rawValue: args[0]).map(Action.moveMouse)
             default: return nil
@@ -151,6 +151,10 @@ enum Action: Codable, Sendable, Equatable {
 }
 
 extension String {
+    fileprivate var isWorkspaceName: Bool {
+        if case .success = WorkspaceName.parse(self) { true } else { false }
+    }
+
     /// Quoted for the command language when needed (e.g. a workspace name with a space)
     fileprivate var shellQuoted: String {
         let isPlain = !isEmpty && allSatisfy { $0.isLetter || $0.isNumber || "-_.".contains($0) }

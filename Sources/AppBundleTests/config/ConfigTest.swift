@@ -703,7 +703,7 @@ struct ConfigTest {
             "q": .q,
             "unicorn": .u,
         ]))
-        let binding = HotkeyBinding(.option, .u, .cmd(WorkspaceCommand(args: WorkspaceCmdArgs(target: .direct(.parse("unicorn").getOrDie())))))
+        let binding = HotkeyBinding(.option, .u, parseCommand("workspace wonderland").cmdOrDie)
         assertEquals(result.config.modes[mainModeId]?.bindings, [binding.descriptionWithKeyCode: binding])
 
         let errors1 = parseConfig(

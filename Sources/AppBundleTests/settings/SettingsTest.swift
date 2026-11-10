@@ -67,7 +67,10 @@ struct SettingsTest {
             }
         }
         // Flags without a typed action, sequences, quoting: custom command lines, as written
-        for line in ["focus --boundaries workspace left", "exec-and-forget open -a Terminal", "workspace --auto-back-and-forth T", "mode main; focus left"] {
+        for line in [
+            "focus --boundaries workspace left", "exec-and-forget open -a Terminal", "workspace --auto-back-and-forth T", "mode main; focus left",
+            "workspace 1 #1 is a comment", "workspace 1#main", "mode service#x", "mode --help", "workspace next", "move-node-to-workspace prev",
+        ] {
             assertEquals(Action(commandLine: line), .custom(line))
         }
         assertEquals(Action(commandLine: "layout   tiles  accordion"), .layout([.tiles, .accordion]))
@@ -89,6 +92,21 @@ struct SettingsTest {
         assertEquals(settings.windowRules[0].actions, [.moveWindowToWorkspace("B"), .enterFullscreen(.macOSNative)])
         assertEquals(settings.modes[0].shortcuts[0].actions, [.fullscreen(.marSpace)])
         assertEquals(settings.compile().config.onWindowDetected.first?.run.shellOfCommandsDescription, "move-node-to-workspace B; macos-native-fullscreen on")
+    }
+
+    /// A name that the command language refuses or reads as something else (a direction) is a problem, not a surprise
+    @Test func testInvalidWorkspaceNamesAreProblems() {
+        var settings = Settings()
+        settings.workspaceShortcuts = .init(goTo: nil, moveWindowTo: nil)
+        settings.workspaces.persistent = ["1", "Mail Box", "next"]
+        settings.modes = [Settings.BindingMode(name: mainModeId, shortcuts: [
+            Settings.Shortcut(chord: KeyChord([.option], .n), actions: [.workspace("next")]),
+            Settings.Shortcut(chord: KeyChord([.option], .m), actions: [.moveWindowToWorkspace("Mail Box")]),
+        ])]
+        let (config, problems) = settings.compile()
+        assertEquals(problems.map(\.location), ["Workspaces › Mail Box", "Workspaces › next", "Shortcuts › main › alt-n", "Shortcuts › main › alt-m"])
+        assertEquals(Array(config.persistentWorkspaces), ["1"])
+        assertEquals(config.modes[mainModeId]?.bindings.count, 0)
     }
 
     /// Every gap and border value distinct, so that no field can be mixed up with another

@@ -20,8 +20,11 @@ public enum Lateinit<T> {
 
 extension Lateinit: Equatable where T: Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.isInitialized && rhs.isInitialized && lhs.val == rhs.val ||
-            lhs.isInitialized == rhs.isInitialized
+        switch (lhs, rhs) {
+            case (.initialized(let lhs), .initialized(let rhs)): lhs == rhs
+            case (.uninitialized, .uninitialized): true
+            default: false
+        }
     }
 }
 
