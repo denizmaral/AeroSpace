@@ -77,6 +77,7 @@ func setUpWorkspacesForTests() {
     TestApp.shared.windows = []
 
     global_layoutForNextDetectedWindow = nil
+    lastInvisibleWindowsNativeStateCheck = nil
 }
 
 extension ParsedCmd {

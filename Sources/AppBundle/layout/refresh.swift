@@ -42,10 +42,7 @@ func runHeavyCompleteRefreshSession(
             if let nativeFocused { try await debugWindowsIfRecording(nativeFocused, .cancellable) }
             updateFocusCache(nativeFocused)
 
-            if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces {
-                try await normalizeLayoutReasonOfNewlyVisibleWorkspaces()
-                try await layoutWorkspaces()
-            }
+            if shouldLayoutWorkspaces && optimisticallyPreLayoutWorkspaces { try await layoutWorkspaces() }
 
             await refreshModel_nonCancellable()
             try await refresh()
@@ -100,10 +97,7 @@ func runLightSession<T>(
 
         updateTrayText()
         SecureInputPanel.shared.refresh()
-        if !event.isFocusFollowsMouse {
-            try await normalizeLayoutReasonOfNewlyVisibleWorkspaces()
-            try await layoutWorkspaces()
-        }
+        if !event.isFocusFollowsMouse { try await layoutWorkspaces() }
         if focusBefore != focusAfter {
             focusAfter?.nativeFocus() // syncFocusToMacOs
         }

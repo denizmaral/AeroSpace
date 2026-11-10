@@ -1,33 +1,22 @@
+/// The last time when the native state of the windows of invisible workspaces was checked. See normalizeLayoutReason
+@MainActor var lastInvisibleWindowsNativeStateCheck: ContinuousClock.Instant? = nil
+
 @MainActor func normalizeLayoutReason() async throws {
+    // Windows of invisible workspaces are hidden in the corner of the screen, their native state rarely changes (e.g.
+    // "Minimize All", an app that minimizes its windows). Check them at most every 5 seconds instead of in every
+    // refresh session (2 AX calls per window). Windows that are already in a native macOS state are always checked
+    let now = ContinuousClock.now
+    let checkInvisible = lastInvisibleWindowsNativeStateCheck.map { now - $0 >= .seconds(5) } ?? true
+    if checkInvisible { lastInvisibleWindowsNativeStateCheck = now }
     for workspace in Workspace.all {
-        // Windows of invisible workspaces are hidden in the corner of the screen, the user can't fullscreen or minimize
-        // them. Their native state is checked once the workspace becomes visible (it saves 2 AX calls per window per
-        // refresh session). Windows that are already in a native macOS state are always checked: the user can leave it
-        let windows: [Window] = workspace.isVisible
+        let windows: [Window] = workspace.isVisible || checkInvisible
             ? workspace.allLeafWindowsRecursive
             : workspace.allLeafWindowsRecursive.filter { $0.layoutReason != .standard }
         if windows.isEmpty { continue }
         try await _normalizeLayoutReason(workspace: workspace, windows: windows)
     }
-    nativeStateCheckedVisibleWorkspaces = Set(Workspace.all.lazy.filter(\.isVisible).map(\.name))
     try await _normalizeLayoutReason(workspace: globalFocus.workspace, windows: macosMinimizedWindowsContainer.children.filterIsInstance(of: Window.self))
     try await validateStillPopups()
-}
-
-/// The visible workspaces whose windows' native state is checked. See normalizeLayoutReason
-@MainActor private var nativeStateCheckedVisibleWorkspaces: Set<String> = []
-
-/// Workspaces that became visible (e.g. the `workspace` command) are laid out before the next complete refresh session.
-/// Check the native state of their windows first. Otherwise, e.g. a minimized window gets a tile and leaves a hole
-@MainActor func normalizeLayoutReasonOfNewlyVisibleWorkspaces() async throws {
-    var visible: Set<String> = []
-    for workspace in Workspace.all where workspace.isVisible {
-        visible.insert(workspace.name)
-        if !nativeStateCheckedVisibleWorkspaces.contains(workspace.name) {
-            try await _normalizeLayoutReason(workspace: workspace, windows: workspace.allLeafWindowsRecursive)
-        }
-    }
-    nativeStateCheckedVisibleWorkspaces = visible
 }
 
 @MainActor private var popupRecheckTask: Task<(), any Error>? = nil
