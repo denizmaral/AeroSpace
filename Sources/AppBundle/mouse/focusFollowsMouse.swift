@@ -39,7 +39,9 @@ import Common
             // Ignores macOS menubar dropdown, but, unfortunately, it doesn't ignore non-native menu-like fake windows.
             // todo: It would be cool to somehow reuse isWindowHeuristic logic here
             if await isAxWindowUnderMouse(location) == false {
-                // E.g. a menu or a popover is over the window. Retry on the next mouse move
+                // E.g. a menu or a popover is over the window. Retry a bit later, not on every mouse move: each check is
+                // an AX call. The task is canceled if the mouse enters another window meanwhile
+                try await Task.sleep(for: .milliseconds(150))
                 if windowUnderMouse === window { windowUnderMouse = nil }
                 return
             }
