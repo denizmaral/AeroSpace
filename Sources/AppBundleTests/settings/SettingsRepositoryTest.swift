@@ -135,22 +135,6 @@ struct SettingsRepositoryTest {
         assertEquals(try Data(contentsOf: store.fileUrl), damaged)
     }
 
-    /// Settings of an older schema: a dry run migrates them in memory only. Otherwise the old file is kept, for an older
-    /// MarSpace
-    @Test func testMigrationKeepsACopyOfTheOldFile() throws {
-        var old = settings(focusFollowsMouse: true)
-        old.schemaVersion = 1
-        try store.save(old)
-        let oldBytes = try Data(contentsOf: store.fileUrl)
-        assertEquals(loadSettings(store: store, dryRun: true).settings.schemaVersion, Settings.currentSchemaVersion)
-        assertEquals(try Data(contentsOf: store.fileUrl), oldBytes)
-
-        _ = loadSettings(store: store)
-        assertEquals(try Data(contentsOf: store.directory.appending(path: "Settings.schema-1.marspace")), oldBytes)
-        guard case .loaded(let migrated) = store.load() else { Issue.record("Expected the migrated settings"); return }
-        assertEquals(migrated.schemaVersion, Settings.currentSchemaVersion)
-    }
-
     private func keptAside(_ kind: String) throws -> [Data] {
         try FileManager.default.contentsOfDirectory(atPath: store.directory.path)
             .filter { $0.hasPrefix("Settings.\(kind)-") }

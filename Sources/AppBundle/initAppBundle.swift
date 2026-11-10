@@ -54,7 +54,6 @@ private func smartLayoutAtStartup() {
 var isStartup: Bool { refreshSessionEvent?.isStartup == true }
 
 struct ServerArgs: Sendable {
-    var configLocation: String? = nil
     var isReadOnly: Bool = false
 }
 
@@ -64,9 +63,7 @@ private let serverHelp = """
     OPTIONS:
       -h, --help              Print help
       -v, --version           Print the version of MarSpace
-      --config-path <path>    An AeroSpace config to take over at the first launch (MarSpace has no
-                              settings yet). It takes priority over ~/.aerospace.toml and
-                              ${XDG_CONFIG_HOME}/aerospace/aerospace.toml
+
       --read-only             Disable window management.
                               Useful if you want to use only debug-windows or other query commands.
     """
@@ -85,12 +82,6 @@ private func initServerArgs() {
         switch current {
             case "--version", "-v":
                 exit(EXIT_CODE_ZERO, out: "\(aeroSpaceAppVersion) \(gitHash)")
-            case "--config-path":
-                switch args.getOrNil(atIndex: index) {
-                    case let arg?: unsafe _serverArgs.configLocation = arg
-                    case nil: exit(EXIT_CODE_TWO, err: "Missing <path> in --config-path flag")
-                }
-                index += 1
             case "--read-only": // todo rename to '--disabled' and unite with disabled feature
                 unsafe _serverArgs.isReadOnly = true
             case "-NSDocumentRevisionsDebugMode" where isDebug:
@@ -100,8 +91,5 @@ private func initServerArgs() {
             default:
                 exit(EXIT_CODE_TWO, err: "Unrecognized flag \(args.first.orDie().singleQuoted)")
         }
-    }
-    if let path = serverArgs.configLocation, !FileManager.default.fileExists(atPath: path) {
-        exit(EXIT_CODE_TWO, err: "\(path) doesn't exist")
     }
 }

@@ -75,16 +75,6 @@ enum Layout: String {
     case accordion
 }
 
-extension String {
-    func parseLayout() -> Layout? {
-        switch Layout(rawValue: self) {
-            case let parsed?: parsed
-            case nil where self == "list": .tiles
-            case nil: nil
-        }
-    }
-}
-
 // The weights of the children of a tiles container are proportions: the layout gives every child its share of the
 // length of the container (see ``proportionalLengths(_:total:)``), and it never changes the weights. A window that leaves
 // the container and comes back (e.g. native fullscreen) gets exactly the same size again, the others keep theirs.

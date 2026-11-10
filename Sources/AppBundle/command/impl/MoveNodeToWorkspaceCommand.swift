@@ -30,7 +30,7 @@ struct MoveNodeToWorkspaceCommand: Command {
 
 @MainActor
 func moveWindowToWorkspace(_ window: Window, _ targetWorkspace: Workspace, _ io: CmdIo, focusFollowsWindow: Bool, failIfNoop: Bool, index: Int? = nil) -> BinaryExitCode {
-    rememberAppWorkspace(of: window, targetWorkspace) // A move by the user: the app opens there next time
+    assignAppWorkspace(of: window, targetWorkspace) // A move by the user: the rule of the app moves its windows there
     if window.nodeWorkspace == targetWorkspace {
         return switch failIfNoop {
             case true: .fail

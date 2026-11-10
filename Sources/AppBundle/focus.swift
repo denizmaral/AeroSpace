@@ -153,7 +153,7 @@ extension Workspace {
         _ = await onFocusChanged(.defaultEnv, CmdIoImpl.emptyStdinIgnoringOut, focus)
     }
     if let _prevFocusedWorkspaceName, hasFocusedWorkspaceChanged {
-        onWorkspaceChanged(_prevFocusedWorkspaceName, frozenFocus.workspaceName, focus)
+        onWorkspaceChanged(_prevFocusedWorkspaceName, frozenFocus.workspaceName)
     }
     if hasFocusedMonitorChanged {
         _ = await onFocusedMonitorChanged(.defaultEnv, CmdIoImpl.emptyStdinIgnoringOut, focus)
@@ -176,27 +176,9 @@ extension Workspace {
     return await config.onFocusChanged.run(env.withFocus(focus), io)
 }
 
-@MainActor private func onWorkspaceChanged(_ oldWorkspace: String, _ newWorkspace: String, _ focus: LiveFocus) {
+@MainActor private func onWorkspaceChanged(_ oldWorkspace: String, _ newWorkspace: String) {
     broadcastEvent(.workspaceChanged(
         workspace: newWorkspace,
         prevWorkspace: oldWorkspace,
     ))
-    if let exec = config.execOnWorkspaceChange.first {
-        let process = Process()
-        process.executableURL = URL(filePath: exec)
-        process.arguments = Array(config.execOnWorkspaceChange.dropFirst())
-        var environment = config.execConfig.envVariables
-        environment[AEROSPACE_FOCUSED_WORKSPACE] = newWorkspace
-        environment[AEROSPACE_PREV_WORKSPACE] = oldWorkspace
-        switch focus.asLeaf {
-            case .emptyWorkspace(let w):
-                environment[AEROSPACE_WORKSPACE] = w.name
-                environment[AEROSPACE_WINDOW_ID] = nil
-            case .window(let w):
-                environment[AEROSPACE_WORKSPACE] = nil
-                environment[AEROSPACE_WINDOW_ID] = w.windowId.description
-        }
-        process.environment = environment
-        _ = Result { try process.run() }
-    }
 }

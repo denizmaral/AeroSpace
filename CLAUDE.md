@@ -102,8 +102,8 @@ A tiling window that leaves for a macOS native state (fullscreen, minimized, hid
 ### Settings (`AppBundle/settings/`) and the runtime config (`AppBundle/config/`)
 - The user edits typed `Settings` in the settings window (`settings/ui/`); there is no config file. `SettingsRepository` keeps them in `~/Library/Application Support/MarSpace` (checksummed binary plist, atomic writes, backup; an unreadable file is never overwritten).
 - `Settings.compile()` (`SettingsCompiler.swift`) turns them into the runtime `Config` (`config/Config.swift`), through the command parser. Invalid parts are reported as `SettingsProblem`s and left out; edits are saved and applied even with problems.
-- Changing the stored format: bump `Settings.currentSchemaVersion` and add a step to `SettingsMigration`. Decoding is tolerant (missing fields get defaults).
-- The TOML parser (`parseConfig.swift`) is only used to take an AeroSpace config over at the first launch (`SettingsImport.swift`) and for the default settings: `docs/config-examples/default-config.toml` is bundled and must parse without errors or warnings (`ConfigTest.testParseDefaultConfig`).
+- There is no TOML and no migration: the first launch starts with `Settings.defaults` (`SettingsDefaults.swift`), and decoding is tolerant (a missing field gets its default). The design and its phases: `dev-docs/settings-architecture.md`.
+- The user's real settings compile to a recorded result (`SettingsCharacterizationTest`, `test-fixtures/user-settings.*`): a change of the compiled result must be deliberate.
 - A new option: a field in `Settings`, the compiler, a control in the settings window, and `docs/guide.md` if users need to know about it.
 - Hotkeys (`HotkeyBinding.swift`) use the HotKey library (Carbon `RegisterEventHotKey`). It consumes the key event and can't tell left from right modifiers. Binding modes enable and disable groups of hotkeys.
 
@@ -115,7 +115,7 @@ The tests use Swift Testing. Patterns to follow:
 - Build trees with `TestWindow.new(id:parent:)`; `focusWindow()` sets focus and the most-recently-used window.
 - Run commands with `await parseCommand("…").cmdOrDie.run(.defaultEnv, .emptyStdin)`.
 - Assert tree shape with `root.layoutDescription`, e.g. `.h_tiles([.window(1), .v_tiles([...])])`.
-- Test config parsing with `parseConfig("toml")`, checking `.config`, `.errors` and `.strErrors`.
+- Test settings by compiling them: `settings.compile()` gives the engine `Config` and the problems.
 
 ## Contributing conventions
 

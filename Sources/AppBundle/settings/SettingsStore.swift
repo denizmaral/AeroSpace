@@ -126,16 +126,11 @@ final class SettingsStore {
         undoManager?.setActionName(actionName)
     }
 
-    /// The user moved a window of the app to a workspace (a shortcut): the app opens there the next time. Not an edit of
-    /// the settings window: not undoable there. Nothing is remembered for an app that a window rule places
-    func remember(_ bundleId: String, onWorkspace workspace: String) {
-        guard !current.hasRulePlacing(bundleId) else { return }
+    /// The user moved a window of the app to a workspace with a shortcut: see ``Settings/assign(_:toWorkspace:)``. Not an
+    /// edit of the settings window: not undoable there
+    func assign(_ bundleId: String, toWorkspace workspace: String) {
         var value = current
-        if let index = value.appWorkspaces.firstIndex(where: { $0.bundleId == bundleId }) {
-            value.appWorkspaces[index].workspace = workspace
-        } else {
-            value.appWorkspaces.append(Settings.AppWorkspace(bundleId: bundleId, workspace: workspace))
-        }
+        value.assign(bundleId, toWorkspace: workspace)
         if value != current { set(value) }
     }
 

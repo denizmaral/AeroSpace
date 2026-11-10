@@ -85,13 +85,6 @@ struct SettingsRepository: Sendable {
         try Self.rename(temporary, to: fileUrl)
     }
 
-    /// A copy of the file as it is, once: e.g. before a migration, an older MarSpace can still read the copy
-    func keepCopy(named name: String) {
-        let copy = directory.appending(path: name)
-        guard !FileManager.default.fileExists(atPath: copy.path) else { return }
-        try? FileManager.default.copyItem(at: fileUrl, to: copy)
-    }
-
     /// A file kept aside for the user or for diagnosis, e.g. `Settings.damaged-1762800000-1A2B3C4D.marspace`
     private func asideUrl(_ kind: String) -> URL {
         directory.appending(path: "Settings.\(kind)-\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8)).marspace")

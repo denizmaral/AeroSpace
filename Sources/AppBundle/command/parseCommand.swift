@@ -25,14 +25,3 @@ func parseCommand(
 func parseCommand(_ args: [String]) -> ParsedCmd<any Command> {
     parseCmdArgs(args.slice).flatMap { $0.toCommand() }
 }
-
-func expectedActualTypeError(expected: TomlType, actual: TomlType) -> String {
-    "Expected type is \(expected.rawValue.singleQuoted). But actual type is \(actual.rawValue.singleQuoted)"
-}
-
-func expectedActualTypeError(expected: [TomlType], actual: TomlType) -> String {
-    switch expected.singleOrNil() {
-        case let single?: expectedActualTypeError(expected: single, actual: actual)
-        case nil: "Expected types are \(expected.lazy.map { "'\($0)'" }.joined(separator: " or ")). But actual type is '\(actual)'"
-    }
-}

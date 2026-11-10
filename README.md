@@ -15,7 +15,7 @@ need to disable SIP) and its `aerospace` CLI, and replaces the config file with 
 
 - **Settings window instead of a config file.** Shortcuts, window rules, workspaces, gaps, the focus border and
   automation, all edited in a native window. Changes apply right away, and invalid ones are shown where they are and
-  left out until they're fixed. On the first launch, an existing `~/.aerospace.toml` is taken over once.
+  left out until they're fixed.
 - **Shortcuts that know your keyboard.** Shortcuts are recorded by their physical keys and shown with the labels of
   your keyboard layout (QWERTY, QWERTZ, AZERTY, Dvorak, …). Actions are picked from menus; any `aerospace` command is
   still possible as a custom action.

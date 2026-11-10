@@ -10,7 +10,6 @@ expected_layout=$(cat <<EOF
 .release/MarSpace.app/Contents/MacOS
 .release/MarSpace.app/Contents/MacOS/MarSpace
 .release/MarSpace.app/Contents/Resources
-.release/MarSpace.app/Contents/Resources/default-config.toml
 .release/MarSpace.app/Contents/Resources/AppIcon.icns
 .release/MarSpace.app/Contents/Resources/Assets.car
 .release/MarSpace.app/Contents/Frameworks

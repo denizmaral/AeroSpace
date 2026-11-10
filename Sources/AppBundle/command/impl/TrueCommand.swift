@@ -7,6 +7,4 @@ struct TrueCommand: Command {
     /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) async -> ConditionalExitCode { ._true }
-
-    static let instance = TrueCommand(args: TrueCmdArgs(rawArgs: []))
 }

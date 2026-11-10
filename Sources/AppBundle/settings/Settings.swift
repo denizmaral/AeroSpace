@@ -20,7 +20,6 @@ struct Settings: Codable, Sendable, Equatable {
     var windowRules: IdentifiedList<WindowRule> = []
     var workspaces = Workspaces()
     var automation = Automation()
-    var appWorkspaces: IdentifiedList<AppWorkspace> = []
 
     struct General: Codable, Sendable, Equatable {
         var startAtLogin = false
@@ -105,12 +104,6 @@ struct Settings: Codable, Sendable, Equatable {
         var monitors: [MonitorSelector]
     }
 
-    /// The app opens on the workspace when it's launched (its first windows). Remembered when the user moves a window of the
-    /// app to a workspace with a shortcut; a window rule that places the app comes first
-    struct AppWorkspace: Codable, Sendable, Equatable {
-        var bundleId: String
-        var workspace: String
-    }
 
     struct Automation: Codable, Sendable, Equatable {
         var afterStartup: IdentifiedList<Action> = []
@@ -205,7 +198,6 @@ extension Settings {
         windowRules = try container.decodeIfPresent(IdentifiedList<WindowRule>.self, forKey: .windowRules) ?? defaults.windowRules
         workspaces = try container.decodeIfPresent(Workspaces.self, forKey: .workspaces) ?? defaults.workspaces
         automation = try container.decodeIfPresent(Automation.self, forKey: .automation) ?? defaults.automation
-        appWorkspaces = try container.decodeIfPresent(IdentifiedList<AppWorkspace>.self, forKey: .appWorkspaces) ?? []
     }
 }
 
@@ -215,11 +207,18 @@ extension Settings.Shortcut {
 }
 
 extension Settings {
-    /// A window rule moves the windows of the app to a workspace: where the app opens isn't remembered, the rule decides
-    func hasRulePlacing(_ bundleId: String) -> Bool {
-        windowRules.contains { rule in
-            rule.isComplete && rule.condition.appBundleId == bundleId &&
-                rule.actions.contains { if case .moveWindowToWorkspace = $0 { true } else { false } }
+    /// The user moved a window of the app to a workspace with a shortcut: the window rule of the app moves its windows
+    /// there, like a rule made in the settings window. Its existing rule (the one for the app alone) gets the workspace
+    mutating func assign(_ bundleId: String, toWorkspace workspace: String) {
+        let move = Action.moveWindowToWorkspace(workspace)
+        guard let rule = windowRules.firstIndex(where: { $0.condition == WindowCondition(appBundleId: bundleId) }) else {
+            windowRules.append(WindowRule(condition: WindowCondition(appBundleId: bundleId), actions: [move]))
+            return
+        }
+        if let action = windowRules[rule].actions.firstIndex(where: { if case .moveWindowToWorkspace = $0 { true } else { false } }) {
+            windowRules[rule].actions[action] = move
+        } else {
+            windowRules[rule].actions.insert(move, at: 0)
         }
     }
 }

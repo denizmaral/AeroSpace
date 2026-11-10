@@ -28,9 +28,7 @@ shortcut, a window rule or an automation does; `.custom` is the escape hatch for
   with a backup. A file that can't be read is never overwritten
 - `SettingsCompiler`: settings → the runtime `Config`, through the command parser. Invalid parts are reported as
   problems and left out
-- `SettingsImport`: takes an AeroSpace TOML config over at the first launch, once. This is the only use of the TOML
-  parser in `config/`
-- `SettingsMigration`: brings older settings to the current schema (`Settings.currentSchemaVersion`)
+- `SettingsDefaults`: the settings of the first launch, written in Swift (there is no config file, and no TOML)
 - `ui/`: the SwiftUI settings window. `SettingsModel` saves and applies every edit shortly after the last one
 
 ## Commands

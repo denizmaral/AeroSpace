@@ -15,18 +15,6 @@ struct DwindleTest {
         config.enableNormalizationOppositeOrientationForNestedContainers = true
     }
 
-    @Test func testParseConfig() {
-        assertEquals(parseConfig("").config.newWindowPlacement, .dwindle)
-        assertEquals(parseConfig("new-window-placement = 'i3'").config.newWindowPlacement, .i3)
-        let result = parseConfig("new-window-placement = 'balanced'")
-        assertEquals(result.errors, [])
-        assertEquals(result.config.newWindowPlacement, .balanced)
-
-        assertEquals(
-            parseConfig("new-window-placement = 'spiral'").strErrors,
-            ["[ERROR] new-window-placement: Can't parse new window placement 'spiral'. Possible values: (i3|dwindle|balanced)"],
-        )
-    }
 
     @Test func testThirdWindowSplitsMostRecentWindow_orientationAlternates() async {
         let workspace = Workspace.get(byName: name)
@@ -192,13 +180,9 @@ struct DwindleTest {
     }
 
     @Test func testPopupPromotedToWindow_splitIsAppliedAfterCallbacks() async throws {
-        config.onWindowDetected = parseConfig(
-            """
-            [[on-window-detected]]
-            if.app-id = 'bobko.AeroSpace.test-app'
-            run = 'move-node-to-workspace B'
-            """,
-        ).config.onWindowDetected
+        var settings = Settings()
+        settings.windowRules = [Settings.WindowRule(condition: .init(appBundleId: "bobko.AeroSpace.test-app"), actions: [.moveWindowToWorkspace("B")])]
+        config.onWindowDetected = settings.compile().config.onWindowDetected
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer.apply {
             TestWindow.new(id: 1, parent: $0, adaptiveWeight: 420)

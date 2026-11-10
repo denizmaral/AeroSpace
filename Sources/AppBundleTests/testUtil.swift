@@ -45,8 +45,7 @@ struct SerializedGloballyTrait: SuiteTrait, TestTrait, TestScoping {
 
 @MainActor
 func setUpWorkspacesForTests() {
-    config = defaultConfig
-    configUrl = defaultConfigUrl
+    config = Config()
     config.enableNormalizationFlattenContainers = false // Make layout tests more predictable
     config.enableNormalizationOppositeOrientationForNestedContainers = false // Make layout tests more predictable
     config.defaultRootContainerOrientation = .horizontal // Make default layout predictable
@@ -131,12 +130,6 @@ extension HotkeyBinding {
             ? keyCode.toString()
             : modifiers.toString() + "-" + keyCode.toString()
         self.init(modifiers, keyCode, commands, descriptionWithKeyNotation: descriptionWithKeyNotation)
-    }
-}
-
-extension FocusCommand {
-    static func new(direction: CardinalDirection) -> FocusCommand {
-        FocusCommand(args: FocusCmdArgs(rawArgs: [], cardinalOrDfsDirection: .direction(direction)))
     }
 }
 

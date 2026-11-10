@@ -1,6 +1,6 @@
 # Settings architecture
 
-Status: phases 1 to 3 done (2026-11-10), phase 4 next.
+Status: phases 1 to 4 done (2026-11-10), phase 5 next.
 
 ## Why
 
@@ -46,7 +46,7 @@ migration of AeroSpace's configuration, no TOML, defaults written in Swift.
    persists, and publishes the change, in one place
 5. **One-way derivation, applied by diff.** Settings → an immutable engine snapshot. Services apply what changed (a
    hotkey added or removed, not all of them again). Nothing else feeds the engine
-6. **No hidden semantic state.** Where an app opens is part of the settings: visible, editable, undoable. The placement
+6. **No hidden semantic state.** Where an app opens is a window rule: visible, editable, undoable. The placement
    cache (windows back to their workspaces after a restart of MarSpace) stays a cache without meaning for the user. Only
    moves made by the user (a shortcut, a menu) are remembered, not moves by window rules or scripts
 
@@ -67,8 +67,8 @@ Every phase is one commit and one deploy, and must reproduce the compiled result
    complete/incomplete as a domain state
 2. **Engine snapshot, applied by diff**: hotkeys, window rules, login item, focus follows mouse; no wholesale `config`
    swap, no reset of all hotkeys
-3. **App workspaces in the settings**: recorded only for moves made by the user, shown and edited in the settings window
-   (the hidden file of before isn't migrated)
+3. **Where an app opens is a window rule**: moving a window to a workspace with a shortcut makes (or changes) the rule of
+   its app, "move the window to workspace M", shown and edited like any other rule. Moves by rules or scripts don't
 4. **No AeroSpace legacy**: no TOML import at the first launch, no TOML parser and default config at runtime, no
    migration of older settings, no `--config-path`. The default settings are written in Swift
 5. **Typed commands** (if still worth it then): actions run as typed commands, the command line stays for custom actions

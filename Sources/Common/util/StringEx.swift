@@ -75,21 +75,6 @@ extension [[String]] {
 
 
 extension String {
-    public func interpolate(with variables: [String: String]) -> Result<String, [String]> {
-        rawInterpolationTokens(interpolationChar: "$")
-            .mapError { [$0] }
-            .flatMap { tokens in
-                tokens.mapAllOrFailures { token in
-                    switch token {
-                        case .literal(let literal): .success(literal)
-                        case .interVar(let value):
-                            variables[value].toResult("Env variable '\(value)' isn't presented in AeroSpace.app env vars, "
-                                + "or not available for interpolation (because it's mutated)")
-                    }
-                }
-            }
-            .map { $0.joined(separator: "") }
-    }
 
     public func interpolationTokens<T>(
         interpolationChar: Character,

@@ -33,7 +33,6 @@ targets:
     sources:
       - "../Sources/AeroSpaceApp"
       - "../resources"
-      - "../docs/config-examples/default-config.toml"
     dependencies:
       - package: AeroSpacePackage
         product: AppBundle

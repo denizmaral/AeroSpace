@@ -29,17 +29,6 @@ indirect enum Shell<T> {
         }
     }
 
-    func flatten() -> [T] {
-        switch self {
-            case .empty: return []
-            case .cmd(let it): return [it]
-            case .and(let it): return it.flatMap { $0.flatten() }
-            case .or(let it): return it.flatMap { $0.flatten() }
-            case .pipe(let it): return it.flatMap { $0.flatten() }
-            case .seq(let it): return it.flatMap { $0.flatten() }
-        }
-    }
-
     func buildDescription(_ stringifier: (T) -> String) -> String {
         let parentPrecedence = precedence
         func render(_ child: Shell<T>) -> String {
