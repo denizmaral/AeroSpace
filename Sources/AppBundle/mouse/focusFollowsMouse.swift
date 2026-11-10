@@ -180,8 +180,21 @@ struct FocusFollowsMouseTracker {
         // the window (it's focused when the menu is closed), or the edge of a window next to it (macOS hit tests a margin
         // around a window for resizing: the first mouse position after leaving a window can still be in it)
         recheckAt = real.map { windowIds.contains($0.windowId) } == true ? nil : now + Self.recheckInterval
-        guard let real, real != focused, previous.map({ real !== $0 }) ?? true, focusChanges == focusChangesAtCheckStart else { return nil }
+        guard let real, real != focused, previous.map({ real !== $0 }) ?? true, focusChanges == focusChangesAtCheckStart,
+              Self.mayFocus(real, from: focused)
+        else { return nil }
         return real
+    }
+
+    /// A focused floating window keeps the focus over the tiling windows behind it: focusing a window raises it in macOS
+    /// (there is no focus without raising), the floating window would disappear behind it. E.g. the mouse crosses Mail,
+    /// which fills the workspace, on its way from the Dock to a small floating window in front of it. A click or a shortcut
+    /// focuses the tiling window. Like Hyprland's `float_switch_override_focus = 0`, only where the windows overlap
+    static func mayFocus(_ window: Window, from focused: Window?) -> Bool {
+        guard let focused, focused.isFloating, !window.isFloating,
+              let floatingFrame = focused.observedFrame, let frame = window.observedFrame
+        else { return true }
+        return floatingFrame.intersection(frame) == nil
     }
 }
 

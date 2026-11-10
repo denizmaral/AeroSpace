@@ -26,7 +26,8 @@ need to disable SIP) and its `aerospace` CLI, and replaces the config file with 
 - **Dwindle and balanced placement.** A new window splits the focused or the largest window, like Hyprland.
 - **Focus border.** A solid or gradient border around the focused window, following its real frame, also when an app
   refuses to shrink to its tile.
-- **Focus follows the mouse.** It also works where windows overlap and when the focus changed by the keyboard.
+- **Focus follows the mouse.** It also works where windows overlap and when the focus changed by the keyboard, and it
+  doesn't hide a focused floating window behind the tiled window under it.
 - **Windows stay where they belong.** After a restart, windows return to their workspaces. After fullscreen, minimize
   or hide, they return to their place in the layout.
 - **Menu bar panel** with the workspaces and their apps.

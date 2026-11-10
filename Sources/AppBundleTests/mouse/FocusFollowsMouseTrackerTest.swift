@@ -15,6 +15,44 @@ struct FocusFollowsMouseTrackerTest {
 
     private func at(_ milliseconds: Int) -> ContinuousClock.Instant { start + .milliseconds(milliseconds) }
 
+    /// Mail fills the workspace, a small floating window (focused, e.g. its app was clicked in the Dock) is in front of it.
+    /// The mouse crosses Mail on its way to the floating window: Mail isn't focused, it would hide the floating window
+    @Test func testFocusedFloatingWindowKeepsTheFocusOverTheTilingWindowBehindIt() async throws {
+        let workspace = Workspace.get(byName: name)
+        let mail = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        try await workspace.layoutWorkspace()
+        let small = TestWindow.new(id: 2, parent: workspace.floatingWindowsContainer)
+        small.setAxFrame(CGPoint(x: 600, y: 300), CGSize(width: 400, height: 300))
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [], top: nil) // The Dock
+
+        assertEquals(tracker.mouseMoved(over: [mail], focused: small, focusChanges: 0, now: at(0), frontmost: { nil }), .enter)
+        assertEquals(tracker.checked(real: mail, focused: small, focusChanges: 0, now: at(5)), nil) // Not focused
+        assertEquals(tracker.mouseMoved(over: [mail], focused: small, focusChanges: 0, now: at(20), frontmost: { nil }), .stay)
+        // Into the floating window (on top, focused), and back over Mail: still not focused, and no recheck loop
+        assertEquals(tracker.mouseMoved(over: [mail, small], focused: small, focusChanges: 0, now: at(40), frontmost: { small }), .leave)
+        assertEquals(tracker.mouseMoved(over: [mail], focused: small, focusChanges: 0, now: at(60), frontmost: { nil }), .enter)
+        assertEquals(tracker.checked(real: mail, focused: small, focusChanges: 0, now: at(65)), nil)
+        assertEquals(tracker.mouseMoved(over: [mail], focused: small, focusChanges: 0, now: at(300), frontmost: { nil }), .stay)
+    }
+
+    @Test func testWhereTheMouseMayFocus() async throws {
+        let workspace = Workspace.get(byName: name)
+        let left = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        let right = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await workspace.layoutWorkspace()
+        let overLeft = TestWindow.new(id: 3, parent: workspace.floatingWindowsContainer)
+        overLeft.setAxFrame(CGPoint(x: 100, y: 100), CGSize(width: 300, height: 300))
+        let other = TestWindow.new(id: 4, parent: workspace.floatingWindowsContainer)
+        other.setAxFrame(CGPoint(x: 200, y: 200), CGSize(width: 300, height: 300))
+
+        #expect(!FocusFollowsMouseTracker.mayFocus(left, from: overLeft)) // A focused floating window over the tiling window
+        #expect(FocusFollowsMouseTracker.mayFocus(right, from: overLeft)) // It doesn't overlap the tiling window
+        #expect(FocusFollowsMouseTracker.mayFocus(overLeft, from: left)) // Tiling to floating
+        #expect(FocusFollowsMouseTracker.mayFocus(other, from: overLeft)) // Floating to floating
+        #expect(FocusFollowsMouseTracker.mayFocus(right, from: left)) // Tiling to tiling
+        #expect(FocusFollowsMouseTracker.mayFocus(left, from: nil)) // Nothing focused
+    }
+
     /// GitHub Desktop (left, focused) covers a strip of App Store. The mouse moves over the strip into App Store
     @Test func testFocusFollowsAcrossTheRealBorderOfAWiderNeighbor() {
         let (gitHub, appStore, _) = windows()

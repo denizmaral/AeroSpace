@@ -52,6 +52,10 @@ A window that leaves the layout for a while (macOS fullscreen, minimized, its ap
 Floating windows aren't part of the tree, but Focus still reaches them: a floating window belongs to the smallest
 container that holds its center.
 
+With focus follows the mouse, a focused floating window keeps the focus while the mouse is over the tiled windows behind
+it: focusing a window in macOS brings it to the front, and the floating window would disappear behind it. Click the
+tiled window, or use a shortcut, to focus it.
+
 ## Workspaces
 
 macOS Spaces are slow to switch, limited in number, and can't be controlled by apps. MarSpace has its own workspaces
