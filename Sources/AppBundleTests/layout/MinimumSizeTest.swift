@@ -132,7 +132,11 @@ struct MinimumSizeTest {
         let (window, _) = try await twoWindows(Workspace.get(byName: name), minimumSize: CGSize(width: 1000, height: 0))
         assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), true)
 
+        let workspace = try #require(window.nodeWorkspace)
         window.bind(to: Workspace.get(byName: "other").rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        assertEquals(window.effectiveMinimumSize, .zero)
+        // Forgotten, not just masked
+        window.bind(to: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
         assertEquals(window.effectiveMinimumSize, .zero)
     }
 
@@ -164,5 +168,108 @@ struct MinimumSizeTest {
 
         let hit = CGPoint(x: 960, y: 500).findWindowRecursively(in: root, virtual: false, fullscreenCoversAll: false)
         #expect(hit === windows[1])
+    }
+}
+
+/// Regressions found by the adversarial QA review
+@MainActor
+@Suite(.serializedGlobally)
+struct MinimumSizeCheckRaceTest {
+    init() { setUpWorkspacesForTests() }
+
+    private func appWindow(_ workspace: Workspace, minimumWidth: CGFloat) -> TestWindow {
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        window.appliesSentFramesForTest = true
+        window.minimumSizeForTest = CGSize(width: minimumWidth, height: 0)
+        return window
+    }
+
+    /// The layout changes during the confirmation and the window keeps refusing without changing its size (no new
+    /// kAXResizedNotification). The check must not give up
+    @Test func testLayoutChangeDuringTheCheck() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 700)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        TestWindow.new(id: 3, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 640: the window stays 700
+        window.scheduleMinimumSizeCheck()
+        try await Task.sleep(for: .milliseconds(100))
+        TestWindow.new(id: 4, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 480: the window stays 700
+        try await Task.sleep(for: .milliseconds(1500))
+        assertEquals(window.effectiveMinimumSize.width, 700)
+    }
+
+    /// Notifications that arrive during a running check must not be lost
+    @Test func testNotificationsDuringTheCheck() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 700)
+        let window2 = TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        let window3 = TestWindow.new(id: 3, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 640: the window stays 700
+        window.scheduleMinimumSizeCheck()
+        try await Task.sleep(for: .milliseconds(50))
+        window2.unbindFromParent()
+        window3.unbindFromParent()
+        try await workspace.layoutWorkspace() // 1920: fits
+        window.scheduleMinimumSizeCheck()
+        try await Task.sleep(for: .milliseconds(50))
+        for id: OpaqueWindowId in [5, 6, 7] { TestWindow.new(id: id, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO) }
+        try await workspace.layoutWorkspace() // 480: the window stays 700
+        window.scheduleMinimumSizeCheck()
+        try await Task.sleep(for: .milliseconds(2000))
+        assertEquals(window.effectiveMinimumSize.width, 700)
+        #expect(window.minimumSizeCheckTask == nil)
+    }
+
+    /// The workspace becomes invisible during the AX read. The check must not pull the window out of the corner
+    @Test func testCheckDoesntUnhideWindowOfInvisibleWorkspace() async throws {
+        let workspace = Workspace.get(byName: "A")
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1000)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await workspace.layoutWorkspace() // 960, the window stays 1000
+        let corner = CGPoint(x: 1919, y: 1079)
+        window.onGetAxSizeForTest = {
+            #expect(Workspace.get(byName: "B").focusWorkspace())
+            window.setAxFrame(corner, nil) // hideInCorner
+        }
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), false)
+        assertEquals(window.sentFrames.last?.topLeft, corner)
+    }
+
+    /// The layout changes during the AX read. The check must not send the outdated frame over the newer layout
+    @Test func testCheckDoesntOverrideNewerLayout() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1000)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 960, the window stays 1000
+        window.onGetAxSizeForTest = {
+            TestWindow.new(id: 3, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+            try await workspace.layoutWorkspace() // 640
+        }
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), true)
+        assertEquals(window.sentFrames.last?.size?.width, 640)
+        assertEquals(window.effectiveMinimumSize.width, 1000)
+    }
+
+    /// A smaller minimum can't be observed (the layout never gives less than the learned minimum). Explicit user sizing
+    /// forgets it
+    @Test func testBalanceSizesForgetsMinimum() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1300)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace()
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), true)
+        window.minimumSizeForTest = .zero // E.g. the sidebar was hidden
+
+        assertEquals(window.focusWindow(), true)
+        await parseCommand("balance-sizes").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+        assertEquals(window.lastAppliedLayoutPhysicalRect?.width, 960)
     }
 }

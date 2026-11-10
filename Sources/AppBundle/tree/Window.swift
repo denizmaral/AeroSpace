@@ -20,6 +20,7 @@ open class Window: TreeNode, Hashable {
     /// The workspace where the minimum size was learned (nil: any)
     var learnedMinimumSizeWorkspace: String? = nil
     var minimumSizeCheckTask: Task<(), any Error>? = nil
+    var isMinimumSizeRecheckRequested: Bool = false
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
@@ -41,6 +42,16 @@ open class Window: TreeNode, Hashable {
 
     @MainActor
     func closeAxWindow() { die("Not implemented") }
+
+    @MainActor
+    @discardableResult
+    override func bind(to newParent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) -> BindingData? {
+        let result = super.bind(to: newParent, adaptiveWeight: adaptiveWeight, index: index)
+        if let workspace = learnedMinimumSizeWorkspace, workspace != nodeWorkspace?.name {
+            forgetMinimumSize() // See forgetMinimumSize
+        }
+        return result
+    }
 
     /// Unbinds the window that was closed
     @MainActor

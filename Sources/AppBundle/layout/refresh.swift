@@ -9,6 +9,7 @@ func scheduleCancellableCompleteRefreshSession(
     _ event: RefreshSessionEvent,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
+    if isUnitTest { return } // Complete refresh sessions talk to the real apps via accessibility
     activeRefreshTask?.cancel()
     activeRefreshTask = Task.startUnstructured { @MainActor in
         // Coalesce bursts of events (e.g. AX moved/resized notifications during window animations). A newer event

@@ -60,8 +60,15 @@ final class TestWindow: Window, CustomStringConvertible {
         _rect
     }
 
+    /// Runs at the await point of the next getAxSize (e.g. emulates a session that runs meanwhile)
+    var onGetAxSizeForTest: (@MainActor () async throws -> Void)? = nil
+
     @MainActor override func getAxSize(_ cm: CancellationMode) async throws -> CGSize? {
-        _rect.map { CGSize(width: $0.width, height: $0.height) }
+        if let hook = onGetAxSizeForTest {
+            onGetAxSizeForTest = nil
+            try await hook()
+        }
+        return _rect.map { CGSize(width: $0.width, height: $0.height) }
     }
 
     override func isMacosFullscreen(_ cm: CancellationMode) async throws -> Bool { isMacosFullscreenForTest }
