@@ -182,6 +182,92 @@ struct TilingSlotTest {
         assertEquals(root.children.map { $0.getWeight(.h) }, [420, 1500])
     }
 
+    /// Both windows of a container are fullscreen, the neighbor of the window that comes back first is still away
+    @Test func testNeighborIsStillAway() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window2: TestWindow!
+        var window3: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                window2 = TestWindow.new(id: 2, parent: $0)
+                window3 = TestWindow.new(id: 3, parent: $0)
+            }
+        }
+        try await setFullscreen([window3], true, workspace)
+        try await setFullscreen([window2], true, workspace)
+        try await setFullscreen([window3], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(3)])) // Window 3 takes the place of window 2
+        try await setFullscreen([window2], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3)])]))
+    }
+
+    /// E.g. both windows of the container belong to the app that is hidden. The normalization removes the empty
+    /// container, the first window that comes back binds it back
+    @Test(arguments: [false, true])
+    func testWholeContainerLeaves(reversedExit: Bool) async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var windows: [TestWindow] = []
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 10, parent: $0)
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                windows.append(TestWindow.new(id: 2, parent: $0))
+                windows.append(TestWindow.new(id: 3, parent: $0))
+            }
+        }
+        try await setFullscreen(windows, true, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(10), .window(1)]))
+        for window in reversedExit ? windows.reversed() : windows {
+            root.children.first?.markAsMostRecentChild() // A new window would split window 10
+            try await setFullscreen([window], false, workspace) // The normalization runs in between
+        }
+        assertEquals(root.layoutDescription, .h_tiles([.window(10), .window(1), .v_tiles([.window(2), .window(3)])]))
+    }
+
+    @Test func testWholeContainerComesBackInOneSession() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var windows: [TestWindow] = []
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                windows.append(TestWindow.new(id: 2, parent: $0))
+                windows.append(TestWindow.new(id: 3, parent: $0))
+            }
+        }
+        try await setFullscreen(windows, true, workspace)
+        try await setFullscreen(windows, false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3)])]))
+    }
+
+    /// The same steps as the macos-native-fullscreen command (it can't run with TestWindow): the window is bound to the
+    /// fullscreen container before the native state is detected
+    @Test func testFullscreenCommand() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window2: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            window2 = TestWindow.new(id: 2, parent: $0)
+            TestWindow.new(id: 3, parent: $0)
+        }
+        window2.bindToMacosNativeStateContainer(workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: 1)
+        window2.isMacosFullscreenForTest = true
+        try await normalizeLayoutReason() // layoutReason = .macos(prevParentKind: .macosFullscreenWindowsContainer)
+        workspace.normalizeContainers()
+        window2.isMacosFullscreenForTest = false
+        try await normalizeLayoutReason()
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2), .window(3)]))
+
+        // The command exits fullscreen before the native state is detected
+        window2.bindToMacosNativeStateContainer(workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: 1)
+        #expect(window2.bindBackToTilingSlot(on: workspace))
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2), .window(3)]))
+    }
+
     /// The slot is gone: the window is placed as a new window
     @Test func testWindowOfAnotherWorkspaceIsPlacedAsNewWindow() async throws {
         let workspace = Workspace.get(byName: name)

@@ -104,7 +104,11 @@
             }
         case .macosPopupWindowsContainer: // Since the window was minimized/fullscreened it was mistakenly detected as popup. Relayout the window
             try await window.relayoutWindow(on: workspace, cm)
-        case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer: // wtf case, should never be possible. But If encounter it, let's just re-layout window
-            try await window.relayoutWindow(on: workspace, cm)
+        case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer:
+            // E.g. the macos-native-fullscreen command bound the window to the fullscreen container before the native
+            // state was detected. The window may still have its place in the tiling tree
+            if !window.bindBackToTilingSlot(on: workspace) {
+                try await window.relayoutWindow(on: workspace, cm)
+            }
     }
 }

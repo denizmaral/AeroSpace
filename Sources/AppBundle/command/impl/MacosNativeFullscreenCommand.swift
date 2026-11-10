@@ -34,7 +34,7 @@ struct MacosNativeFullscreenCommand: Command {
             return .fail(io.err(windowIsntPartOfTree(window)))
         }
         if newState { // Enter fullscreen
-            window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+            window.bindToMacosNativeStateContainer(workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: 1)
         } else { // Exit fullscreen
             switch window.layoutReason {
                 case .macos(let prevParentKind):
@@ -49,6 +49,7 @@ struct MacosNativeFullscreenCommand: Command {
                         return .fail(io.err(bugPrompt()))
                     }
                 default:
+                    if window.bindBackToTilingSlot(on: workspace) { break } // See TilingSlot
                     do {
                         try await window.relayoutWindow(on: workspace, .nonCancellable)
                     } catch {
