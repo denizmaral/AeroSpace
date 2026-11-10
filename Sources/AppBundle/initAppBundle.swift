@@ -15,7 +15,6 @@ import Foundation
             interceptTermination(SIGKILL)
         }
 
-        await bootstrapConfig_nonCancellable()
         _ = await reloadConfig_nonCancellable()
         startObservingKeyboardLayout()
 
@@ -42,17 +41,6 @@ import Foundation
     }
 }
 
-@MainActor private func bootstrapConfig_nonCancellable() async {
-    let result = await reloadConfig_nonCancellable(forceConfigUrl: defaultConfigUrl)
-    let msg = """
-        Can't load default config. Your installation is probably corrupted.
-        Please don't modify \(defaultConfigUrl.description.singleQuoted)
-
-        \(result.stdout)
-        """
-    check(result.isOk, msg)
-}
-
 @MainActor
 private func smartLayoutAtStartup() {
     let workspace = globalFocus.workspace
@@ -71,11 +59,11 @@ struct ServerArgs: Sendable {
 }
 
 private let serverHelp = """
-    USAGE: \(CommandLine.arguments.first ?? "AeroSpace.app/Contents/MacOS/AeroSpace") [<options>]
+    USAGE: \(CommandLine.arguments.first ?? "MarSpace.app/Contents/MacOS/MarSpace") [<options>]
 
     OPTIONS:
       -h, --help              Print help
-      -v, --version           Print AeroSpace.app version
+      -v, --version           Print the version of MarSpace
       --config-path <path>    An AeroSpace config to take over at the first launch (MarSpace has no
                               settings yet). It takes priority over ~/.aerospace.toml and
                               ${XDG_CONFIG_HOME}/aerospace/aerospace.toml

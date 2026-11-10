@@ -4,49 +4,6 @@ import HotKey
 import TOMLDecoder
 import OrderedCollections
 
-struct ReadConfigResult {
-    let configUrl: URL
-    let parseConfigResult: ParseConfigResult
-
-    @MainActor static func fatal(configUrl: URL, message: String) -> Self {
-        ReadConfigResult(
-            configUrl: configUrl,
-            parseConfigResult: ParseConfigResult(
-                config: defaultConfig,
-                errors: [.init(.emptyRoot, message, preventConfigReload: true)],
-                warnings: [],
-            ),
-        )
-    }
-}
-
-@MainActor
-func readConfig(forceConfigUrl: URL?) -> ReadConfigResult {
-    let configUrl: URL
-    if let forceConfigUrl {
-        configUrl = forceConfigUrl
-    } else {
-        switch findCustomConfigUrl() {
-            case .file(let url): configUrl = url
-            case .noCustomConfigExists: configUrl = defaultConfigUrl
-            case .ambiguousConfigError(let candidates):
-                let msg = """
-                    Ambiguous config error. Several configs found:
-                    \(candidates.map(\.path).joined(separator: "\n"))
-                    """
-                return .fatal(configUrl: defaultConfigUrl, message: msg)
-        }
-    }
-    let configStr: String
-    do {
-        configStr = try String(contentsOf: configUrl, encoding: .utf8)
-    } catch {
-        let msg = "Can't read contents of \(configUrl.path.singleQuoted) as a utf8 string: \(error.localizedDescription)"
-        return .fatal(configUrl: configUrl, message: msg)
-    }
-    return ReadConfigResult(configUrl: configUrl, parseConfigResult: parseConfig(configStr))
-}
-
 struct ConfigParseDiagnostic: Error, Equatable {
     let backtrace: ConfigBacktrace
     let message: String

@@ -74,6 +74,8 @@ func applySettings(_ settings: Settings) async {
         )
         return
     }
-    await applyConfig_nonCancellable(settings.compile().config)
+    let (config, problems) = settings.compile()
+    TrayMenuModel.shared.settingsHaveProblems = !problems.isEmpty
+    await applyConfig_nonCancellable(config)
     scheduleCancellableCompleteRefreshSession(.settingsChanged) // Gaps, border, layout
 }

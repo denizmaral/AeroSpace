@@ -17,7 +17,7 @@ public func bugPrompt(_ __message: String = "", isDie: Bool = false, fileId: MyF
     let thread = Thread.current
     return """
         Please report to:
-            https://github.com/nikitabobko/AeroSpace/discussions/categories/potential-bugs
+            https://github.com/denizmaral/MarSpace/issues
             Please describe what you did to trigger this error
 
         Message: \(_message)
@@ -48,7 +48,7 @@ public func dieT<T>(_ __message: String = "", fileId: MyFileId = #myFileId) -> T
             filenameIfConsoleApp: recursionDetectorDuringTermination
                 ? "aerospace-runtime-error-recursion.txt"
                 : "aerospace-runtime-error.txt",
-            title: "AeroSpace Runtime Error",
+            title: "\(aeroSpaceAppName) Runtime Error",
             message: message,
         )
     }
@@ -72,7 +72,6 @@ extension MainActor {
 }
 
 public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
-    case configAutoReload
     case globalObserver(String)
     case globalObserverLeftMouseUp
     case menuBarButton
@@ -96,7 +95,6 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
     public var description: String {
         switch self {
             case .ax(let str): "ax(\(str))"
-            case .configAutoReload: "configAutoReload"
             case .globalObserver(let str): "globalObserver(\(str))"
             case .globalObserverLeftMouseUp: "globalObserverLeftMouseUp"
             case .hotkeyBinding: "hotkeyBinding"

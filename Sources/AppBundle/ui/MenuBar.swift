@@ -34,7 +34,7 @@ private struct MenuBarPanel: View {
             if viewModel.axPermissionStatus != .granted {
                 permissionCallout
             } else {
-                if viewModel.lastReloadConfigContainedWarnings {
+                if viewModel.settingsHaveProblems {
                     configWarnings
                 }
                 if viewModel.isEnabled {
