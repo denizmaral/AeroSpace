@@ -17,7 +17,7 @@ enum GlobalObserver {
             switch notifName {
                 case NSWorkspace.activeSpaceDidChangeNotification.rawValue:
                     // The border belongs to the previous Space. The refresh session shows it again if needed
-                    FocusBorderController.shared.hide()
+                    FocusBorderController.shared.hideAfterSpaceChange()
                     MacWindow.invalidateAllSentFrames()
                     MissionControl.exitIfStale()
                 case NSWorkspace.didLaunchApplicationNotification.rawValue where bundleId == "com.apple.dock":

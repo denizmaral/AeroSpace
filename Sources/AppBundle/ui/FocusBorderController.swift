@@ -66,6 +66,22 @@ final class FocusBorderController {
         }
     }
 
+    private var spaceChangeRecheck: Task<(), any Error>? = nil
+
+    /// macOS posts the Space change before its animation ends: the refresh session right after it still sees the windows
+    /// of the previous Space on screen and draws their border, and the panel follows into the new Space (e.g. the Space
+    /// of a native fullscreen window). Check again when the animation is over
+    func hideAfterSpaceChange() {
+        hide()
+        spaceChangeRecheck?.cancel()
+        spaceChangeRecheck = Task.startUnstructured { @MainActor in
+            for delay in [700, 800] { // ms: after the animation, and once more for slow transitions
+                try await Task.sleep(for: .milliseconds(delay))
+                await self.update() // The singleton
+            }
+        }
+    }
+
     /// See ``isHiddenForMouseDrag``
     func hideForMouseDrag() {
         isHiddenForMouseDrag = true
