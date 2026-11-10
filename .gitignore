@@ -4,6 +4,7 @@
 /.*
 
 # Unignored top level .dirs
+!/.github
 
 /xcode/.xcode-build
 

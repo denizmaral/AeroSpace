@@ -1,0 +1,16 @@
+name: Feature idea
+description: Something MarSpace should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What are you trying to do?
+      description: Your day-to-day use case, and where MarSpace gets in the way. This is the most helpful part.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could it work?
+      description: Your idea, alternatives you considered, and how other window managers do it (links welcome).
