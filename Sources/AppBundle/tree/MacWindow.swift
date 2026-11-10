@@ -34,8 +34,11 @@ final class MacWindow: Window {
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
-        if previousPlacement?.isFloating == true, window.parent is TilingContainer {
-            window.bindAsFloatingWindow(to: workspace)
+        if let previousPlacement {
+            WindowPlacementStore.markRestored(windowId, macApp)
+            if previousPlacement.isFloating, window.parent is TilingContainer {
+                window.bindAsFloatingWindow(to: workspace)
+            }
         }
         window.lifeStatus = lifeStatus // Invisible windows (e.g. on other macOS Spaces) must not split other windows
         allWindowsMap[windowId] = window

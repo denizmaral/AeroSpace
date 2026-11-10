@@ -11,14 +11,14 @@ struct WindowPlacementStoreTest {
     ]
 
     @Test func testRoundTrip() throws {
-        let snapshot = try #require(WindowPlacementSnapshot(data: WindowPlacementSnapshot.encode(placements, bootTime: 1_762_700_000)))
+        let snapshot = try #require(WindowPlacementSnapshot(data: WindowPlacementSnapshot.encode(placements, bootSession: 1_762_700_000)))
         assertEquals(snapshot.count, 4)
-        assertEquals(snapshot.bootTime, 1_762_700_000)
+        assertEquals(snapshot.bootSession, 1_762_700_000)
         assertEquals(snapshot.all, placements)
     }
 
     @Test func testLookup() throws {
-        let snapshot = try #require(WindowPlacementSnapshot(data: WindowPlacementSnapshot.encode(placements, bootTime: 1_762_700_000)))
+        let snapshot = try #require(WindowPlacementSnapshot(data: WindowPlacementSnapshot.encode(placements, bootSession: 1_762_700_000)))
         for placement in placements {
             assertEquals(snapshot.placement(nativeWindowId: placement.nativeWindowId, pid: placement.pid), placement)
         }
@@ -29,13 +29,13 @@ struct WindowPlacementStoreTest {
     }
 
     @Test func testEmpty() throws {
-        let snapshot = try #require(WindowPlacementSnapshot(data: WindowPlacementSnapshot.encode([], bootTime: 0)))
+        let snapshot = try #require(WindowPlacementSnapshot(data: WindowPlacementSnapshot.encode([], bootSession: 0)))
         assertEquals(snapshot.count, 0)
         assertNil(snapshot.placement(nativeWindowId: 1, pid: 1))
     }
 
     @Test func testRejectsCorruptedData() {
-        let data = WindowPlacementSnapshot.encode(placements, bootTime: 1_762_700_000)
+        let data = WindowPlacementSnapshot.encode(placements, bootSession: 1_762_700_000)
         #expect(WindowPlacementSnapshot(data: Data()) == nil)
         #expect(WindowPlacementSnapshot(data: data.dropLast()) == nil) // Truncated
         #expect(WindowPlacementSnapshot(data: data + [0]) == nil) // Trailing garbage
@@ -49,7 +49,7 @@ struct WindowPlacementStoreTest {
 
     /// The mapping of a file is a Data slice that doesn't start at index 0
     @Test func testSliceWithNonZeroStartIndex() throws {
-        let encoded = WindowPlacementSnapshot.encode(placements, bootTime: 1_762_700_000)
+        let encoded = WindowPlacementSnapshot.encode(placements, bootSession: 1_762_700_000)
         let slice = (Data([0xAB, 0xCD]) + encoded).dropFirst(2)
         let snapshot = try #require(WindowPlacementSnapshot(data: Data(slice)))
         assertEquals(snapshot.all, placements)
