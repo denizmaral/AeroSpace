@@ -9,17 +9,18 @@ struct WindowPlacement: Equatable, Sendable {
     let isFloating: Bool
 }
 
-/// Immutable, memory-mapped set of window placements.
+/// Immutable, memory-mapped set of window placements, and the tiling trees of the workspaces.
 ///
 /// Binary format (little-endian):
 /// ```
-/// Header (24 bytes):
+/// Header (28 bytes; 24 bytes in version 2, which has no trees):
 ///   magic:       UInt32 "MSWP"
-///   version:     UInt16 (2)
+///   version:     UInt16 (3)
 ///   reserved:    UInt16
 ///   count:       UInt32
 ///   blobLength:  UInt32
 ///   bootSession: UInt64  (FNV-1a of kern.bootsessionuuid. Window ids and pids are reused after a reboot)
+///   treesLength: UInt32
 /// Records (16 bytes each, sorted by nativeWindowId for binary search):
 ///   nativeWindowId: UInt32
 ///   pid:            Int32
@@ -29,32 +30,50 @@ struct WindowPlacement: Equatable, Sendable {
 ///   padding:        UInt8
 /// Blob:
 ///   UTF-8 workspace names
+/// Trees (see ``TilingTreeSnapshot``)
 /// ```
 struct WindowPlacementSnapshot: Sendable {
     private let data: Data
     let count: Int
     let bootSession: UInt64
+    private let headerSize: Int
     private let blobStart: Int
+    private let treesStart: Int
 
     private static let magic: UInt32 = 0x5057_534D // "MSWP" little-endian
-    private static let version: UInt16 = 2
-    private static let headerSize = 24
+    private static let version: UInt16 = 3
+    /// Still read: the file that the previous version of MarSpace wrote, when MarSpace is updated
+    private static let versionWithoutTrees: UInt16 = 2
+    private static let headerSize = 28
+    private static let headerSizeWithoutTrees = 24
     private static let recordSize = 16
 
     /// Validates the header. `data` can be (and normally is) a memory mapping. Nothing is copied
     init?(data: Data) {
-        guard data.count >= Self.headerSize,
-              data.loadLE(UInt32.self, at: 0) == Self.magic,
-              data.loadLE(UInt16.self, at: 4) == Self.version
-        else { return nil }
+        guard data.count >= Self.headerSizeWithoutTrees, data.loadLE(UInt32.self, at: 0) == Self.magic else { return nil }
+        let headerSize: Int
+        switch data.loadLE(UInt16.self, at: 4) {
+            case Self.version: headerSize = Self.headerSize
+            case Self.versionWithoutTrees: headerSize = Self.headerSizeWithoutTrees
+            default: return nil
+        }
+        guard data.count >= headerSize else { return nil }
         let count = Int(data.loadLE(UInt32.self, at: 8))
         let blobLength = Int(data.loadLE(UInt32.self, at: 12))
-        let blobStart = Self.headerSize + count * Self.recordSize
-        guard data.count == blobStart + blobLength else { return nil }
+        let treesLength = headerSize == Self.headerSize ? Int(data.loadLE(UInt32.self, at: 24)) : 0
+        let blobStart = headerSize + count * Self.recordSize
+        guard data.count == blobStart + blobLength + treesLength else { return nil }
         self.data = data
         self.count = count
         self.bootSession = data.loadLE(UInt64.self, at: 16)
+        self.headerSize = headerSize
         self.blobStart = blobStart
+        self.treesStart = blobStart + blobLength
+    }
+
+    /// The tiling trees of the workspaces. Empty if there are none, or if they can't be read
+    var trees: [TilingTreeSnapshot] {
+        treesStart == data.count ? [] : [TilingTreeSnapshot](decoding: data[(data.startIndex + treesStart)...]) ?? []
     }
 
     /// Binary search by the native window id. The pid protects against window ids of terminated apps
@@ -63,7 +82,7 @@ struct WindowPlacementSnapshot: Sendable {
         var high = count - 1
         while low <= high {
             let mid = (low + high) / 2
-            let id = data.loadLE(UInt32.self, at: Self.headerSize + mid * Self.recordSize)
+            let id = data.loadLE(UInt32.self, at: headerSize + mid * Self.recordSize)
             if id < nativeWindowId {
                 low = mid + 1
             } else if id > nativeWindowId {
@@ -79,11 +98,11 @@ struct WindowPlacementSnapshot: Sendable {
     var all: [WindowPlacement] { (0 ..< count).map(record(at:)) }
 
     private func record(at index: Int) -> WindowPlacement {
-        let offset = Self.headerSize + index * Self.recordSize
+        let offset = headerSize + index * Self.recordSize
         let nameOffset = Int(data.loadLE(UInt32.self, at: offset + 8))
         let nameLength = Int(data.loadLE(UInt16.self, at: offset + 12))
         let nameStart = blobStart + nameOffset
-        let name = nameStart + nameLength <= data.count
+        let name = nameStart + nameLength <= treesStart
             ? String(decoding: data[(data.startIndex + nameStart) ..< (data.startIndex + nameStart + nameLength)], as: UTF8.self)
             : ""
         return WindowPlacement(
@@ -95,7 +114,8 @@ struct WindowPlacementSnapshot: Sendable {
     }
 
     /// `placements` must be sorted by nativeWindowId and must not contain duplicate ids
-    static func encode(_ placements: [WindowPlacement], bootSession: UInt64) -> Data {
+    static func encode(_ placements: [WindowPlacement], trees: [TilingTreeSnapshot] = [], bootSession: UInt64) -> Data {
+        let trees = trees.isEmpty ? Data() : trees.encoded()
         var records = Data(capacity: placements.count * recordSize)
         var blob = Data()
         for placement in placements {
@@ -108,24 +128,28 @@ struct WindowPlacementSnapshot: Sendable {
             records.appendLE(UInt8(0))
             blob.append(name.prefix(Int(UInt16.max)))
         }
-        var result = Data(capacity: headerSize + records.count + blob.count)
+        var result = Data(capacity: headerSize + records.count + blob.count + trees.count)
         result.appendLE(magic)
         result.appendLE(version)
         result.appendLE(UInt16(0))
         result.appendLE(UInt32(placements.count))
         result.appendLE(UInt32(blob.count))
         result.appendLE(bootSession)
+        result.appendLE(UInt32(trees.count))
         result.append(records)
         result.append(blob)
+        result.append(trees)
         return result
     }
 }
 
-/// Remembers the workspace of every window in a memory-mapped file.
+/// Remembers the workspace of every window, and the tiling tree of every workspace, in a memory-mapped file.
 ///
 /// AeroSpace only sees windows on the active macOS Space, and it loses its model on restart. Without the store, the
 /// windows that it detects after a restart (or later: after a native fullscreen Space, after the lock screen) are put
-/// on the focused workspace. With the store, every window goes back to its own workspace.
+/// on the focused workspace. With the store, every window goes back to its own workspace, and the windows that are
+/// there when MarSpace starts go back to their places in the layout, with their sizes
+/// (``restoreTilingTreesOfPreviousRun()``).
 ///
 /// The file of the previous run is memory-mapped once at startup (zero copy, no parsing). It's rewritten atomically
 /// only when the placement of some window changes.
@@ -153,6 +177,24 @@ enum WindowPlacementStore {
     /// Windows of the previous run that were detected in this run
     private static var restoredWindowIds: Set<UInt32> = []
     private static var lastPersisted: [WindowPlacement] = []
+    private static var lastPersistedTrees: [TilingTreeSnapshot] = []
+
+    /// Puts the tiling windows back where they were in the layout of the previous run. Called once, when the windows that
+    /// are there at the start of MarSpace are registered (in an arbitrary order, each one placed like a new window), before
+    /// the first layout and before the placements are persisted again. A window that shows up later (it was on another
+    /// macOS Space) goes to its workspace, as a new window
+    static func restoreTilingTreesOfPreviousRun() {
+        guard let previousRun else { return }
+        for tree in previousRun.trees {
+            Workspace.get(byName: tree.workspace).restoreTilingTree(tree, nativeWindowId: nativeWindowId(of:))
+        }
+        // The focus was taken from macOS before: the focused window stays the most recent one of its workspace
+        globalFocus.windowOrNil?.markAsMostRecentChild()
+    }
+
+    private static func nativeWindowId(of window: Window) -> UInt32? {
+        (window as? MacWindow).flatMap { $0.macApp.nativeWindowId(of: $0.windowId) }
+    }
 
     /// The placement of the window in the previous run. Only the first registration of the window in this run is
     /// restored (see ``markRestored(_:_:)``): later, the window may be moved, its previous run placement is outdated
@@ -199,11 +241,17 @@ enum WindowPlacementStore {
             }
         }
         placements.sort { $0.nativeWindowId < $1.nativeWindowId }
-        if placements == lastPersisted { return }
+        // While a window is resized with the mouse, every mouse move changes the weights: the trees are persisted when
+        // the button is released (a refresh session follows)
+        let trees = currentlyManipulatedWithMouseWindowId == nil
+            ? Workspace.all.compactMap { $0.tilingTreeSnapshot(nativeWindowId: nativeWindowId(of:)) }
+            : lastPersistedTrees
+        if placements == lastPersisted && trees == lastPersistedTrees { return }
         lastPersisted = placements
+        lastPersistedTrees = trees
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try WindowPlacementSnapshot.encode(placements, bootSession: bootSession).write(to: url, options: .atomic)
+            try WindowPlacementSnapshot.encode(placements, trees: trees, bootSession: bootSession).write(to: url, options: .atomic)
         } catch {
             perfLogger.error("Can't persist window placement: \(error.localizedDescription, privacy: .public)")
         }

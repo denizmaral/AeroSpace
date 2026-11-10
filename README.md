@@ -28,8 +28,8 @@ need to disable SIP) and its `aerospace` CLI, and replaces the config file with 
   refuses to shrink to its tile.
 - **Focus follows the mouse.** It also works where windows overlap and when the focus changed by the keyboard, and it
   doesn't hide a focused floating window behind the tiled window under it.
-- **Windows stay where they belong.** After a restart, windows return to their workspaces. After fullscreen, minimize
-  or hide, they return to their place in the layout.
+- **Windows stay where they belong.** After a restart of MarSpace, windows return to their workspaces and to their
+  places in the layout. After fullscreen, minimize or hide, they return to their place too.
 - **Menu bar panel** with the workspaces and their apps.
 - **Fast and light.** Only changed window frames are sent to apps, the settings window keeps its panes, and the
   settings file is checksummed, written atomically and backed up.

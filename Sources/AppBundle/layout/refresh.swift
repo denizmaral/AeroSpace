@@ -46,6 +46,8 @@ func runHeavyCompleteRefreshSession(
 
             await refreshModel_nonCancellable()
             try await refresh()
+            // The windows were registered one by one, in an arbitrary order: back to their places of the previous run
+            if event.isStartup { WindowPlacementStore.restoreTilingTreesOfPreviousRun() }
             gcMonitors()
 
             updateTrayText()

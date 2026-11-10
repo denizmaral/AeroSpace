@@ -46,6 +46,8 @@ Settings › General › New window placement:
 - **i3**: the new window goes next to the focused one, and all windows of the container share the space equally
 
 A window that leaves the layout for a while (macOS fullscreen, minimized, its app hidden) comes back to its place.
+When MarSpace itself is restarted, the windows go back to their workspaces and to their places and sizes in the layout
+(until the Mac is restarted: macOS gives the windows new ids then).
 
 ### Floating windows
 
