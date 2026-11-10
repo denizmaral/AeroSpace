@@ -46,7 +46,7 @@ struct ResizeCommand: Command {
         guard let orientation else { return .fail }
         guard let node else { return .fail }
         // The units are pixels, the weights are proportions (see TilingContainer.pixelsToWeight)
-        let length = node.lastAppliedLayoutVirtualRect?.getDimension(orientation) ?? node.getWeight(orientation)
+        let length = parent.length(of: node) ?? node.getWeight(orientation)
         let pixels: CGFloat = switch args.units.val {
             case .set(let unit): CGFloat(unit) - length
             case .add(let unit): CGFloat(unit)

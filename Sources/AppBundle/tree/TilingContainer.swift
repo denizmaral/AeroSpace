@@ -99,12 +99,28 @@ extension TilingContainer {
         return weights.map { total * $0 / sum }
     }
 
-    /// The weight that corresponds to `pixels` of the length of the container (as of the last layout). A container
-    /// that wasn't laid out yet: the weights are taken as pixels
+    /// The length (along the orientation) that the children share: the length of the last layout. A container that
+    /// wasn't laid out yet (e.g. created in this session), or a workspace that isn't visible (the monitor may have
+    /// changed): estimated from the tree
+    @MainActor
+    var sharedLength: CGFloat? {
+        if let lastLayoutLength, nodeWorkspace?.isVisible == true { return lastLayoutLength }
+        return estimatedTilingRect()?.getDimension(orientation)
+    }
+
+    /// The weight that corresponds to `pixels` of ``sharedLength``
     @MainActor
     func pixelsToWeight(_ pixels: CGFloat) -> CGFloat {
-        guard let length = lastLayoutLength, length > 0 else { return pixels }
         let sum = inhabitedChildren.reduce(0) { $0 + max($1.getWeight(orientation), 0) }
-        return sum > 0 ? pixels * sum / length : pixels
+        guard let length = sharedLength, length > 0, sum > 0 else { return pixels }
+        return pixels * sum / length
+    }
+
+    /// The length of `child` (along the orientation) in ``sharedLength``
+    @MainActor
+    func length(of child: TreeNode) -> CGFloat? {
+        let sum = inhabitedChildren.reduce(0) { $0 + max($1.getWeight(orientation), 0) }
+        guard let length = sharedLength, sum > 0 else { return nil }
+        return length * max(child.getWeight(orientation), 0) / sum
     }
 }

@@ -183,7 +183,8 @@ struct ProportionalWeightsTest {
     }
 
     /// All windows leave, a new window starts the weights from scratch: the windows that come back get their old shares,
-    /// not their old weights (500 next to 1 would leave no space for the new window)
+    /// not their old weights (500 next to 1 would leave no space for the new window). Both were alone when they left
+    /// (the other one was away already), so they get equal shares
     @Test func testAllAwayAndNewWindow() async throws {
         let workspace = Workspace.get(byName: name)
         #expect(workspace.focusWorkspace())
@@ -199,11 +200,33 @@ struct ProportionalWeightsTest {
         try await workspace.layoutWorkspace()
         assertEquals(root.children.map { $0.getWeight(.h) }, [1])
         try await setFullscreen([windows[0]], false, workspace)
-        assertEquals(widths(workspace), [960, 960]) // It was alone when it left: an equal share
+        assertEquals(widths(workspace), [960, 960])
         try await setFullscreen([windows[1]], false, workspace)
         assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2), .window(3)]))
-        // Its old share (900 next to 500), the others share the rest
-        assertEquals(widths(workspace), [343, 1234, 343])
+        assertEquals(widths(workspace), [640, 640, 640])
+    }
+
+    /// Two windows leave together, the third one is closed and a new window comes: the two come back to exactly their old
+    /// sizes, the new window gets the rest
+    @Test func testTwoAwayClosedAndNewWindow() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var windows: [TestWindow] = []
+        let root = workspace.rootTilingContainer.apply {
+            windows.append(TestWindow.new(id: 1, parent: $0, adaptiveWeight: 500))
+            windows.append(TestWindow.new(id: 2, parent: $0, adaptiveWeight: 900))
+            windows.append(TestWindow.new(id: 3, parent: $0, adaptiveWeight: 520))
+        }
+        try await workspace.layoutWorkspace()
+        try await setFullscreen([windows[1], windows[2]], true, workspace)
+        windows[0].closeAxWindow()
+        TestWindow.new(id: 4, parent: workspace.floatingWindowsContainer).bindAsNewTilingWindow(to: workspace)
+        try await workspace.layoutWorkspace()
+        try await setFullscreen([windows[1]], false, workspace)
+        try await setFullscreen([windows[2]], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(2), .window(3), .window(4)]))
+        // 2 and 3 had 900 + 520 of 1920 (1 is closed and frees its share for all), 4 takes the share of 1
+        assertEquals(widths(workspace), [900, 520, 500])
     }
 
     /// Both windows of a container leave, the normalization removes the container. It comes back with its old share
@@ -228,5 +251,130 @@ struct ProportionalWeightsTest {
         try await setFullscreen(away, false, workspace)
         assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3)]), .window(4)]))
         assertEquals(widths(workspace), [240, 1440, 1440, 240])
+    }
+
+    /// The weights in the slots of away windows can have another scale than the weights in the tree: two windows (500,
+    /// 500) leave, a new window starts from 1 and leaves too. They come back in any order with equal shares (500 next to 1
+    /// gave the new window 4 px)
+    @Test(arguments: [false, true])
+    func testAwayWeightsOfAnotherScale(newWindowFirst: Bool) async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var windows: [TestWindow] = []
+        let root = workspace.rootTilingContainer.apply {
+            windows.append(TestWindow.new(id: 1, parent: $0, adaptiveWeight: 500))
+            windows.append(TestWindow.new(id: 2, parent: $0, adaptiveWeight: 500))
+        }
+        try await workspace.layoutWorkspace()
+        try await setFullscreen([windows[0]], true, workspace)
+        try await setFullscreen([windows[1]], true, workspace)
+        let window3 = TestWindow.new(id: 3, parent: workspace.floatingWindowsContainer)
+        window3.bindAsNewTilingWindow(to: workspace)
+        try await workspace.layoutWorkspace()
+        try await setFullscreen([window3], true, workspace)
+        for window in newWindowFirst ? [window3, windows[0]] : [windows[0], window3] {
+            try await setFullscreen([window], false, workspace)
+        }
+        assertEquals(widths(workspace), [960, 960])
+        try await setFullscreen([windows[1]], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2), .window(3)]))
+        assertEquals(widths(workspace), [640, 640, 640])
+    }
+
+    /// Dwindle: 3 split 2, all windows leave, a new window starts from 1, 2 comes back and 3 is closed while away: 2 takes
+    /// the share of 3 in the scale of the tree now (the old weight of 3 gave the new window 3 px)
+    @Test func testDwindleSplitClosedWhileAwayOtherScale() async throws {
+        config.newWindowPlacement = .dwindle
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window2: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0, adaptiveWeight: 420)
+            window2 = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 1500)
+        }
+        _ = window2.focusWindow()
+        let window3 = TestWindow.new(id: 3, parent: workspace.floatingWindowsContainer)
+        window3.bindAsNewTilingWindow(to: workspace)
+        assertEquals(root.children.map { $0.getWeight(.h) }, [420, 750, 750])
+        try await workspace.layoutWorkspace()
+        for window in [window3, window1!, window2!] { try await setFullscreen([window], true, workspace) }
+        TestWindow.new(id: 4, parent: workspace.floatingWindowsContainer).bindAsNewTilingWindow(to: workspace)
+        try await workspace.layoutWorkspace()
+        try await setFullscreen([window2], false, workspace)
+        assertEquals(widths(workspace), [960, 960])
+        window3.closeAxWindow()
+        workspace.normalizeContainers()
+        try await workspace.layoutWorkspace()
+        assertEquals(root.layoutDescription, .h_tiles([.window(2), .window(4)]))
+        assertEquals(widths(workspace), [1440, 480]) // 3 was as big as 2 (750 next to 750), 2 has both shares
+    }
+
+    /// The container was created in the same session (it wasn't laid out yet): resize converts the pixels with the
+    /// estimated length of the container
+    @Test func testResizeInContainerNotLaidOutYet() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0)
+            TestWindow.new(id: 2, parent: $0)
+            TestWindow.new(id: 3, parent: $0)
+        }
+        try await workspace.layoutWorkspace()
+        _ = window1.focusWindow()
+        await parseCommand("join-with right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        await parseCommand("resize height +100").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+        assertEquals(root.layoutDescription, .h_tiles([.v_tiles([.window(1), .window(2)]), .window(3)]))
+        let heights = root.allLeafWindowsRecursive.prefix(2).map { (($0.lastAppliedLayoutPhysicalRect?.height ?? -1) * 2).rounded() / 2 }
+        assertEquals(heights, [639.5, 439.5]) // 1079 / 2 + 100, 1079 / 2 - 100
+    }
+
+    /// A workspace that was never laid out (not visible): resize converts the pixels with the estimated length
+    @Test func testResizeOnInvisibleWorkspace() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window2: TestWindow!
+        workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 3, parent: $0)
+            window1 = TestWindow.new(id: 1, parent: $0)
+            window2 = TestWindow.new(id: 2, parent: $0)
+        }
+        try await workspace.layoutWorkspace()
+        for window in [window1!, window2!] {
+            await parseCommand("move-node-to-workspace hidden5").cmdOrDie.run(.defaultEnv.withWindowId(window.windowId), .emptyStdin)
+        }
+        await parseCommand("resize width +100").cmdOrDie.run(.defaultEnv.withWindowId(window1.windowId), .emptyStdin)
+        let invisible = Workspace.get(byName: "hidden5")
+        #expect(invisible.focusWorkspace())
+        try await invisible.layoutWorkspace()
+        assertEquals(widths(invisible), [1060, 860])
+    }
+
+    /// Both windows of a container leave, the normalization flattens the container. They come back in any order to
+    /// exactly their old sizes
+    @Test(arguments: [false, true])
+    func testNeighborStillAwayUnequal(reversedReturn: Bool) async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window2: TestWindow!
+        var window3: TestWindow!
+        workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                window2 = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 700)
+                window3 = TestWindow.new(id: 3, parent: $0, adaptiveWeight: 379)
+            }
+        }
+        try await workspace.layoutWorkspace()
+        let rects = workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.lastAppliedLayoutPhysicalRect)
+        try await setFullscreen([window3], true, workspace)
+        try await setFullscreen([window2], true, workspace)
+        for window in reversedReturn ? [window2!, window3!] : [window3!, window2!] {
+            try await setFullscreen([window], false, workspace)
+        }
+        assertEquals(workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.lastAppliedLayoutPhysicalRect), rects)
     }
 }

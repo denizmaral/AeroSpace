@@ -55,7 +55,7 @@ extension TreeNode {
     func estimatedTilingRect(ignoring ignored: [TreeNode] = []) -> Rect? {
         guard let parent else { return nil }
         if let root = self as? TilingContainer, root.isRootContainer, let workspace = parent as? Workspace {
-            return workspace.workspaceMonitorInfo.visibleRectPaddedByOuterGaps
+            return workspace.rootTilingRect
         }
         guard let parent = parent as? TilingContainer, let parentRect = parent.estimatedTilingRect(ignoring: ignored) else { return nil }
         switch parent.layout {
@@ -256,8 +256,8 @@ extension Window {
         let orientation = parent.orientation
         if anchor.parent === parent {
             anchor.setWeight(orientation, anchor.getWeight(orientation) + weight)
-        } else if let anchor = anchor as? Window { // E.g. the anchor is in native fullscreen. It gets the weight when it comes back
-            anchor.addWeightToTilingSlot(weight, of: parent, from: self)
+        } else if let anchor = anchor as? Window { // E.g. the anchor is in native fullscreen. It takes the share when it comes back
+            anchor.takeShareInTilingSlot(of: self, in: parent)
         }
     }
 }

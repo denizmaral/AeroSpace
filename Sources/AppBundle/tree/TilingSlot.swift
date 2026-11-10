@@ -45,20 +45,21 @@ private struct EmptiedContainer {
     var leftSiblings: ArraySlice<WeightedSibling> { siblings[..<index] }
 }
 
-/// A sibling and its weight. The weights are proportions (see ``TilingContainer/proportionalLengths(_:total:)``): a
-/// weight means something only next to the weights of its siblings
+/// A sibling and its weight when the window left. The weights are proportions (see
+/// ``TilingContainer/proportionalLengths(_:total:)``): a weight means something only next to the weights of the same
+/// container at the same time
 private struct WeightedSibling {
     weak var node: TreeNode?
     let weight: CGFloat
-    /// The sibling was away itself (see ``awayNodes(of:)``): it didn't take a share of the parent
-    var isAway: Bool = false
+    /// The sibling was away itself (see ``awayNodes(of:)``): it didn't take a share of the parent. Its weight is 0: the
+    /// weight in its own slot may be from a time when the weights of the parent had another scale
+    let isAway: Bool
 }
 
 /// A node that is away and comes back to its parent: a window in a macOS native state, or a container that the
 /// normalization removed when its last window left
 private struct AwayNode {
     let node: TreeNode
-    let weight: CGFloat
     let leftSiblings: ArraySlice<WeightedSibling>
 }
 
@@ -99,23 +100,25 @@ extension Window {
         return bindToParent(of: slot, on: workspace) || bindNextToNeighbor(of: slot, on: workspace)
     }
 
-    /// The container and the weight of the window that is away in a macOS native state
+    /// The container of the window that is away in a macOS native state, and the weight that the window would get there
+    /// if it came back now (the weight in its slot may have another scale than the weights in the container now)
     @MainActor
     var tilingSlotPlace: (TilingContainer, CGFloat)? {
         guard let slot = tilingSlot, let parent = slot.parent else { return nil }
-        return (parent, slot.adaptiveWeight)
+        return (parent, restoredWeight(slot.adaptiveWeight, siblings: slot.siblings, in: parent))
     }
 
     /// The window is away in a macOS native state, and `closed`, the window that split it in dwindle placement, is
-    /// closed. The share of `closed` goes back to the window when it comes back. See ``returnWeightToDwindleSplitAnchor()``
+    /// closed. The window takes the share of `closed` when it comes back. See ``returnWeightToDwindleSplitAnchor()``
     @MainActor
-    func addWeightToTilingSlot(_ weight: CGFloat, of parent: TilingContainer, from closed: Window) {
-        guard let slot = tilingSlot, slot.parent === parent, slot.orientation == parent.orientation else { return }
-        tilingSlot?.adaptiveWeight += weight
-        // Otherwise the share of `closed` would be shared by all children too
-        if let index = slot.siblings.firstIndex(where: { $0.node === closed }) {
-            tilingSlot?.siblings[index] = WeightedSibling(node: closed, weight: 0)
-        }
+    func takeShareInTilingSlot(of closed: Window, in parent: TilingContainer) {
+        guard let slot = tilingSlot, slot.parent === parent,
+              let index = slot.siblings.firstIndex(where: { $0.node === closed && !$0.isAway })
+        else { return }
+        // The weight of `closed` when the window left: the same scale as the weight of the window
+        tilingSlot?.adaptiveWeight += slot.siblings[index].weight
+        // Otherwise its share would be free for all children too
+        tilingSlot?.siblings[index] = WeightedSibling(node: nil, weight: 0, isAway: false)
     }
 
     @MainActor
@@ -159,9 +162,10 @@ extension Window {
                   bindToParent(of: awaySlot, on: workspace)
         {
             // The neighbor is away too. The window takes its place, and the neighbor comes back next to the window
+            // (both get their old weights in the container then)
             away.tilingSlot = TilingSlot(
                 parent: nil,
-                adaptiveWeight: WEIGHT_AUTO,
+                adaptiveWeight: slot.neighborAdaptiveWeight,
                 siblings: [],
                 index: 0,
                 neighbor: self,
@@ -169,7 +173,7 @@ extension Window {
                 orientation: slot.orientation,
                 layout: slot.layout,
                 isRootFlattened: false,
-                neighborAdaptiveWeight: WEIGHT_AUTO,
+                neighborAdaptiveWeight: slot.adaptiveWeight,
                 emptiedContainer: awaySlot.emptiedContainer,
             )
             return true
@@ -262,26 +266,32 @@ private func bindBackEmptiedContainer(_ container: TilingContainer, on workspace
 /// the old weight means something only next to the old weights of its siblings (e.g. all of them left too, and a new
 /// window started from scratch). The siblings that are gone meanwhile (closed, moved) give their share to all children,
 /// the new children take theirs from all. The siblings that are still away don't count, they bring their share back
+///
+/// Only weights of the same time are compared: `weight` with the weights of `siblings` (the old scale), the weights of
+/// the children now with each other (the new scale). The weights may have another scale now, e.g. all children left
+/// and a new window started from 1
 @MainActor
 private func restoredWeight(_ weight: CGFloat, siblings: [WeightedSibling], in parent: TilingContainer) -> CGFloat {
     let orientation = parent.orientation
-    let now = parent.inhabitedChildren.reduce(0) { $0 + max($1.getWeight(orientation), 0) }
-    // The first child that comes back: the old scale is the scale for the others that are away
-    guard now > 0 else { return weight }
+    let children = parent.inhabitedChildren
+    // The first child that comes back: its weight is the scale for the others that are away
+    guard !children.isEmpty else { return weight }
+    let total = children.reduce(0) { $0 + max($1.getWeight(orientation), 0) }
     let away = awayNodes(of: parent)
-    var before: CGFloat = 0
+    var before: CGFloat = 0 // The siblings that had a share when the node left (the old scale)
+    var broughtBack: CGFloat = 0 // The children that were away then and came back with their own share (the new scale)
     for sibling in siblings {
-        if let node = sibling.node {
-            if node.parent === parent && node.tilingTreeNodeCasesOrDie().isInhabited {
-                before += max(sibling.weight, 0) // It counts now and before
-                continue
-            }
-            if away.contains(where: { $0.node === node }) { continue } // It counts neither now nor before
-        }
-        if !sibling.isAway { before += max(sibling.weight, 0) } // Gone: its share is free
+        let node = sibling.node
+        let isChild = node.map { $0.parent === parent && $0.tilingTreeNodeCasesOrDie().isInhabited } ?? false
+        if sibling.isAway {
+            if isChild, let node { broughtBack += max(node.getWeight(orientation), 0) }
+        } else if isChild || !away.contains(where: { $0.node === node }) {
+            before += max(sibling.weight, 0) // A child now, or gone (closed, moved): its share is free
+        } // else: still away, it brings its share back itself
     }
-    // The node was the only child: it shares with the new children equally
-    guard before > 0, weight > 0 else { return WEIGHT_AUTO }
+    let now = total - broughtBack
+    // The node was the only child with a share, or all children now came back with their own shares: an equal share
+    guard weight > 0, before > 0, now > total * 1e-9 else { return total / CGFloat(children.count) }
     return weight * now / before
 }
 
@@ -303,10 +313,10 @@ private func awayNodes(of parent: TilingContainer) -> [AwayNode] {
     for window in allAwayWindows(of: workspace) {
         guard let slot = window.tilingSlot else { continue }
         if slot.parent === parent {
-            result.append(AwayNode(node: window, weight: slot.adaptiveWeight, leftSiblings: slot.leftSiblings))
+            result.append(AwayNode(node: window, leftSiblings: slot.leftSiblings))
         }
         if let record = slot.emptiedContainer, record.parent === parent, !result.contains(where: { $0.node === record.container }) {
-            result.append(AwayNode(node: record.container, weight: record.adaptiveWeight, leftSiblings: record.leftSiblings))
+            result.append(AwayNode(node: record.container, leftSiblings: record.leftSiblings))
         }
     }
     return result
@@ -316,15 +326,19 @@ private func awayNodes(of parent: TilingContainer) -> [AwayNode] {
 @MainActor
 private func siblingsIncludingAwayNodes(_ parent: TilingContainer) -> [WeightedSibling] {
     var nodes: [TreeNode] = parent.children
-    var weights: [CGFloat] = nodes.map { $0.tilingTreeNodeCasesOrDie().isInhabited ? $0.getWeight(parent.orientation) : 0 }
+    var result = nodes.map { child in
+        WeightedSibling(
+            node: child,
+            weight: child.tilingTreeNodeCasesOrDie().isInhabited ? child.getWeight(parent.orientation) : 0,
+            isAway: false,
+        )
+    }
     for away in awayNodes(of: parent) {
         let index = insertionIndex(in: nodes, after: away.leftSiblings)
         nodes.insert(away.node, at: index)
-        weights.insert(away.weight, at: index)
+        result.insert(WeightedSibling(node: away.node, weight: 0, isAway: true), at: index)
     }
-    return zip(nodes, weights).map { node, weight in
-        WeightedSibling(node: node, weight: weight, isAway: node.parent !== parent)
-    }
+    return result
 }
 
 /// Right after the last of `leftSiblings` that is in `nodes`. 0 if none of them is
