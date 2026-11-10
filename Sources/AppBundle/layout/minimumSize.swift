@@ -83,7 +83,7 @@ extension Window {
                 previous = nil
                 continue
             }
-            forgetMinimumSizeIfSmaller(actual, requested)
+            forgetMinimumSizeIfSmaller(actual)
             guard let refused = refusedSize(actual, requested) else { return .fits }
             if let previous, previous.requested == requested {
                 // The dimensions that were refused both times by (almost) the same size. Some apps jitter by a few
@@ -93,7 +93,6 @@ extension Window {
                 if width > 0 || height > 0 {
                     learnedMinimumSize = CGSize(width: max(learnedMinimumSize.width, width), height: max(learnedMinimumSize.height, height))
                     learnedMinimumSizeWorkspace = nodeWorkspace?.name
-                    backOffMinimumSizeProbeIfWrong()
                     return .learned
                 }
             }
@@ -109,81 +108,9 @@ extension Window {
     @MainActor
     var effectiveMinimumSize: CGSize { learnedMinimumSize }
 
-    static let minimumSizeProbeInterval: Duration = .seconds(30)
-    private static let minimumSizeMaxProbeInterval: Duration = .seconds(30 * 60)
-    private static let minimumSizeProbeStep: CGFloat = 4 * minimumSizeTolerance
-
-    /// A smaller minimum can't be observed (see ``forgetMinimumSize()``): a window that doesn't shrink by itself (e.g.
-    /// the app hides its sidebar) would keep its minimum until explicit sizing. The focused window that the layout holds
-    /// at its minimum is probed instead, at most every 30 seconds. See ``probeMinimumSizeDrop()``
-    @MainActor
-    func probeMinimumSizeDropIfDue() {
-        guard minimumSizeCheckTask == nil, let requested = minimumSizeCheckableRect, minimumSizeProbe(requested) != nil else { return }
-        let now = ContinuousClock.now
-        if let last = lastMinimumSizeProbe, now - last < minimumSizeProbeInterval { return }
-        lastMinimumSizeProbe = now
-        minimumSizeCheckTask = Task.startUnstructured { @MainActor [weak self] in
-            defer { self?.minimumSizeCheckTask = nil }
-            _ = try await self?.probeMinimumSizeDrop()
-        }
-    }
-
-    /// Asks for a slightly smaller size than the learned minimum. A window at its minimum refuses it: nothing changes on
-    /// the screen, and the frame of the layout is sent again. A window whose minimum dropped accepts it: the minimum is
-    /// forgotten, the layout gives the window its regular size, and the window is checked again after that.
-    ///
-    /// The size is read right after the write (both go through the AX thread of the app in order), before the refresh
-    /// session that the resize triggers sends the frame of the layout again. Apps apply or refuse the size synchronously
-    ///
-    /// - Returns: true if the minimum dropped
-    @MainActor
-    func probeMinimumSizeDrop() async throws -> Bool {
-        guard let requested = minimumSizeCheckableRect, let probe = minimumSizeProbe(requested) else { return false }
-        let minimum = learnedMinimumSize
-        setAxFrame(requested.topLeftCorner, probe)
-        // The layout changed meanwhile: it sent its own frame
-        guard let actual = try await getAxSize(.cancellable), minimumSizeCheckableRect == requested else { return false }
-        let isAccepted = probe.width < requested.width && actual.width + Self.minimumSizeTolerance < minimum.width ||
-            probe.height < requested.height && actual.height + Self.minimumSizeTolerance < minimum.height
-        if isAccepted {
-            if probe.width < requested.width { takeFairShare(.h) }
-            if probe.height < requested.height { takeFairShare(.v) }
-            minimumSizeDroppedByProbe = minimum
-            forgetMinimumSizeAndRecheckAfterLayout()
-            scheduleCancellableCompleteRefreshSession(.minimumSizeLearned)
-        } else {
-            setAxFrame(requested.topLeftCorner, CGSize(width: requested.width, height: requested.height))
-        }
-        return isAccepted
-    }
-
-    /// Some apps accept the probe and grow the window back to their minimum asynchronously: the same minimum is learned
-    /// again right away. The window would jiggle on every probe, it's probed less often
-    @MainActor
-    private func backOffMinimumSizeProbeIfWrong() {
-        guard let dropped = minimumSizeDroppedByProbe else { return }
-        minimumSizeDroppedByProbe = nil
-        func isSame(_ old: CGFloat, _ new: CGFloat) -> Bool { old == 0 || abs(old - new) <= 2 * Self.minimumSizeTolerance }
-        if isSame(dropped.width, learnedMinimumSize.width) && isSame(dropped.height, learnedMinimumSize.height) {
-            minimumSizeProbeInterval = min(minimumSizeProbeInterval * 4, Self.minimumSizeMaxProbeInterval)
-        }
-    }
-
-    /// The size to probe if the layout holds the window at its learned minimum in any dimension, otherwise nil
-    @MainActor
-    private func minimumSizeProbe(_ requested: Rect) -> CGSize? {
-        func probe(_ minimum: CGFloat, _ length: CGFloat) -> CGFloat? {
-            minimum > 0 && length <= minimum + Self.minimumSizeTolerance ? minimum - Self.minimumSizeProbeStep : nil
-        }
-        let width = probe(learnedMinimumSize.width, requested.width)
-        let height = probe(learnedMinimumSize.height, requested.height)
-        if width == nil && height == nil { return nil }
-        return CGSize(width: width ?? requested.width, height: height ?? requested.height)
-    }
-
     /// The minimum size of a window may change (e.g. its sidebar is hidden), but the layout never gives the window
     /// less than its learned minimum, so a smaller minimum can't be observed. Moving the window to another workspace
-    /// forgets the learned minimum (see Window.bind), and the focused window is probed (see ``probeMinimumSizeDropIfDue()``)
+    /// forgets the learned minimum (see Window.bind)
     @MainActor
     func forgetMinimumSize() {
         learnedMinimumSize = .zero
@@ -220,29 +147,14 @@ extension Window {
 
     /// The window is smaller than its learned minimum (e.g. resized by the app itself). The minimum is outdated
     @MainActor
-    private func forgetMinimumSizeIfSmaller(_ actual: CGSize, _ requested: Rect) {
+    private func forgetMinimumSizeIfSmaller(_ actual: CGSize) {
         let minimumSize = effectiveMinimumSize
         if minimumSize.width > 0 && actual.width + Self.minimumSizeTolerance < minimumSize.width {
             learnedMinimumSize.width = 0
-            if requested.width <= minimumSize.width + Self.minimumSizeTolerance { takeFairShare(.h) }
         }
         if minimumSize.height > 0 && actual.height + Self.minimumSizeTolerance < minimumSize.height {
             learnedMinimumSize.height = 0
-            if requested.height <= minimumSize.height + Self.minimumSizeTolerance { takeFairShare(.v) }
         }
-    }
-
-    /// The minimum of the window dropped while the layout held the window at it. The layout keeps the lengths in the
-    /// weights, the window would keep its size. It gets the average weight of its siblings instead, like a new window
-    @MainActor
-    private func takeFairShare(_ orientation: Orientation) {
-        guard let node = parentsWithSelf.first(where: { ($0.parent as? TilingContainer)?.orientation == orientation }),
-              let parent = node.parent as? TilingContainer,
-              parent.layout == .tiles
-        else { return }
-        let siblings = parent.inhabitedChildren.filter { $0 !== node }
-        guard !siblings.isEmpty else { return }
-        node.setWeight(orientation, siblings.reduce(0) { $0 + $1.getWeight(orientation) } / CGFloat(siblings.count))
     }
 
     /// Per dimension: the actual size if the window is bigger than requested (beyond the tolerance), otherwise 0.
