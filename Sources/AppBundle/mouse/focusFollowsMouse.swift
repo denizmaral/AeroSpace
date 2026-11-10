@@ -24,7 +24,8 @@ import Common
     focusFollowsMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { @MainActor event in
         guard let token: RunSessionGuard = .isServerEnabled, !MissionControl.isActive else { return }
         let location = event.locationInWindow.withYAxisFlipped
-        let windows = location.monitorApproximation.visibleWorkspace.windowsUnderMouse(location)
+        // MarSpace's own windows (the settings window, the menu) are above the windows that it manages
+        let windows = isOverOwnWindow(event.locationInWindow) ? [] : location.monitorApproximation.visibleWorkspace.windowsUnderMouse(location)
         let move = mouseTracker.mouseMoved(
             over: windows, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now,
             frontmost: { frontmostWindow(of: windows) },
@@ -278,4 +279,10 @@ private func frontmostWindow(of windows: [Window]) -> Window? {
         if let number = info[kCGWindowNumber as String] as? Int, let window = byNativeId[number] { return window }
     }
     return nil
+}
+
+/// - Parameter cocoaLocation: in screen coordinates of AppKit (the origin at the bottom left)
+@MainActor
+private func isOverOwnWindow(_ cocoaLocation: CGPoint) -> Bool {
+    NSApp.windows.contains { $0.isVisible && !$0.ignoresMouseEvents && $0.frame.contains(cocoaLocation) } // Not the focus border
 }

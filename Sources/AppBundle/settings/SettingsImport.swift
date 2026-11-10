@@ -138,17 +138,3 @@ extension MonitorSelector {
         }
     }
 }
-
-/// Until the settings window replaces the TOML config, the stored settings follow it (the TOML config stays the source of
-/// truth meanwhile): the settings are ready to take over with everything the user configured. Written only when the
-/// result changed
-@MainActor
-func mirrorIntoSettings(tomlConfigAt url: URL) {
-    if isUnitTest { return }
-    guard let toml = try? String(contentsOf: url, encoding: .utf8) else { return }
-    let settings = SettingsImport.settings(fromToml: toml).settings
-    guard settings.compile().problems.isEmpty else { return }
-    let store = SettingsStore.applicationSupport
-    if case .loaded(settings) = store.load() { return }
-    try? store.save(settings)
-}

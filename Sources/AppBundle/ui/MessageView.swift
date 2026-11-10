@@ -75,7 +75,6 @@ struct MessageView: View {
                 if let type = model.message?.type {
                     switch type {
                         case .config:
-                            reloadConfigButton(showShortcutGroup: true, warningsAsErrors: model.message?.containsWarnings == true)
                             openConfigButton(showShortcutGroup: true)
                     }
                 }
@@ -117,19 +116,16 @@ public struct Message: Hashable, Equatable {
     public let title: String
     public let description: String
     public let body: String
-    public let containsWarnings: Bool
 
     init(
         type: MessageType = .config,
         title: String = aeroSpaceAppName,
         description: String = "AeroSpace Config Diagnostics",
         body: String,
-        containsWarnings: Bool,
     ) {
         self.type = type
         self.title = title
         self.description = description
         self.body = body
-        self.containsWarnings = containsWarnings
     }
 }

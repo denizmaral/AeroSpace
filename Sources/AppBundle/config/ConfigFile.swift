@@ -24,11 +24,4 @@ func findCustomConfigUrl() -> ConfigFile {
 
 enum ConfigFile {
     case file(URL), ambiguousConfigError(_ candidates: [URL]), noCustomConfigExists
-
-    var urlOrNil: URL? {
-        return switch self {
-            case .file(let url): url
-            case .ambiguousConfigError, .noCustomConfigExists: nil
-        }
-    }
 }
