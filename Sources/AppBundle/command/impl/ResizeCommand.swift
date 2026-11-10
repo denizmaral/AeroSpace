@@ -52,9 +52,15 @@ struct ResizeCommand: Command {
             case .add(let unit): CGFloat(unit)
             case .subtract(let unit): -CGFloat(unit)
         }
-        let diff = parent.pixelsToWeight(pixels)
-
         let inhabitedSiblings = parent.inhabitedChildren.filter { $0 != node }
+        // Nobody is resized to nothing: a tile keeps a twentieth of the container (half of its equal share, if that's
+        // less). Weights below zero were laid out as nothing, and it took as many steps back to see the window again
+        let weights = (inhabitedSiblings + [node]).map { max($0.getWeight(orientation), 0) }
+        let minimum = weights.reduce(0, +) * min(0.05, 0.5 / CGFloat(weights.count))
+        let maxGrowth = max((weights.dropLast().min() ?? 0) - minimum, 0) * CGFloat(inhabitedSiblings.count)
+        let maxShrinkage = max(node.getWeight(orientation) - minimum, 0)
+        let diff = min(max(parent.pixelsToWeight(pixels), -maxShrinkage), maxGrowth)
+
         guard let childDiff = diff.div(inhabitedSiblings.count) else { return .fail }
         for sibling in inhabitedSiblings {
             sibling.setWeight(parent.orientation, sibling.getWeight(parent.orientation) - childDiff)

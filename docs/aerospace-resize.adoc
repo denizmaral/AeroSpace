@@ -33,6 +33,9 @@ Second argument controls how much the size changes
 * If the `<number>` is prefixed with `-` then the dimension is decreased
 * If the `<number>` is prefixed with neither `+` nor `-` then the command changes the absolute value of the dimension
 
+The `<number>` is in pixels. The windows next to the resized one give or take the space in equal parts. No window is
+resized to nothing: every window keeps a twentieth of its container
+
 // =========================================================== Options
 include::./util/conditional-options-header.adoc[]
 

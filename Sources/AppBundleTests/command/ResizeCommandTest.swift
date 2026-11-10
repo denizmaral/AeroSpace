@@ -235,4 +235,26 @@ struct ResizeCommandTest {
         let result = await parseCommand("resize width +2").cmdOrDie.run(.defaultEnv, .emptyStdin)
         assertEquals(result.exitCode.rawValue, 2)
     }
+
+    /// A window can't be resized over its siblings, or to nothing: every tile keeps a twentieth of the container
+    @Test func testNobodyIsResizedToNothing() async {
+        var window1: Window!
+        var window2: Window!
+        var window3: Window!
+        Workspace.get(byName: name).rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0, adaptiveWeight: 640)
+            window2 = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 640)
+            window3 = TestWindow.new(id: 3, parent: $0, adaptiveWeight: 640)
+        }
+        _ = window1.focusWindow()
+
+        await parseCommand("resize width +5000").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals([window1.hWeight, window2.hWeight, window3.hWeight], [1728, 96, 96])
+        // One step back is one step back
+        await parseCommand("resize width -200").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals([window1.hWeight, window2.hWeight, window3.hWeight], [1528, 196, 196])
+
+        await parseCommand("resize width 10").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals([window1.hWeight, window2.hWeight, window3.hWeight], [96, 912, 912])
+    }
 }
