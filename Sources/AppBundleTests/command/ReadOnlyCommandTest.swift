@@ -19,7 +19,7 @@ struct ReadOnlyCommandTest {
     /// Read-only commands skip layout. A mutating command must never be read-only
     @Test func testMutatingCommandsAreNotReadOnly() {
         for command in [
-            "focus left", "workspace 1", "move left", "layout floating", "close", "reload-config", "mode main",
+            "focus left", "workspace 1", "move left", "layout floating", "pin", "close", "reload-config", "mode main",
             "move-node-to-workspace 2", "fullscreen", "balance-sizes", "enable toggle", "swap left",
         ] {
             #expect(parseCliArgs(command)?.isReadOnly == false, "\(command)")

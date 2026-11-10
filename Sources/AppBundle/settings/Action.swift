@@ -30,6 +30,8 @@ enum Action: Codable, Sendable, Equatable {
     /// Nothing if the window is already fullscreen: e.g. a window rule for a window that is detected again
     case enterFullscreen(FullscreenKind)
     case exitFullscreen(FullscreenKind)
+    /// Shows the floating window on every workspace (Hyprland's `pin`)
+    case pin(PinState)
     case flattenWorkspaceTree
     case balanceSizes
     case closeWindow
@@ -44,6 +46,10 @@ enum Action: Codable, Sendable, Equatable {
         case add(UInt)
         case subtract(UInt)
         case set(UInt)
+    }
+
+    enum PinState: String, Codable, Sendable, CaseIterable {
+        case toggle, on, off
     }
 
     enum Cycle: String, Codable, Sendable, CaseIterable {
@@ -92,6 +98,7 @@ enum Action: Codable, Sendable, Equatable {
             case .fullscreen(let kind): [kind.command]
             case .enterFullscreen(let kind): [kind.command, "on"]
             case .exitFullscreen(let kind): [kind.command, "off"]
+            case .pin(let state): state == .toggle ? ["pin"] : ["pin", state.rawValue]
             case .flattenWorkspaceTree: ["flatten-workspace-tree"]
             case .balanceSizes: ["balance-sizes"]
             case .closeWindow: ["close"]
@@ -154,6 +161,7 @@ enum Action: Codable, Sendable, Equatable {
             case .fullscreen(let kind): args = kind.args(rawArgs, .toggle)
             case .enterFullscreen(let kind): args = kind.args(rawArgs, .on)
             case .exitFullscreen(let kind): args = kind.args(rawArgs, .off)
+            case .pin(let state): args = PinCmdArgs(rawArgs: rawArgs, toggle: state == .toggle ? .toggle : state == .on ? .on : .off)
             case .flattenWorkspaceTree: args = FlattenWorkspaceTreeCmdArgs(rawArgs: rawArgs.slice)
             case .balanceSizes: args = BalanceSizesCmdArgs(rawArgs: rawArgs.slice)
             case .closeWindow: args = CloseCmdArgs(rawArgs: rawArgs.slice)

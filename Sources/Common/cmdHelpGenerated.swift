@@ -134,6 +134,9 @@ let move_help_generated = """
                 [--boundaries-action <boundary-action>] [--fail-if-fullscreen]
                 [--fail-if-macos-native-fullscreen] (left|down|up|right)
     """
+let pin_help_generated = """
+    USAGE: pin [-h|--help] [on|off] [--window-id <window-id>]
+    """
 let reload_config_help_generated = """
     USAGE: reload-config [-h|--help] [--no-gui] [--dry-run] [--warnings-as-errors]
     """

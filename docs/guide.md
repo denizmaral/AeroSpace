@@ -68,6 +68,11 @@ Hyprland's smart gaps).
 Floating windows aren't part of the tree, but Focus still reaches them: a floating window belongs to the smallest
 container that holds its center.
 
+A floating window can be **pinned** (the action "Pin the floating window", or `aerospace pin`): it stays on the screen
+when you go to another workspace, like a small video or a note that you want everywhere. It comes along without taking
+the focus. A window rule can pin the windows of an app: make them floating first (Change the layout › Floating), then
+pin them.
+
 With focus follows the mouse, a focused floating window keeps the focus while the mouse is over the tiled windows behind
 it: focusing a window in macOS brings it to the front, and the floating window would disappear behind it. Click the
 tiled window, or use a shortcut, to focus it.

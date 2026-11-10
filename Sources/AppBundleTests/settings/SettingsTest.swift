@@ -23,7 +23,7 @@ struct SettingsTest {
             .moveWorkspaceToMonitor(.next, wrapAround: false), .moveWorkspaceToMonitor(.prev, wrapAround: true),
             .layout([.tiles, .accordion]), .layout([.horizontal, .vertical]), .layout([.floating, .tiling]), .layout([.tiling]),
             .fullscreen(.marSpace), .fullscreen(.macOSNative), .enterFullscreen(.marSpace), .enterFullscreen(.macOSNative),
-            .exitFullscreen(.marSpace), .exitFullscreen(.macOSNative),
+            .exitFullscreen(.marSpace), .exitFullscreen(.macOSNative), .pin(.toggle), .pin(.on), .pin(.off),
             .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent, .enterMode("service"), .enterMode("main"),
             .reloadSettings,
         ] + MouseTarget.allCases.map(Action.moveMouse)

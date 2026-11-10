@@ -1,0 +1,41 @@
+= aerospace-pin(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-pin
+// tag::purpose[]
+:manpurpose: Show the floating window on every workspace
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace pin [-h|--help] [on|off] [--window-id <window-id>]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+A pinned window stays on the screen when another workspace is shown on its monitor: it goes to that workspace (a small
+video, a note, a calculator). It doesn't take the focus when it comes along.
+
+Only a floating window can be pinned: `layout floating` makes a window floating. A window that is tiled again isn't pinned
+anymore. Without `on` or `off`, the command toggles.
+
+Like Hyprland's `pin`. The pinned windows are remembered when MarSpace is restarted.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+--window-id <window-id>::
+include::./util/window-id-flag-desc.adoc[]
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

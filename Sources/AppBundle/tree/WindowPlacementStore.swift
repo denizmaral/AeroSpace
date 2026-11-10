@@ -7,6 +7,8 @@ struct WindowPlacement: Equatable, Sendable {
     let pid: Int32
     let workspace: String
     let isFloating: Bool
+    /// See ``PinCommand``
+    var isPinned = false
 }
 
 /// Immutable, memory-mapped set of window placements, and the tiling trees of the workspaces.
@@ -26,7 +28,7 @@ struct WindowPlacement: Equatable, Sendable {
 ///   pid:            Int32
 ///   nameOffset:     UInt32  (into the blob)
 ///   nameLength:     UInt16
-///   flags:          UInt8   (bit 0: floating)
+///   flags:          UInt8   (bit 0: floating, bit 1: pinned)
 ///   padding:        UInt8
 /// Blob:
 ///   UTF-8 workspace names
@@ -110,6 +112,7 @@ struct WindowPlacementSnapshot: Sendable {
             pid: Int32(bitPattern: data.loadLE(UInt32.self, at: offset + 4)),
             workspace: name,
             isFloating: data.loadLE(UInt8.self, at: offset + 14) & 1 != 0,
+            isPinned: data.loadLE(UInt8.self, at: offset + 14) & 2 != 0,
         )
     }
 
@@ -124,7 +127,7 @@ struct WindowPlacementSnapshot: Sendable {
             records.appendLE(UInt32(bitPattern: placement.pid))
             records.appendLE(UInt32(blob.count))
             records.appendLE(UInt16(clamping: name.count))
-            records.appendLE(UInt8(placement.isFloating ? 1 : 0))
+            records.appendLE(UInt8((placement.isFloating ? 1 : 0) | (placement.isPinned ? 2 : 0)))
             records.appendLE(UInt8(0))
             blob.append(name.prefix(Int(UInt16.max)))
         }
@@ -225,6 +228,7 @@ enum WindowPlacementStore {
                 pid: window.macApp.nsApp.processIdentifier,
                 workspace: workspace,
                 isFloating: window.isFloating,
+                isPinned: window.isPinned,
             ))
         }
         // E.g. the lock screen: all windows are temporarily invisible. Keep the last persisted placement

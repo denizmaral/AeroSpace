@@ -43,6 +43,7 @@ final class MacWindow: Window {
             if previousPlacement.isFloating, window.parent is TilingContainer {
                 window.bindAsFloatingWindow(to: workspace)
             }
+            window.isPinned = previousPlacement.isPinned && window.isFloating
         }
         window.lifeStatus = lifeStatus // Invisible windows (e.g. on other macOS Spaces) must not split other windows
         allWindowsMap[windowId] = window

@@ -50,7 +50,7 @@ struct ActionListEditor: View {
 enum ActionKind: String, CaseIterable, Identifiable {
     case focus, cycleFocus, focusBackAndForth, move, swap, joinWith, resize
     case workspace, workspaceBackAndForth, moveWindowToWorkspace, moveWorkspaceToMonitor
-    case layout, fullscreen, flattenWorkspaceTree, balanceSizes
+    case layout, fullscreen, pin, flattenWorkspaceTree, balanceSizes
     case closeWindow, closeAllWindowsButCurrent
     case enterMode, reloadSettings, moveMouse, custom
 
@@ -71,6 +71,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .moveWorkspaceToMonitor: "Move the workspace to a monitor"
             case .layout: "Change the layout"
             case .fullscreen: "Fullscreen"
+            case .pin: "Pin the floating window"
             case .flattenWorkspaceTree: "Reset the layout of the workspace"
             case .balanceSizes: "Balance the window sizes"
             case .closeWindow: "Close the window"
@@ -95,7 +96,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
         [.focus, .cycleFocus, .focusBackAndForth],
         [.move, .swap, .joinWith, .resize],
         [.workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor],
-        [.layout, .fullscreen, .flattenWorkspaceTree, .balanceSizes],
+        [.layout, .fullscreen, .pin, .flattenWorkspaceTree, .balanceSizes],
         [.closeWindow, .closeAllWindowsButCurrent],
         [.enterMode, .moveMouse], // Settings apply right away: reloading them is only kept for existing shortcuts
         [.custom],
@@ -116,6 +117,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .moveWorkspaceToMonitor: .moveWorkspaceToMonitor
             case .layout: .layout
             case .fullscreen, .enterFullscreen, .exitFullscreen: .fullscreen
+            case .pin: .pin
             case .flattenWorkspaceTree: .flattenWorkspaceTree
             case .balanceSizes: .balanceSizes
             case .closeWindow: .closeWindow
@@ -143,6 +145,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .moveWorkspaceToMonitor: .moveWorkspaceToMonitor(.next, wrapAround: true)
             case .layout: .layout([.tiles, .accordion])
             case .fullscreen: context == .shortcut ? .fullscreen(.marSpace) : .enterFullscreen(.marSpace)
+            case .pin: context == .shortcut ? .pin(.toggle) : .pin(.on) // A rule pins the window that has just appeared
             case .flattenWorkspaceTree: .flattenWorkspaceTree
             case .balanceSizes: .balanceSizes
             case .closeWindow: .closeWindow
@@ -219,6 +222,14 @@ struct ActionEditor: View {
             case .layout(let options): LayoutOptionsEditor(options: options) { action = .layout($0) }
             case .fullscreen(let kind), .enterFullscreen(let kind), .exitFullscreen(let kind):
                 FullscreenEditor(action: $action, kind: kind)
+            case .pin(let state):
+                Picker("", selection: Binding(get: { state }, set: { action = .pin($0) })) {
+                    Text("Pin or unpin").tag(Action.PinState.toggle)
+                    Text("Pin").tag(Action.PinState.on)
+                    Text("Unpin").tag(Action.PinState.off)
+                }
+                .labelsHidden().fixedSize()
+                .help("A pinned floating window stays on the screen when you go to another workspace")
             case .enterMode(let name):
                 Picker("", selection: Binding(get: { name }, set: { action = .enterMode($0) })) {
                     ForEach(Set(modes + [name]).sorted(), id: \.self) { Text($0).tag($0) }

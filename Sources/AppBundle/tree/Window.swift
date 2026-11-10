@@ -6,6 +6,8 @@ open class Window: TreeNode, Hashable {
     let app: any AbstractApp
     var lastFloatingSize: CGSize?
     var isFullscreen: Bool = false
+    /// A pinned floating window is on the workspace that its monitor shows. See ``PinCommand``
+    var isPinned: Bool = false
     var noOuterGapsInFullscreen: Bool = false
     var layoutReason: LayoutReason = .standard
     var lifeStatus: WindowLifeStatus = .alive
@@ -61,6 +63,7 @@ open class Window: TreeNode, Hashable {
         {
             tilingSlot = nil
         }
+        if newParent is TilingContainer { isPinned = false } // Tiled: it has its place in the layout of one workspace
         return super.bind(to: newParent, adaptiveWeight: adaptiveWeight, index: index)
     }
 

@@ -58,6 +58,8 @@ extension CmdArgs {
                 command = MacosNativeMinimizeCommand(args: self as! MacosNativeMinimizeCmdArgs)
             case .mode:
                 command = ModeCommand(args: self as! ModeCmdArgs)
+            case .pin:
+                command = PinCommand(args: self as! PinCmdArgs)
             case .move:
                 command = MoveCommand(args: self as! MoveCmdArgs)
             case .moveMouse:
