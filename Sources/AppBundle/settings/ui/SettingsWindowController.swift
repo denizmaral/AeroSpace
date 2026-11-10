@@ -27,6 +27,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             model.store.undoManager = window.undoManager // ⌘Z, ⇧⌘Z and the Edit menu
             self.window = window
         }
+        // The Dock keeps the tile image of a bundle id: AeroSpace's (the same id) would come back. The icon of the bundle
+        // goes to the Dock tile directly
+        NSApp.applicationIconImage = Bundle.main.image(forResource: "AppIcon")
         NSApp.setActivationPolicy(.regular)
         NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
