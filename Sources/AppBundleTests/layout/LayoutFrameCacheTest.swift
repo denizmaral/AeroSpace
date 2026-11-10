@@ -192,4 +192,18 @@ struct LayoutFrameCacheTest {
         try await workspace.layoutWorkspace()
         assertEquals(floating.observedFrame?.topLeftX, 300)
     }
+
+    /// A workspace that isn't shown doesn't send a position to the windows that refuse it: a refused frame would be
+    /// sent again by every layout
+    @Test func testWindowsThatCantBeMovedAreNotHiddenInCorner() {
+        let workspace = Workspace.get(byName: name)
+        let tiling = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        let floating = TestWindow.new(id: 2, parent: workspace.floatingWindowsContainer)
+        let ofHiddenApp = TestWindow.new(id: 3, parent: workspace.macOsNativeHiddenAppsWindowsContainer)
+        TestWindow.new(id: 4, parent: workspace.macOsNativeFullscreenWindowsContainer)
+        TestWindow.new(id: 5, parent: workspace.rootTilingContainer).lifeStatus = .invisible // On another macOS Space
+        TestWindow.new(id: 6, parent: workspace.rootTilingContainer).lifeStatus = .dead
+
+        assertEquals(workspace.windowsToHideInCorner.map(\.windowId), [tiling, floating, ofHiddenApp].map(\.windowId))
+    }
 }

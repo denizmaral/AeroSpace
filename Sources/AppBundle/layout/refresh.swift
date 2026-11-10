@@ -221,9 +221,21 @@ private func layoutWorkspaces() async throws {
     }
     for workspace in Workspace.all where !workspace.isVisible {
         let corner = monitorToOptimalHideCorner[workspace.workspaceMonitorInfo.rect.topLeftCorner] ?? .bottomRightCorner
-        for window in workspace.allLeafWindowsRecursive {
+        for window in workspace.windowsToHideInCorner {
             try await (window as! MacWindow).hideInCorner(corner) // todo as!
         }
+    }
+}
+
+extension Workspace {
+    /// The windows that are moved to a corner of the screen while the workspace isn't shown. Not the windows that can't
+    /// be moved: a window in macOS fullscreen, on another macOS Space or closed (its tombstone) refuses the position.
+    /// A refused frame is sent again by the next layout (see ``Window/setAxFrame(_:_:readBack:)``): every refresh
+    /// session made accessibility calls to the app of such a window (Zen in macOS fullscreen: its enhanced user
+    /// interface switched off and on, and a position that it refused, for every command and every window event)
+    @MainActor
+    var windowsToHideInCorner: [Window] {
+        allLeafWindowsRecursive.filter { $0.lifeStatus == .alive && !($0.parent is MacosFullscreenWindowsContainer) }
     }
 }
 
