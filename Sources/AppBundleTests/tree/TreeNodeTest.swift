@@ -99,6 +99,25 @@ struct TreeNodeTest {
         )
     }
 
+    /// The single child of the root was left mustBeFlattened by the previous normalization (e.g. an empty sibling was
+    /// removed in the same pass). The root takes its place, and a single-child grandchild is flattened into the root
+    @Test func testNormalizeContainers_rootTakesMustBeFlattenedChild() {
+        config.enableNormalizationFlattenContainers = true
+        let workspace = Workspace.get(byName: name)
+        var child: TilingContainer!
+        workspace.rootTilingContainer.apply {
+            child = TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                TilingContainer.newHTiles(parent: $0, adaptiveWeight: 1).apply {
+                    TestWindow.new(id: 1, parent: $0)
+                }
+            }
+        }
+        child.lifeStatus = .mustBeFlattened
+        workspace.normalizeContainers() // Binding to the root that took the lifeStatus of the child crashed
+        assertEquals(workspace.rootTilingContainer.lifeStatus, .alive)
+        assertEquals(workspace.rootTilingContainer.children.map(\.layoutDescription), [.window(1)])
+    }
+
     @Test func testNormalizeContainers_removeEffectivelyEmpty() {
         let workspace = Workspace.get(byName: name)
         workspace.rootTilingContainer.apply {

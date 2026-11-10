@@ -26,6 +26,9 @@ extension TilingContainer {
                     grandChild.bind(to: self, adaptiveWeight: data.adaptiveWeight, index: INDEX_BIND_LAST)
                 }
                 self.copyFrom(child)
+                // copyFrom took the lifeStatus of the child (e.g. mustBeFlattened from the previous normalization).
+                // The root is always alive, and its children may be flattened into it below
+                self.lifeStatus = .alive
             }
             for child in children {
                 (child as? TilingContainer)?.unbindEmptyAndFlattenContainersRecursive()
