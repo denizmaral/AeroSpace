@@ -676,4 +676,33 @@ struct ProportionalWeightsTest {
         assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3), .window(4)])]))
         assertEquals(rects(workspace), before)
     }
+
+    /// The root is flattened twice in a row: 1 leaves (the root takes v), 2 leaves (the root takes h). Whichever comes
+    /// back first, the tree and the sizes are restored when both are back
+    @Test(arguments: [false, true])
+    func testRootFlattenedTwice(reversedReturn: Bool) async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window2: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0, adaptiveWeight: 700)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1220).apply {
+                window2 = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 400)
+                TilingContainer.newHTiles(parent: $0, adaptiveWeight: 679).apply {
+                    TestWindow.new(id: 3, parent: $0, adaptiveWeight: 500)
+                    TestWindow.new(id: 4, parent: $0, adaptiveWeight: 720)
+                }
+            }
+        }
+        try await workspace.layoutWorkspace()
+        let before = rects(workspace)
+        try await setFullscreen([window1], true, workspace)
+        try await setFullscreen([window2], true, workspace)
+        for window in reversedReturn ? [window2!, window1!] : [window1!, window2!] {
+            try await setFullscreen([window], false, workspace)
+        }
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .h_tiles([.window(3), .window(4)])])]))
+        assertEquals(rects(workspace), before)
+    }
 }

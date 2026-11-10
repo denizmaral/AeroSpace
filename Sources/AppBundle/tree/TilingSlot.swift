@@ -132,23 +132,24 @@ extension Window {
     @MainActor
     private func bindToParent(of slot: TilingSlot, on workspace: Workspace) -> Bool {
         guard let parent = slot.parent, parent.lifeStatus == .alive, parent.nodeWorkspace === workspace else { return false }
+        // The windows that flattened the root after the window left are still away: wrap the children of the root again on
+        // their behalf, the last one first (the root flattened several times in a row: h[1, v[2, h[3, 4]]], 1 and 2 left)
+        for _ in 0 ..< 8 where parent.isRootContainer {
+            guard let away = allAwayWindows(of: workspace).first(where: { away in
+                // That window was a sibling then (or in a sibling), not away. A window that left after it comes back into
+                // the root as it is (the user may have changed its layout)
+                away.tilingSlot?.needsRootRewrap(parent) == true && slot.siblings.contains { sibling in
+                    !sibling.isAway && (sibling.node === away || sibling.windows.contains { $0.window === away })
+                }
+            }), let awaySlot = away.tilingSlot else { break }
+            let wrapper = rewrapRoot(parent, as: awaySlot, of: away)
+            away.tilingSlot?.neighbor = wrapper
+        }
         if slot.needsRootRewrap(parent) {
             // The root has only the wrapper and the window then: both get their old weights
             rewrapRoot(parent, as: slot, of: self)
             bind(to: parent, adaptiveWeight: slot.adaptiveWeight, index: slot.isAfterNeighbor ? INDEX_BIND_LAST : 0)
             return true
-        }
-        if parent.isRootContainer,
-           let away = allAwayWindows(of: workspace).first(where: { away in
-               // The window left the root before the window that flattened it: that one was a sibling then, not away. A
-               // window that left after it comes back into the root as it is (the user may have changed its layout)
-               away.tilingSlot?.needsRootRewrap(parent) == true && slot.siblings.contains { $0.node === away && !$0.isAway }
-           }),
-           let awaySlot = away.tilingSlot
-        {
-            // Wrap the children of the root again on behalf of the window that is still away
-            let wrapper = rewrapRoot(parent, as: awaySlot, of: away)
-            away.tilingSlot?.neighbor = wrapper
         }
         bind(
             to: parent,
@@ -309,10 +310,11 @@ private func rewrapRoot(_ root: TilingContainer, as slot: TilingSlot, of flatten
     root.changeOrientation(slot.orientation)
     root.layout = slot.layout
     // The windows that left the root while it had the children of the flattened container (after `flattener`, with its
-    // orientation and layout, and they didn't flatten the root themselves) come back to the wrapper
+    // orientation and layout) come back to the wrapper. Also a window that flattened the root again then: the wrapper
+    // has the children it took
     if let workspace = root.nodeWorkspace {
         for window in allAwayWindows(of: workspace) where window !== flattener {
-            guard let other = window.tilingSlot, other.parent === root, !other.isRootFlattened,
+            guard let other = window.tilingSlot, other.parent === root,
                   other.orientation == container.orientation, other.layout == container.layout,
                   other.siblings.contains(where: { $0.node === flattener && $0.isAway })
             else { continue }
