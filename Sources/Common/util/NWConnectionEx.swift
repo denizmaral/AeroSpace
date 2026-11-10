@@ -3,15 +3,18 @@ import Foundation
 
 extension NWConnection {
     public func writeAtomic(_ msg: Codable, _ encoder: JSONEncoder = JSONEncoder()) async -> ((), error: NWError?) {
+        await withCheckedContinuation { cont in
+            sendAtomic(msg, encoder) { error in cont.resume(returning: ((), error)) }
+        }
+    }
+
+    /// Queues the message (its length, then its JSON) and returns. Messages are sent in the order of the calls
+    public func sendAtomic(_ msg: Codable, _ encoder: JSONEncoder = JSONEncoder(), completion: @escaping @Sendable (NWError?) -> Void) {
         let payload = Result { try encoder.encode(msg) }.getOrDie()
         var data = withUnsafeBytes(of: UInt32(payload.count)) { pointer in unsafe Data.init(pointer) }
         check(data.count == 4)
         data.append(payload)
-        return await withCheckedContinuation { cont in
-            send(content: data, completion: .contentProcessed { error in
-                cont.resume(returning: ((), error))
-            })
-        }
+        send(content: data, completion: .contentProcessed(completion))
     }
 
     public func initConnection() async -> ((), error: InitConnectionError?) {
