@@ -3,13 +3,7 @@ import Common
 
 @MainActor private var focusFollowsMouseMonitor: Any? = nil
 @MainActor private var focusFollowsTask: Task<(), any Error>? = nil
-/// The window under the mouse as of the previous mouseMoved event.
-///
-/// The focus follows the mouse only when the mouse enters a different window (like Hyprland's `mouse_refocus = false`):
-/// - mouseMoved events arrive at the display refresh rate. Most of them don't cross window boundaries, and they are
-///   handled without any accessibility calls and without refresh sessions
-/// - Small mouse moves don't steal the focus that was changed by other means (keyboard, Mission Control, cmd-tab)
-@MainActor private weak var windowUnderMouse: Window? = nil
+@MainActor private var mouseTracker = FocusFollowsMouseTracker()
 
 @MainActor func syncFocusFollowsMouse(_ config: Config) {
     if config.focusFollowsMouse.enabled == (focusFollowsMouseMonitor != nil) {
@@ -21,7 +15,7 @@ import Common
         focusFollowsMouseMonitor = nil
         focusFollowsTask?.cancel()
         focusFollowsTask = nil
-        windowUnderMouse = nil
+        mouseTracker = FocusFollowsMouseTracker()
         return
     }
 
@@ -31,30 +25,31 @@ import Common
         guard let token: RunSessionGuard = .isServerEnabled, !MissionControl.isActive else { return }
         let location = event.locationInWindow.withYAxisFlipped
         let window = location.monitorApproximation.visibleWorkspace.windowUnderMouse(location)
-        if window === windowUnderMouse { return }
-        windowUnderMouse = window
-        focusFollowsTask?.cancel()
-        guard let window, window != globalFocus.windowOrNil else { return }
+        let isRecheck: Bool
+        switch mouseTracker.mouseMoved(over: window, focused: globalFocus.windowOrNil, now: .now) {
+            case .stay: return
+            case .leave:
+                focusFollowsTask?.cancel()
+                return
+            case .enter:
+                focusFollowsTask?.cancel()
+                isRecheck = false
+            case .recheck:
+                // No check is running (the previous one scheduled this one). Its focus session may still be: not canceled
+                isRecheck = true
+        }
         focusFollowsTask = Task.startUnstructured { @MainActor in
             // Ignores macOS menubar dropdown, but, unfortunately, it doesn't ignore non-native menu-like fake windows.
             // todo: It would be cool to somehow reuse isWindowHeuristic logic here
-            let target: Window?
-            switch await axWindowUnderMouse(location) {
-                case .notAWindow:
-                    // E.g. a menu or a popover is over the window. Retry a bit later, not on every mouse move: each check
-                    // is an AX call. The task is canceled if the mouse enters another window meanwhile
-                    try await Task.sleep(for: .milliseconds(150))
-                    if windowUnderMouse === window { windowUnderMouse = nil }
-                    return
-                case .window(let nativeWindowId, let pid):
-                    // The rects of the last layout don't know the z-order (e.g. a floating window behind a tiling one):
-                    // the window that is really on top. Nothing if AeroSpace doesn't manage it
-                    target = Window.get(byNativeId: nativeWindowId, pid: pid)
-                case .unknown:
-                    target = window
+            let real: Window? = switch await axWindowUnderMouse(location) {
+                case .notAWindow: nil // E.g. a menu or a popover is over the window
+                // Nothing if AeroSpace doesn't manage it
+                case .window(let nativeWindowId, let pid): Window.get(byNativeId: nativeWindowId, pid: pid)
+                case .unknown: window
             }
             try checkCancellation()
-            guard let target, target != globalFocus.windowOrNil else { return }
+            guard let target = mouseTracker.checked(real: real, isRecheck: isRecheck, focused: globalFocus.windowOrNil, now: .now)
+            else { return }
             try await runLightSession(.focusFollowsMouse, token) {
                 _ = target.focusWindow()
                 target.nativeFocus()
@@ -67,7 +62,73 @@ import Common
 /// window
 @MainActor func resetFocusFollowsMouse() {
     let location = NSEvent.mouseLocation.withYAxisFlipped
-    windowUnderMouse = location.monitorApproximation.visibleWorkspace.windowUnderMouse(location)
+    mouseTracker = FocusFollowsMouseTracker(hitWindow: location.monitorApproximation.visibleWorkspace.windowUnderMouse(location))
+}
+
+/// Decides when focus-follows-mouse checks which window is really under the mouse, and which window it focuses.
+///
+/// The focus follows the mouse only when the mouse enters a different window (like Hyprland's `mouse_refocus = false`):
+/// - mouseMoved events arrive at the display refresh rate. An in-memory hit test against the rects of the last layout
+///   detects that the mouse entered another window: most events are handled without accessibility calls and without
+///   refresh sessions. Only then the accessibility API tells which window is really on top under the mouse
+/// - Small mouse moves don't steal the focus that was changed by other means (keyboard, Mission Control, cmd-tab)
+///
+/// The rects of the last layout are not what is on the screen everywhere: a window that refuses to shrink to its tile
+/// (e.g. App Store is at least 1000 wide) covers a part of the next tile, a floating window can be behind a tiling one, a
+/// menu or a popover can be over the window. Where the check finds another window than the hit test, the hit test can't
+/// tell when the mouse crosses the real border. So the check runs again on mouse moves, at most once per
+/// `recheckInterval`, until both agree or the mouse enters another window
+@MainActor
+struct FocusFollowsMouseTracker {
+    static let recheckInterval: Duration = .milliseconds(100)
+
+    enum MouseMove: Equatable {
+        /// Over the same window. Nothing to do
+        case stay
+        /// Over another window that needs no check: none (e.g. a gap) or the focused window. A check of the previous one
+        /// is obsolete
+        case leave
+        /// Over another window: check which window is really under the mouse. A check of the previous one is obsolete
+        case enter
+        /// Over the same window, where the previous check found another one on top: check again
+        case recheck
+    }
+
+    /// The hit test result as of the previous mouseMoved event
+    private weak var hitWindow: Window?
+    /// The window that the last check found really under the mouse. nil: none that AeroSpace manages, or not checked
+    private weak var realWindow: Window?
+    /// The earliest next check while the hit test and the last check disagree. nil: they agree, or a check is running
+    private var recheckAt: ContinuousClock.Instant? = nil
+
+    init(hitWindow: Window? = nil) {
+        self.hitWindow = hitWindow
+    }
+
+    mutating func mouseMoved(over window: Window?, focused: Window?, now: ContinuousClock.Instant) -> MouseMove {
+        if window === hitWindow {
+            guard let recheckAt, now >= recheckAt else { return .stay }
+            self.recheckAt = nil
+            return .recheck
+        }
+        hitWindow = window
+        realWindow = nil
+        recheckAt = nil
+        guard let window, window != focused else { return .leave }
+        return .enter
+    }
+
+    /// - Parameter real: the window really on top under the mouse. nil: not managed by AeroSpace, a menu or a popover
+    /// - Returns: the window to focus
+    mutating func checked(real: Window?, isRecheck: Bool, focused: Window?, now: ContinuousClock.Instant) -> Window? {
+        let previous = realWindow
+        realWindow = real
+        recheckAt = real === hitWindow ? nil : now + Self.recheckInterval
+        guard let real, real != focused else { return nil }
+        // Moving inside the same window, the focus follows only into another window: the previous check found the window
+        // that was focused by other means meanwhile, small mouse moves don't steal the focus from it
+        return !isRecheck || real !== previous ? real : nil
+    }
 }
 
 extension Workspace {
