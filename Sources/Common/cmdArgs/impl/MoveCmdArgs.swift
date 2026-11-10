@@ -1,6 +1,12 @@
 public struct MoveCmdArgs: CmdArgs {
     /*conforms*/ public var commonState: CmdArgsCommonState
     fileprivate init(rawArgs: StrArrSlice) { self.commonState = .init(rawArgs) }
+
+    public init(rawArgs: [String], direction: CardinalDirection) {
+        self.commonState = .init(rawArgs.slice)
+        self.direction = .initialized(direction)
+    }
+
     public static let parser: CmdParser<Self> = .init(
         kind: .move,
         help: move_help_generated,

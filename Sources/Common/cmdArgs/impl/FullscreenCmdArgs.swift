@@ -1,6 +1,12 @@
 public struct FullscreenCmdArgs: CmdArgs {
     /*conforms*/ public var commonState: CmdArgsCommonState
     fileprivate init(rawArgs: StrArrSlice) { self.commonState = .init(rawArgs) }
+
+    public init(rawArgs: [String], toggle: ToggleEnum) {
+        self.commonState = .init(rawArgs.slice)
+        self.toggle = toggle
+    }
+
     public static let parser: CmdParser<Self> = .init(
         kind: .fullscreen,
         help: fullscreen_help_generated,

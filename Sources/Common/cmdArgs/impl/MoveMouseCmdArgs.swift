@@ -1,6 +1,12 @@
 public struct MoveMouseCmdArgs: CmdArgs {
     /*conforms*/ public var commonState: CmdArgsCommonState
     init(rawArgs: StrArrSlice) { self.commonState = .init(rawArgs) }
+
+    public init(rawArgs: [String], mouseTarget: MouseTarget) {
+        self.commonState = .init(rawArgs.slice)
+        self.mouseTarget = .initialized(mouseTarget)
+    }
+
     public static let parser: CmdParser<Self> = .init(
         kind: .moveMouse,
         help: move_mouse_help_generated,

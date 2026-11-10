@@ -26,8 +26,8 @@ shortcut, a window rule or an automation does; `.custom` is the escape hatch for
 
 - `SettingsRepository`: a checksummed binary property list in `~/Library/Application Support/MarSpace`, written atomically,
   with a backup. A file that can't be read is never overwritten
-- `SettingsCompiler`: settings → the runtime `Config`, through the command parser. Invalid parts are reported as
-  problems and left out
+- `SettingsCompiler`: settings → the runtime `Config`. Typed actions build their commands directly, only custom command
+  lines are parsed. Invalid parts are reported as problems and left out
 - `SettingsDefaults`: the settings of the first launch, written in Swift (there is no config file, and no TOML)
 - `ui/`: the SwiftUI settings window. `SettingsModel` saves and applies every edit shortly after the last one
 

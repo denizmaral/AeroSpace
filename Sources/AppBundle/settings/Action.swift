@@ -3,8 +3,8 @@ import Common
 /// What a shortcut, a window rule or an automation does. The settings window edits the typed cases with pickers;
 /// ``custom(_:)`` is the escape hatch for any other command line (validated by the command parser).
 ///
-/// An action compiles to the command language of the engine (``commandLine``): the same parser and the same commands as
-/// the CLI, nothing is implemented twice
+/// A typed action builds its engine command from its values (``command``), without the parser: the same commands as the
+/// CLI, nothing is implemented twice
 enum Action: Codable, Sendable, Equatable {
     case focus(CardinalDirection)
     case move(CardinalDirection)
@@ -54,110 +54,122 @@ enum Action: Codable, Sendable, Equatable {
         var command: String { self == .marSpace ? "fullscreen" : "macos-native-fullscreen" }
     }
 
-    /// The command line that the action compiles to
-    var commandLine: String {
+    /// The command and its arguments, as the CLI takes them (not quoted). Empty for a custom command line
+    private var words: [String] {
         switch self {
-            case .focus(let direction): "focus \(direction.rawValue)"
-            case .move(let direction): "move \(direction.rawValue)"
-            case .joinWith(let direction): "join-with \(direction.rawValue)"
+            case .focus(let direction): ["focus", direction.rawValue]
+            case .move(let direction): ["move", direction.rawValue]
+            case .joinWith(let direction): ["join-with", direction.rawValue]
             case .resize(let dimension, let amount):
                 switch amount {
-                    case .add(let value): "resize \(dimension.rawValue) +\(value)"
-                    case .subtract(let value): "resize \(dimension.rawValue) -\(value)"
-                    case .set(let value): "resize \(dimension.rawValue) \(value)"
+                    case .add(let value): ["resize", dimension.rawValue, "+\(value)"]
+                    case .subtract(let value): ["resize", dimension.rawValue, "-\(value)"]
+                    case .set(let value): ["resize", dimension.rawValue, "\(value)"]
                 }
-            case .workspace(let name): "workspace \(name.shellQuoted)"
-            case .workspaceBackAndForth: "workspace-back-and-forth"
-            case .moveWindowToWorkspace(let name): "move-node-to-workspace \(name.shellQuoted)"
+            case .workspace(let name): ["workspace", name]
+            case .workspaceBackAndForth: ["workspace-back-and-forth"]
+            case .moveWindowToWorkspace(let name): ["move-node-to-workspace", name]
             case .moveWorkspaceToMonitor(let step, let wrapAround):
-                wrapAround ? "move-workspace-to-monitor --wrap-around \(step.rawValue)" : "move-workspace-to-monitor \(step.rawValue)"
-            case .layout(let options): (["layout"] + options.map(\.rawValue)).joined(separator: " ")
-            case .fullscreen(let kind): kind.command
-            case .enterFullscreen(let kind): "\(kind.command) on"
-            case .exitFullscreen(let kind): "\(kind.command) off"
-            case .flattenWorkspaceTree: "flatten-workspace-tree"
-            case .balanceSizes: "balance-sizes"
-            case .closeWindow: "close"
-            case .closeAllWindowsButCurrent: "close-all-windows-but-current"
-            case .enterMode(let name): "mode \(name.shellQuoted)"
-            case .reloadSettings: "reload-config"
-            case .moveMouse(let target): "move-mouse \(target.rawValue)"
-            case .custom(let line): line
+                wrapAround ? ["move-workspace-to-monitor", "--wrap-around", step.rawValue] : ["move-workspace-to-monitor", step.rawValue]
+            case .layout(let options): ["layout"] + options.map(\.rawValue)
+            case .fullscreen(let kind): [kind.command]
+            case .enterFullscreen(let kind): [kind.command, "on"]
+            case .exitFullscreen(let kind): [kind.command, "off"]
+            case .flattenWorkspaceTree: ["flatten-workspace-tree"]
+            case .balanceSizes: ["balance-sizes"]
+            case .closeWindow: ["close"]
+            case .closeAllWindowsButCurrent: ["close-all-windows-but-current"]
+            case .enterMode(let name): ["mode", name]
+            case .reloadSettings: ["reload-config"]
+            case .moveMouse(let target): ["move-mouse", target.rawValue]
+            case .custom: []
         }
     }
 
-    /// The typed action that runs exactly the same command as `commandLine`, otherwise ``custom(_:)``. A candidate is read
-    /// from the words of the line and accepted only if it parses to the same command (the parser decides, not the words)
-    init(commandLine: String) {
-        let line = commandLine.trimmingCharacters(in: .whitespaces)
-        if let candidate = Self.candidate(line), candidate.commandLine == line || candidate.isEquivalent(to: line) {
-            self = candidate
-        } else {
-            self = .custom(line)
-        }
+    /// The command line of the action: shown in the settings window, and where a custom command line starts from
+    var commandLine: String {
+        if case .custom(let line) = self { return line }
+        return words.map(\.shellQuoted).joined(separator: " ")
     }
 
-    private func isEquivalent(to line: String) -> Bool {
-        guard case .cmd(let original) = parseCommand(line, allowExecAndForget: true, allowEval: false),
-              case .cmd(let compiled) = parseCommand(commandLine, allowExecAndForget: true, allowEval: false)
-        else { return false }
-        return original.strictEquals(compiled)
-    }
-
-    private static func candidate(_ line: String) -> Action? {
-        // Quotes, sequences, pipes, conditions and comments are custom command lines
-        if line.contains(where: { "'\";&|()$`\\#".contains($0) }) { return nil }
-        let words = line.split(separator: " ").map(String.init)
-        guard let name = words.first else { return nil }
-        let args = Array(words.dropFirst())
-        switch (name, args.count) {
-            case ("focus", 1): return CardinalDirection(rawValue: args[0]).map(Action.focus)
-            case ("move", 1): return CardinalDirection(rawValue: args[0]).map(Action.move)
-            case ("join-with", 1): return CardinalDirection(rawValue: args[0]).map(Action.joinWith)
-            case ("resize", 2):
-                guard let dimension = ResizeCmdArgs.Dimension(rawValue: args[0]) else { return nil }
-                let raw = args[1]
-                if raw.hasPrefix("+") { return UInt(raw.dropFirst()).map { .resize(dimension, .add($0)) } }
-                if raw.hasPrefix("-") { return UInt(raw.dropFirst()).map { .resize(dimension, .subtract($0)) } }
-                return UInt(raw).map { .resize(dimension, .set($0)) }
-            case ("workspace", 1) where args[0].isWorkspaceName: return .workspace(args[0]) // Not `next`: a direction
-            case ("workspace-back-and-forth", 0): return .workspaceBackAndForth
-            case ("move-node-to-workspace", 1) where args[0].isWorkspaceName: return .moveWindowToWorkspace(args[0])
-            case ("move-workspace-to-monitor", 1): return MonitorStep(rawValue: args[0]).map { .moveWorkspaceToMonitor($0, wrapAround: false) }
-            case ("move-workspace-to-monitor", 2) where args[0] == "--wrap-around":
-                return MonitorStep(rawValue: args[1]).map { .moveWorkspaceToMonitor($0, wrapAround: true) }
-            case ("layout", 1...):
-                let options = args.compactMap(LayoutOption.init(rawValue:))
-                return options.count == args.count ? .layout(options) : nil
-            case ("fullscreen", 0): return .fullscreen(.marSpace)
-            case ("macos-native-fullscreen", 0): return .fullscreen(.macOSNative)
-            case ("fullscreen", 1), ("macos-native-fullscreen", 1):
-                let kind: FullscreenKind = name == "fullscreen" ? .marSpace : .macOSNative
-                switch args[0] {
-                    case "on": return .enterFullscreen(kind)
-                    case "off": return .exitFullscreen(kind)
-                    default: return nil
+    /// The engine command. A typed action builds it from its values, nothing is parsed; its words are kept for what the
+    /// command prints (e.g. `aerospace config`, the logs). A custom command line is parsed
+    @MainActor var command: ParsedCmd<Shell<any Command>> {
+        let rawArgs = Array(words.dropFirst())
+        let args: any CmdArgs
+        switch self {
+            case .focus(let direction): args = FocusCmdArgs(rawArgs: rawArgs.slice, cardinalOrDfsDirection: .direction(direction))
+            case .move(let direction): args = MoveCmdArgs(rawArgs: rawArgs, direction: direction)
+            case .joinWith(let direction): args = JoinWithCmdArgs(rawArgs: rawArgs, direction: direction)
+            case .resize(let dimension, let amount):
+                let units: ResizeCmdArgs.Units = switch amount {
+                    case .add(let value): .add(value)
+                    case .subtract(let value): .subtract(value)
+                    case .set(let value): .set(value)
                 }
-            case ("flatten-workspace-tree", 0): return .flattenWorkspaceTree
-            case ("balance-sizes", 0): return .balanceSizes
-            case ("close", 0): return .closeWindow
-            case ("close-all-windows-but-current", 0): return .closeAllWindowsButCurrent
-            case ("mode", 1) where !args[0].hasPrefix("-"): return .enterMode(args[0]) // Not `--help`
-            case ("reload-config", 0): return .reloadSettings
-            case ("move-mouse", 1): return MouseTarget(rawValue: args[0]).map(Action.moveMouse)
-            default: return nil
+                args = ResizeCmdArgs(rawArgs: rawArgs, dimension: dimension, units: units)
+            case .workspace(let name), .moveWindowToWorkspace(let name):
+                // E.g. `next` would be a direction
+                let target: WorkspaceTarget
+                switch WorkspaceName.parse(name) {
+                    case .success(let name): target = .direct(name)
+                    case .failure(let message): return .failure(message, EXIT_CODE_TWO)
+                }
+                args = if case .workspace = self {
+                    WorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target))
+                } else {
+                    MoveNodeToWorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target))
+                }
+            case .workspaceBackAndForth: args = WorkspaceBackAndForthCmdArgs(rawArgs: rawArgs.slice)
+            case .moveWorkspaceToMonitor(let step, let wrapAround):
+                args = MoveWorkspaceToMonitorCmdArgs(rawArgs: rawArgs.slice)
+                    .with(\.wrapAround, wrapAround)
+                    .with(\.target, .initialized(.relative(step == .next ? .next : .prev)))
+            case .layout(let options):
+                if options.isEmpty { return .failure("No layout is chosen", EXIT_CODE_TWO) }
+                args = LayoutCmdArgs(rawArgs: rawArgs, toggleBetween: options.map(\.layoutDescription))
+            case .fullscreen(let kind): args = kind.args(rawArgs, .toggle)
+            case .enterFullscreen(let kind): args = kind.args(rawArgs, .on)
+            case .exitFullscreen(let kind): args = kind.args(rawArgs, .off)
+            case .flattenWorkspaceTree: args = FlattenWorkspaceTreeCmdArgs(rawArgs: rawArgs.slice)
+            case .balanceSizes: args = BalanceSizesCmdArgs(rawArgs: rawArgs.slice)
+            case .closeWindow: args = CloseCmdArgs(rawArgs: rawArgs.slice)
+            case .closeAllWindowsButCurrent: args = CloseAllWindowsButCurrentCmdArgs(rawArgs: rawArgs.slice)
+            case .enterMode(let name): args = ModeCmdArgs(rawArgs: rawArgs.slice).with(\.targetMode, .initialized(name))
+            case .reloadSettings: args = ReloadConfigCmdArgs(rawArgs: rawArgs.slice)
+            case .moveMouse(let target): args = MoveMouseCmdArgs(rawArgs: rawArgs, mouseTarget: target)
+            case .custom(let line): return parseCommand(line, allowExecAndForget: true, allowEval: false)
+        }
+        return args.toCommand().map { .cmd($0) }
+    }
+}
+
+extension Action.LayoutOption {
+    fileprivate var layoutDescription: LayoutCmdArgs.LayoutDescription {
+        switch self {
+            case .tiles: .tiles
+            case .accordion: .accordion
+            case .horizontal: .horizontal
+            case .vertical: .vertical
+            case .floating: .floating
+            case .tiling: .tiling
+        }
+    }
+}
+
+extension Action.FullscreenKind {
+    fileprivate func args(_ rawArgs: [String], _ toggle: ToggleEnum) -> any CmdArgs {
+        switch self {
+            case .marSpace: FullscreenCmdArgs(rawArgs: rawArgs, toggle: toggle)
+            case .macOSNative: MacosNativeFullscreenCmdArgs(rawArgs: rawArgs.slice).with(\.toggle, toggle)
         }
     }
 }
 
 extension String {
-    fileprivate var isWorkspaceName: Bool {
-        if case .success = WorkspaceName.parse(self) { true } else { false }
-    }
-
     /// Quoted for the command language when needed (e.g. a workspace name with a space)
     fileprivate var shellQuoted: String {
-        let isPlain = !isEmpty && allSatisfy { $0.isLetter || $0.isNumber || "-_.".contains($0) }
+        let isPlain = !isEmpty && allSatisfy { $0.isLetter || $0.isNumber || "-_.+".contains($0) }
         return isPlain ? self : "'" + replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }

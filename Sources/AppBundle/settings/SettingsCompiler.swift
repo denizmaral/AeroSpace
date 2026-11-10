@@ -104,27 +104,13 @@ extension Settings {
 private func compileActions(_ actions: some Collection<Action>, _ location: String, _ problems: inout [SettingsProblem]) -> Shell<any Command>? {
     var shells: [Shell<any Command>] = []
     for action in actions {
-        // E.g. a workspace named `next` would be a direction, `Mail Box` a quoted line that the parser refuses
-        if let name = action.workspaceName, case .failure(let message) = WorkspaceName.parse(name) {
-            problems.append(.init(location: location, message: message))
-            continue
-        }
-        switch parseCommand(action.commandLine, allowExecAndForget: true, allowEval: false) {
+        switch action.command {
             case .cmd(let shell): shells.append(shell)
             case .help: problems.append(.init(location: location, message: "'\(action.commandLine)' only prints a help text"))
             case .failure(let failure): problems.append(.init(location: location, message: failure.msg))
         }
     }
     return shells.count == actions.count ? .newCompound(shells, Shell<any Command>.seq) : nil
-}
-
-extension Action {
-    fileprivate var workspaceName: String? {
-        switch self {
-            case .workspace(let name), .moveWindowToWorkspace(let name): name
-            default: nil
-        }
-    }
 }
 
 extension BorderColor {
@@ -251,9 +237,7 @@ extension Settings {
         for (modifiers, action) in [(goTo, Action.workspace), (moveWindowTo, Action.moveWindowToWorkspace)] {
             guard let modifiers else { continue }
             for name in workspaces.persistent where name.count == 1 {
-                guard let key = keyForCharacter(name),
-                      case .cmd(let shell) = parseCommand(action(name).commandLine, allowExecAndForget: false, allowEval: false)
-                else { continue }
+                guard let key = keyForCharacter(name), case .cmd(let shell) = action(name).command else { continue }
                 let chord = KeyChord(modifiers, key)
                 let binding = HotkeyBinding(modifiers.eventFlags, key, shell, descriptionWithKeyNotation: keyNames.notation(chord))
                 bindings[binding.descriptionWithKeyCode] = binding

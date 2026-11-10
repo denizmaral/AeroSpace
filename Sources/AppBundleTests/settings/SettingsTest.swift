@@ -4,41 +4,55 @@ import Foundation
 import HotKey
 import Testing
 
-/// The settings replace the TOML config. Importing a TOML config and compiling the settings must give exactly the config
-/// that the TOML parser gives: nothing of the user's setup is lost
+/// The settings compile to the config of the engine: typed actions build their commands, invalid parts are problems
 @MainActor
 @Suite(.serializedGlobally)
 struct SettingsTest {
     init() { setUpWorkspacesForTests() }
 
-    @Test func testTypedActionsAndTheirCommandLines() {
+    /// A typed action builds its command without the parser: exactly the command that its command line parses to, and it
+    /// prints the same (`aerospace config`, the logs)
+    @Test func testTypedActionsBuildTheCommandsOfTheirCommandLines() {
         let actions: [Action] = [
-            .focus(.up), .move(.down), .joinWith(.right), .resize(.width, .add(50)), .resize(.height, .set(300)),
-            .workspace("T"), .workspace("my space"), .workspaceBackAndForth, .moveWindowToWorkspace("B"),
-            .moveWorkspaceToMonitor(.prev, wrapAround: false), .layout([.floating, .tiling]), .fullscreen(.macOSNative),
-            .enterFullscreen(.macOSNative), .exitFullscreen(.marSpace),
-            .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent, .enterMode("service"),
-            .reloadSettings, .moveMouse(.windowLazyCenter),
-        ]
+            .focus(.left), .focus(.down), .move(.up), .move(.right), .joinWith(.left), .joinWith(.down),
+            .resize(.smart, .add(50)), .resize(.width, .subtract(50)), .resize(.height, .set(300)), .resize(.smartOpposite, .add(1)),
+            .workspace("T"), .workspace("1#main"), .workspace("A+B"), .workspaceBackAndForth,
+            .moveWindowToWorkspace("B"), .moveWindowToWorkspace("1#main"),
+            .moveWorkspaceToMonitor(.next, wrapAround: false), .moveWorkspaceToMonitor(.prev, wrapAround: true),
+            .layout([.tiles, .accordion]), .layout([.horizontal, .vertical]), .layout([.floating, .tiling]), .layout([.tiling]),
+            .fullscreen(.marSpace), .fullscreen(.macOSNative), .enterFullscreen(.marSpace), .enterFullscreen(.macOSNative),
+            .exitFullscreen(.marSpace), .exitFullscreen(.macOSNative),
+            .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent, .enterMode("service"), .enterMode("main"),
+            .reloadSettings,
+        ] + MouseTarget.allCases.map(Action.moveMouse)
+        assertEquals(Set(actions.map(ActionKind.init)), Set(ActionKind.allCases).subtracting([.custom]))
         for action in actions {
-            if case .workspace("my space") = action {
-                assertEquals(action.commandLine, "workspace 'my space'")
-                continue // A quoted line stays a custom command line when it's read back
-            }
-            assertEquals(Action(commandLine: action.commandLine), action)
-            guard case .cmd = parseCommand(action.commandLine, allowExecAndForget: true, allowEval: false) else {
-                Issue.record("'\(action.commandLine)' doesn't parse")
+            guard case .cmd(let built) = action.command,
+                  case .cmd(let parsed) = parseCommand(action.commandLine, allowExecAndForget: true, allowEval: false)
+            else {
+                Issue.record("'\(action.commandLine)' isn't a command")
                 continue
             }
+            #expect(built.strictEquals(parsed), "\(action.commandLine)")
+            assertEquals(built.shellOfCommandsDescription, parsed.shellOfCommandsDescription)
         }
-        // Flags without a typed action, sequences, quoting: custom command lines, as written
-        for line in [
-            "focus --boundaries workspace left", "exec-and-forget open -a Terminal", "workspace --auto-back-and-forth T", "mode main; focus left",
-            "workspace 1 #1 is a comment", "workspace 1#main", "mode service#x", "mode --help", "workspace next", "move-node-to-workspace prev",
-        ] {
-            assertEquals(Action(commandLine: line), .custom(line))
+        assertEquals(Action.workspace("1#main").commandLine, "workspace '1#main'") // Not a comment
+        assertEquals(Action.resize(.width, .add(50)).commandLine, "resize width +50")
+        guard case .failure = Action.layout([]).command else { Issue.record("A layout command without a layout"); return }
+    }
+
+    /// A custom command line is parsed: flags without a typed action, sequences, quoting
+    @Test func testCustomCommandLinesAreParsed() {
+        for line in ["focus --boundaries workspace left", "exec-and-forget open -a Terminal", "mode main; focus left", "workspace next"] {
+            guard case .cmd(let parsed) = parseCommand(line, allowExecAndForget: true, allowEval: false),
+                  case .cmd(let custom) = Action.custom(line).command
+            else {
+                Issue.record("'\(line)' isn't a command")
+                continue
+            }
+            #expect(custom.strictEquals(parsed), "\(line)")
         }
-        assertEquals(Action(commandLine: "layout   tiles  accordion"), .layout([.tiles, .accordion]))
+        guard case .help = Action.custom("mode --help").command else { Issue.record("Not the help"); return }
     }
 
     /// A name that the command language refuses or reads as something else (a direction) is a problem, not a surprise

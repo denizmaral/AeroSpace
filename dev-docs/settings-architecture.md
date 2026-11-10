@@ -1,6 +1,6 @@
 # Settings architecture
 
-Status: phases 1 to 4 done (2026-11-10), phase 5 next.
+Status: done (2026-11-10).
 
 ## Why
 
@@ -71,7 +71,9 @@ Every phase is one commit and one deploy, and must reproduce the compiled result
    its app, "move the window to workspace M", shown and edited like any other rule. Moves by rules or scripts don't
 4. **No AeroSpace legacy**: no TOML import at the first launch, no TOML parser and default config at runtime, no
    migration of older settings, no `--config-path`. The default settings are written in Swift
-5. **Typed commands** (if still worth it then): actions run as typed commands, the command line stays for custom actions
+5. **Typed commands**: a typed action builds its engine command from its values, without the parser; its words are
+   kept as the arguments that the command prints. Only a custom action is a command line, parsed. A golden test requires
+   every typed command to equal the parsed command of its command line, and to print the same
 
 ## Backlog (UX QA, after phase 1)
 
