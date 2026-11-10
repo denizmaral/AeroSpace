@@ -27,7 +27,16 @@ final class MacWindow: Window {
         let rect = try await macApp.getAxRect(windowId, .cancellable)
         // The window is known from the previous run (AeroSpace was restarted, or the window was invisible until now)
         let previousPlacement = WindowPlacementStore.previousPlacement(of: windowId, macApp)
+        // An app that the user moved to a workspace opens there again (see AppWorkspaceStore)
+        let appWorkspace = AppWorkspaceStore.workspace(
+            forNewWindowOf: macApp.rawAppBundleId,
+            // Its first window, or the windows that it opens (or restores) while it's launched
+            appIsStarting: !allWindowsMap.values.contains { $0.macApp === macApp } ||
+                macApp.nsApp.launchDate.map { Date.now.timeIntervalSince($0) < 10 } == true,
+            isStartup: isStartup,
+        )
         let workspace = previousPlacement.map { Workspace.get(byName: $0.workspace) }
+            ?? appWorkspace.map(Workspace.get(byName:))
             ?? (isStartup ? (rect?.center.monitorApproximation ?? mainMonitorInfo).visibleWorkspace : globalFocus.workspace)
         // A window that was tiling in the previous run is tiling again: the dialog heuristic may be wrong right now (the
         // subrole of a window of a hidden app or a minimized window is AXDialog, e.g. when AeroSpace restarts)
