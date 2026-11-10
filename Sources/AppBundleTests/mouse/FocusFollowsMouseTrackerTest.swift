@@ -18,17 +18,17 @@ struct FocusFollowsMouseTrackerTest {
     /// GitHub Desktop (left, focused) covers a strip of App Store. The mouse moves over the strip into App Store
     @Test func testFocusFollowsAcrossTheRealBorderOfAWiderNeighbor() {
         let (gitHub, appStore, _) = windows()
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [gitHub], focused: gitHub)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [gitHub], top: gitHub)
 
-        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: gitHub, focusChanges: 0, now: at(0)), .leave) // GitHub Desktop on top
-        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: gitHub, focusChanges: 0, now: at(10)), .stay)
-        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 0, now: at(20)), .enter)
+        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: gitHub, focusChanges: 0, now: at(0), frontmost: { gitHub }), .leave) // GitHub Desktop on top
+        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: gitHub, focusChanges: 0, now: at(10), frontmost: { gitHub }), .stay)
+        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 0, now: at(20), frontmost: { nil }), .enter)
         assertEquals(tracker.checked(real: appStore, focused: gitHub, focusChanges: 0, now: at(25)), appStore)
-        assertEquals(tracker.mouseMoved(over: [appStore], focused: appStore, focusChanges: 0, now: at(1000)), .stay)
+        assertEquals(tracker.mouseMoved(over: [appStore], focused: appStore, focusChanges: 0, now: at(1000), frontmost: { nil }), .stay)
 
         // And back: App Store (focused now) covers the strip
-        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: appStore, focusChanges: 0, now: at(1010)), .leave)
-        assertEquals(tracker.mouseMoved(over: [gitHub], focused: appStore, focusChanges: 0, now: at(1020)), .enter)
+        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: appStore, focusChanges: 0, now: at(1010), frontmost: { appStore }), .leave)
+        assertEquals(tracker.mouseMoved(over: [gitHub], focused: appStore, focusChanges: 0, now: at(1020), frontmost: { nil }), .enter)
         assertEquals(tracker.checked(real: gitHub, focused: appStore, focusChanges: 0, now: at(1025)), gitHub)
     }
 
@@ -36,21 +36,21 @@ struct FocusFollowsMouseTrackerTest {
     /// mouse moves over the strip and back into App Store
     @Test func testKeyboardFocusedNeighborCoversAPartOfTheWindowUnderTheMouse() {
         let (gitHub, appStore, _) = windows()
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], focused: appStore)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], top: appStore)
 
-        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 0, now: at(0)), .stay)
-        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: gitHub, focusChanges: 0, now: at(10)), .leave)
-        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 0, now: at(20)), .enter)
+        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 0, now: at(0), frontmost: { nil }), .stay)
+        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: gitHub, focusChanges: 0, now: at(10), frontmost: { gitHub }), .leave)
+        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 0, now: at(20), frontmost: { nil }), .enter)
         assertEquals(tracker.checked(real: appStore, focused: gitHub, focusChanges: 0, now: at(25)), appStore)
     }
 
     /// The keyboard focused another window. Moving inside the window under the mouse doesn't take the focus back
     @Test func testSmallMovesDontStealTheFocusChangedByOtherMeans() {
         let (_, appStore, terminal) = windows()
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], focused: appStore)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], top: appStore)
 
         for time in stride(from: 0, through: 1000, by: 50) {
-            assertEquals(tracker.mouseMoved(over: [appStore], focused: terminal, focusChanges: 0, now: at(time)), .stay)
+            assertEquals(tracker.mouseMoved(over: [appStore], focused: terminal, focusChanges: 0, now: at(time), frontmost: { nil }), .stay)
         }
     }
 
@@ -58,38 +58,36 @@ struct FocusFollowsMouseTrackerTest {
     /// entering another window
     @Test func testPassingOverTheBorderOfAWindowBehindDoesntStealTheFocus() {
         let (gitHub, appStore, terminal) = windows()
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], focused: appStore)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], top: appStore)
 
-        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: terminal, focusChanges: 0, now: at(0)), .enter)
-        assertNil(tracker.checked(real: appStore, focused: terminal, focusChanges: 0, now: at(5)))
-        assertEquals(tracker.mouseMoved(over: [appStore], focused: terminal, focusChanges: 0, now: at(10)), .leave) // No accessibility call
-        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: terminal, focusChanges: 0, now: at(20)), .enter)
-        assertNil(tracker.checked(real: appStore, focused: terminal, focusChanges: 0, now: at(25)))
+        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: terminal, focusChanges: 0, now: at(0), frontmost: { appStore }), .leave)
+        assertEquals(tracker.mouseMoved(over: [appStore], focused: terminal, focusChanges: 0, now: at(10), frontmost: { nil }), .leave) // No accessibility call
+        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: terminal, focusChanges: 0, now: at(20), frontmost: { appStore }), .leave)
     }
 
     /// Where GitHub Desktop is on top, the mouse is over another window than before
     @Test func testEnteringTheStripWhereTheNeighborIsOnTop() {
         let (gitHub, appStore, terminal) = windows()
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], focused: appStore)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], top: appStore)
 
-        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: terminal, focusChanges: 0, now: at(0)), .enter)
+        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: terminal, focusChanges: 0, now: at(0), frontmost: { gitHub }), .enter)
         assertEquals(tracker.checked(real: gitHub, focused: terminal, focusChanges: 0, now: at(5)), gitHub)
     }
 
     @Test func testMenuOverTheWindow() {
         let (first, second, _) = windows()
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [first], focused: first)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [first], top: first)
 
-        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(0)), .enter)
+        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(0), frontmost: { nil }), .enter)
         assertNil(tracker.checked(real: nil, focused: first, focusChanges: 0, now: at(5)))
-        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(50)), .stay)
-        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(200)), .recheck)
-        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(210)), .stay) // The recheck is running
+        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(50), frontmost: { nil }), .stay)
+        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(200), frontmost: { nil }), .recheck)
+        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(210), frontmost: { nil }), .stay) // The recheck is running
         assertNil(tracker.checked(real: nil, focused: first, focusChanges: 0, now: at(215)))
         // The menu is closed
-        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(400)), .recheck)
+        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(400), frontmost: { nil }), .recheck)
         assertEquals(tracker.checked(real: second, focused: first, focusChanges: 0, now: at(405)), second)
-        assertEquals(tracker.mouseMoved(over: [second], focused: second, focusChanges: 0, now: at(1000)), .stay)
+        assertEquals(tracker.mouseMoved(over: [second], focused: second, focusChanges: 0, now: at(1000), frontmost: { nil }), .stay)
     }
 
     /// A floating window behind the focused tiling window: its visible part is another window
@@ -97,34 +95,32 @@ struct FocusFollowsMouseTrackerTest {
         let workspace = Workspace.get(byName: name)
         let (tiling, _, _) = windows()
         let floating = TestWindow.new(id: 4, parent: workspace.floatingWindowsContainer)
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [tiling], focused: tiling)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [tiling], top: tiling)
 
-        // A floating window can be above the focused one (always on top): checked
-        assertEquals(tracker.mouseMoved(over: [floating, tiling], focused: tiling, focusChanges: 0, now: at(0)), .enter)
-        assertNil(tracker.checked(real: tiling, focused: tiling, focusChanges: 0, now: at(5)))
-        assertEquals(tracker.mouseMoved(over: [floating], focused: tiling, focusChanges: 0, now: at(10)), .enter)
+        assertEquals(tracker.mouseMoved(over: [floating, tiling], focused: tiling, focusChanges: 0, now: at(0), frontmost: { tiling }), .leave)
+        assertEquals(tracker.mouseMoved(over: [floating], focused: tiling, focusChanges: 0, now: at(10), frontmost: { nil }), .enter)
         assertEquals(tracker.checked(real: floating, focused: tiling, focusChanges: 0, now: at(15)), floating)
     }
 
     @Test func testGapAndReenteringTheWindow() {
         let (first, second, _) = windows()
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [first], focused: first)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [first], top: first)
 
-        assertEquals(tracker.mouseMoved(over: [], focused: second, focusChanges: 0, now: at(0)), .leave)
-        assertEquals(tracker.mouseMoved(over: [second], focused: second, focusChanges: 0, now: at(10)), .leave)
+        assertEquals(tracker.mouseMoved(over: [], focused: second, focusChanges: 0, now: at(0), frontmost: { nil }), .leave)
+        assertEquals(tracker.mouseMoved(over: [second], focused: second, focusChanges: 0, now: at(10), frontmost: { nil }), .leave)
         // The keyboard focused the other window meanwhile. The mouse left the window and enters it again
-        assertEquals(tracker.mouseMoved(over: [], focused: first, focusChanges: 0, now: at(20)), .leave)
-        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(30)), .enter)
+        assertEquals(tracker.mouseMoved(over: [], focused: first, focusChanges: 0, now: at(20), frontmost: { nil }), .leave)
+        assertEquals(tracker.mouseMoved(over: [second], focused: first, focusChanges: 0, now: at(30), frontmost: { nil }), .enter)
         assertEquals(tracker.checked(real: second, focused: first, focusChanges: 0, now: at(35)), second)
     }
 
     /// E.g. after Mission Control, the window under the mouse is not focused until the mouse enters another window
     @Test func testWindowUnderTheMouseAtTheStartIsNotFocused() {
         let (first, second, _) = windows()
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [first], focused: second)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [first], top: first)
 
-        assertEquals(tracker.mouseMoved(over: [first], focused: second, focusChanges: 0, now: at(0)), .stay)
-        assertEquals(tracker.mouseMoved(over: [first, second], focused: second, focusChanges: 0, now: at(10)), .leave)
+        assertEquals(tracker.mouseMoved(over: [first], focused: second, focusChanges: 0, now: at(0), frontmost: { nil }), .stay)
+        assertEquals(tracker.mouseMoved(over: [first, second], focused: second, focusChanges: 0, now: at(10), frontmost: { second }), .leave)
     }
 
     /// The first accessibility call to App Store after a restart was slow: the keyboard focused GitHub Desktop before the
@@ -133,13 +129,13 @@ struct FocusFollowsMouseTrackerTest {
         let (gitHub, appStore, _) = windows()
         var tracker = FocusFollowsMouseTracker()
 
-        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 7, now: at(0)), .enter)
+        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 7, now: at(0), frontmost: { nil }), .enter)
         // The keyboard: App Store, then GitHub Desktop again
         assertNil(tracker.checked(real: appStore, focused: gitHub, focusChanges: 9, now: at(600)))
-        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 9, now: at(700)), .stay)
+        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 9, now: at(700), frontmost: { nil }), .stay)
         // Over the strip that GitHub Desktop covers, and back into App Store
-        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: gitHub, focusChanges: 9, now: at(800)), .leave)
-        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 9, now: at(900)), .enter)
+        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: gitHub, focusChanges: 9, now: at(800), frontmost: { gitHub }), .leave)
+        assertEquals(tracker.mouseMoved(over: [appStore], focused: gitHub, focusChanges: 9, now: at(900), frontmost: { nil }), .enter)
         assertEquals(tracker.checked(real: appStore, focused: gitHub, focusChanges: 9, now: at(905)), appStore)
     }
 
@@ -161,11 +157,11 @@ struct FocusFollowsMouseTrackerTest {
     /// The mouse moves fast: focus-follows-mouse focuses the first window while the second one is checked
     @Test func testOwnFocusChangeDoesntCancelTheNextCheck() {
         let (first, second, third) = windows()
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [third], focused: third)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [third], top: third)
 
-        assertEquals(tracker.mouseMoved(over: [first], focused: third, focusChanges: 3, now: at(0)), .enter)
+        assertEquals(tracker.mouseMoved(over: [first], focused: third, focusChanges: 3, now: at(0), frontmost: { nil }), .enter)
         assertEquals(tracker.checked(real: first, focused: third, focusChanges: 3, now: at(5)), first)
-        assertEquals(tracker.mouseMoved(over: [second], focused: third, focusChanges: 3, now: at(10)), .enter)
+        assertEquals(tracker.mouseMoved(over: [second], focused: third, focusChanges: 3, now: at(10), frontmost: { nil }), .enter)
         assertEquals(tracker.checked(real: second, focused: first, focusChanges: 3, now: at(15)), second)
     }
 
@@ -175,12 +171,12 @@ struct FocusFollowsMouseTrackerTest {
         let workspace = Workspace.get(byName: name)
         let (focused, _, _) = windows()
         let panel = TestWindow.new(id: 4, parent: workspace.floatingWindowsContainer)
-        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [focused], focused: focused)
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [focused], top: focused)
 
-        assertEquals(tracker.mouseMoved(over: [panel, focused], focused: focused, focusChanges: 0, now: at(0)), .enter)
+        assertEquals(tracker.mouseMoved(over: [panel, focused], focused: focused, focusChanges: 0, now: at(0), frontmost: { panel }), .enter)
         assertEquals(tracker.checked(real: panel, focused: focused, focusChanges: 0, now: at(5)), panel)
         // Clicked into the panel, then out of it
-        assertEquals(tracker.mouseMoved(over: [focused], focused: panel, focusChanges: 1, now: at(100)), .enter)
+        assertEquals(tracker.mouseMoved(over: [focused], focused: panel, focusChanges: 1, now: at(100), frontmost: { nil }), .enter)
         assertEquals(tracker.checked(real: focused, focused: panel, focusChanges: 1, now: at(105)), focused)
     }
 
@@ -196,6 +192,18 @@ struct FocusFollowsMouseTrackerTest {
         assertEquals(workspace.windowsUnderMouse(CGPoint(x: 960, y: 500)), [second])
         assertEquals(workspace.windowsUnderMouse(CGPoint(x: 1915, y: 500)), [second]) // The padding of the last window
         _ = (first, third)
+    }
+
+    /// Fast switching: App Store was just focused by the mouse and is on top of the strip in the window server, but the focus
+    /// of AeroSpace is still (or again) GitHub Desktop for a moment. The window on top comes from the window server, not
+    /// from the focus: moving on into GitHub Desktop focuses it
+    @Test func testFocusThatLagsBehindTheStackingDoesntHideTheWindowOnTop() {
+        let (gitHub, appStore, _) = windows()
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [appStore], top: appStore)
+
+        assertEquals(tracker.mouseMoved(over: [gitHub, appStore], focused: gitHub, focusChanges: 0, now: at(0), frontmost: { appStore }), .leave)
+        assertEquals(tracker.mouseMoved(over: [gitHub], focused: appStore, focusChanges: 0, now: at(10), frontmost: { nil }), .enter)
+        assertEquals(tracker.checked(real: gitHub, focused: appStore, focusChanges: 0, now: at(15)), gitHub)
     }
 
     /// The hit test sees what the user sees, not the tiles: App Store (left) is 1000 wide in its 960 wide tile

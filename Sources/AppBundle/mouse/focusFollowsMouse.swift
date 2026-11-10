@@ -25,7 +25,11 @@ import Common
         guard let token: RunSessionGuard = .isServerEnabled, !MissionControl.isActive else { return }
         let location = event.locationInWindow.withYAxisFlipped
         let windows = location.monitorApproximation.visibleWorkspace.windowsUnderMouse(location)
-        switch mouseTracker.mouseMoved(over: windows, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now) {
+        let move = mouseTracker.mouseMoved(
+            over: windows, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now,
+            frontmost: { frontmostWindow(of: windows) },
+        )
+        switch move {
             case .stay: return
             case .leave:
                 focusFollowsTask?.cancel()
@@ -63,7 +67,7 @@ import Common
     focusFollowsTask?.cancel()
     let location = NSEvent.mouseLocation.withYAxisFlipped
     let windows = location.monitorApproximation.visibleWorkspace.windowsUnderMouse(location)
-    mouseTracker = FocusFollowsMouseTracker(windowsUnderMouse: windows, focused: globalFocus.windowOrNil)
+    mouseTracker = FocusFollowsMouseTracker(windowsUnderMouse: windows, top: windows.count == 1 ? windows.first : frontmostWindow(of: windows))
 }
 
 /// Decides when focus-follows-mouse checks which window is really under the mouse, and which window it focuses.
@@ -110,18 +114,19 @@ struct FocusFollowsMouseTracker {
     /// ``focusChangesByOtherMeans`` when the running check started
     private var focusChangesAtCheckStart: UInt = 0
 
-    /// - Parameter windows: the windows under the mouse right now. The one on top is not focused until the mouse enters
-    ///   another window
-    init(windowsUnderMouse windows: [Window] = [], focused: Window? = nil) {
+    /// - Parameter windows: the windows under the mouse right now. The one on top (`top`, if known) is not focused until
+    ///   the mouse enters another window
+    init(windowsUnderMouse windows: [Window] = [], top: Window? = nil) {
         windowIds = Set(windows.map(\.windowId))
-        let top = Self.knownTop(windows, focused: focused)
         realWindow = top
         isRealWindowKnown = top != nil || windows.isEmpty
     }
 
     /// - Parameter windows: the windows whose observed frames contain the mouse location
+    /// - Parameter frontmost: the frontmost of them in the stacking of the window server, nil if unknown. Asked only where
+    ///   windows overlap, when the mouse enters there
     /// - Parameter focusChanges: ``focusChangesByOtherMeans``
-    mutating func mouseMoved(over windows: [Window], focused: Window?, focusChanges: UInt, now: ContinuousClock.Instant) -> MouseMove {
+    mutating func mouseMoved(over windows: [Window], focused: Window?, focusChanges: UInt, now: ContinuousClock.Instant, frontmost: () -> Window?) -> MouseMove {
         if windows.count == windowIds.count, windows.allSatisfy({ windowIds.contains($0.windowId) }) {
             guard let recheckAt, now >= recheckAt else { return .stay }
             self.recheckAt = nil
@@ -135,7 +140,10 @@ struct FocusFollowsMouseTracker {
             isRealWindowKnown = true
             return .leave
         }
-        if let top = Self.knownTop(windows, focused: focused), top == focused || isRealWindowKnown && top === realWindow {
+        // Not assumed to be the focused window: the focus can be ahead of the stacking (a focus that is still applied, an
+        // app that is being activated) or behind it (a window that stays on top without being focused)
+        let top = windows.count == 1 ? windows.first : frontmost()
+        if let top, top == focused || isRealWindowKnown && top === realWindow {
             realWindow = top
             isRealWindowKnown = true
             return .leave
@@ -155,15 +163,6 @@ struct FocusFollowsMouseTracker {
         recheckAt = real == nil ? now + Self.recheckInterval : nil
         guard let real, real != focused, previous.map({ real !== $0 }) ?? true, focusChanges == focusChangesAtCheckStart else { return nil }
         return real
-    }
-
-    /// The window on top without accessibility calls: the only one, or the focused one (it's in front of the others). Not
-    /// if another floating window is there: a window can float above the focused one without being focused (always on
-    /// top, a panel)
-    private static func knownTop(_ windows: [Window], focused: Window?) -> Window? {
-        if windows.count == 1 { return windows.first }
-        guard let focused, windows.contains(focused), !windows.contains(where: { $0 != focused && $0.isFloating }) else { return nil }
-        return focused
     }
 }
 
@@ -245,6 +244,20 @@ private nonisolated func topmostWindow(at location: CGPoint, of pid: pid_t? = ni
         } else if layer == 0 {
             return (CGWindowID(id), owner, layer)
         }
+    }
+    return nil
+}
+
+/// The frontmost of the windows in the stacking of the window server. One query, no accessibility calls
+@MainActor
+private func frontmostWindow(of windows: [Window]) -> Window? {
+    var byNativeId: [Int: Window] = [:]
+    for case let window as MacWindow in windows {
+        if let nativeWindowId = window.macApp.nativeWindowId(of: window.windowId) { byNativeId[Int(nativeWindowId)] = window }
+    }
+    let infos = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+    for info in infos { // Front to back
+        if let number = info[kCGWindowNumber as String] as? Int, let window = byNativeId[number] { return window }
     }
     return nil
 }
