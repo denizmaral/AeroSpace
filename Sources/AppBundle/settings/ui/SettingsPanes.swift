@@ -576,13 +576,18 @@ private struct WindowRuleRow: View {
     private var conditions: String? {
         let condition = rule.condition
         let parts = [
+            condition.appBundleId.flatMap { AppCatalog.isInstalled($0) ? nil : "not installed" },
             condition.windowTitlePattern.map { "title contains \($0)" },
             condition.appNamePattern.map { "app name contains \($0)" },
             condition.workspace.map { "on workspace \($0)" },
             condition.duringStartup.map { $0 ? "while MarSpace starts" : "not while MarSpace starts" },
         ].compactMap(\.self)
-        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+        return parts.isEmpty ? nil : parts.joined(separator: ", ").capitalizingFirstLetter
     }
+}
+
+extension String {
+    fileprivate var capitalizingFirstLetter: String { prefix(1).uppercased() + dropFirst() }
 }
 
 /// Edits a rule in a popover

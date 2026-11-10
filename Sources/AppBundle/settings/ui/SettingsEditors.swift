@@ -439,14 +439,24 @@ enum AppCatalog {
         let icon: NSImage
     }
 
-    private static var names: [String: String] = [:]
+    /// nil: not installed
+    private static var names: [String: String?] = [:]
     private static var icons: [String: NSImage] = [:]
     private static var running: (date: Date, apps: [App])? = nil
 
+    /// The bundle id if the app isn't installed (e.g. a window rule that came with the config of another Mac)
     static func name(of bundleId: String) -> String {
+        installedName(of: bundleId) ?? bundleId
+    }
+
+    static func isInstalled(_ bundleId: String) -> Bool {
+        installedName(of: bundleId) != nil
+    }
+
+    private static func installedName(of bundleId: String) -> String? {
         if let name = names[bundleId] { return name }
         let name = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId)
-            .map { FileManager.default.displayName(atPath: $0.path).replacing(".app", with: "") } ?? bundleId
+            .map { FileManager.default.displayName(atPath: $0.path).replacing(".app", with: "") }
         names[bundleId] = name
         return name
     }
