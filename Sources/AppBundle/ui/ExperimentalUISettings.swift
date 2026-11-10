@@ -46,8 +46,10 @@ func getExperimentalUISettingsMenu(viewModel: TrayMenuModel) -> some View {
             MenuBarStyleButton(style: style, color: color).environmentObject(viewModel)
         }
     } label: {
-        Text("Experimental UI Settings (No stability guarantees)")
+        // Short: the menu is in the footer of the 312pt wide menu bar panel
+        Label("Menu bar style", systemImage: "paintbrush")
     }
+    .help("Experimental UI settings (no stability guarantees)")
 }
 
 @MainActor

@@ -143,12 +143,13 @@ private struct MenuBarPanel: View {
         HStack(spacing: 8) {
             getExperimentalUISettingsMenu(viewModel: viewModel)
                 .menuStyle(.borderlessButton)
+                .controlSize(.small) // The menu is an AppKit control, it ignores the font
                 .fixedSize()
-                .font(.caption)
-            Spacer()
+            Spacer(minLength: 8)
             Link("Based on AeroSpace (MIT)", destination: URL(string: "https://github.com/nikitabobko/AeroSpace").orDie())
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+                .fixedSize()
         }
     }
 
