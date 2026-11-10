@@ -40,7 +40,23 @@ enum MissionControl {
     /// App activation or Space change while Mission Control is shown means that it was closed. Events right after it was
     /// shown are ignored (Mission Control itself may cause them)
     static func exitIfStale() {
-        if isActive && ContinuousClock.now - activeSince > .milliseconds(500) { exit() }
+        if isActive && ContinuousClock.now - activeSince > .milliseconds(500) && !isOverlayOnScreen { exit() }
+    }
+
+    /// The Mission Control overlay: a full display window of the Dock (or WindowManager since macOS 27) above the
+    /// normal windows. A single window list query, only for the fallbacks (switching Spaces inside Mission Control,
+    /// App Exposé and Show Desktop also activate apps and change Spaces)
+    private static var isOverlayOnScreen: Bool {
+        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        let screens = NSScreen.screens.map(\.frame.size)
+        return windows.contains { info in
+            let owner = info[kCGWindowOwnerName as String] as? String
+            guard owner == "Dock" || owner == "WindowManager",
+                  (info[kCGWindowLayer as String] as? Int ?? 0) > 0,
+                  let bounds = info[kCGWindowBounds as String] as? [String: CGFloat]
+            else { return false }
+            return screens.contains { abs($0.width - (bounds["Width"] ?? 0)) < 1 && abs($0.height - (bounds["Height"] ?? 0)) < 1 }
+        }
     }
 
     fileprivate static func handle(_ notification: String) {
@@ -51,10 +67,12 @@ enum MissionControl {
         isActive = true
         activeSince = .now
         FocusBorderController.shared.hide()
-        // Fallback in case the exit notification is missed. Mission Control is never shown for a minute
+        // Fallback in case the exit notification is missed
         exitFallbackTask?.cancel()
         exitFallbackTask = Task.startUnstructured { @MainActor in
-            try await Task.sleep(for: .seconds(60))
+            repeat {
+                try await Task.sleep(for: .seconds(60))
+            } while isOverlayOnScreen // E.g. Show Desktop can stay for a long time
             exit()
         }
     }
