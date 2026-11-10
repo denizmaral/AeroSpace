@@ -1,7 +1,8 @@
-#!/usr/bin/env bashcd "$(dirname "$0")"
+#!/usr/bin/env bash
+cd "$(dirname "$0")"
 source ./script/setup.sh
 
-build_version="0.0.0-SNAPSHOT"
+build_version="$(awk '/MARKETING_VERSION:/ {print $2}' xcode/project.yml)" # One place: xcode/project.yml
 codesign_identity="aerospace-codesign-certificate"
 while test $# -gt 0; do
     case $1 in
