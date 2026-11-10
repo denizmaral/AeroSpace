@@ -43,8 +43,6 @@ private struct EmptiedContainer {
     let siblings: [WeightedSibling]
     let index: Int
     let adaptiveWeight: CGFloat
-
-    var leftSiblings: ArraySlice<WeightedSibling> { siblings[..<index] }
 }
 
 /// A sibling and its weight when the window left. The weights are proportions (see
@@ -69,7 +67,8 @@ private struct WeakWindow {
 /// normalization removed when its last window left
 private struct AwayNode {
     let node: TreeNode
-    let leftSiblings: ArraySlice<WeightedSibling>
+    let siblings: [WeightedSibling]
+    let index: Int
 }
 
 extension Window {
@@ -139,18 +138,20 @@ extension Window {
             bind(to: parent, adaptiveWeight: slot.adaptiveWeight, index: slot.isAfterNeighbor ? INDEX_BIND_LAST : 0)
             return true
         }
-        if parent.isRootContainer, let away = allAwayWindows(of: workspace).first(where: { $0.tilingSlot?.needsRootRewrap(parent) == true }),
+        if parent.isRootContainer, parent.orientation != slot.orientation || parent.layout != slot.layout,
+           let away = allAwayWindows(of: workspace).first(where: { $0.tilingSlot?.needsRootRewrap(parent) == true }),
            let awaySlot = away.tilingSlot
         {
-            // The window left the root before the window that flattened it. The root has the orientation of the
-            // flattened container now: wrap its children again on behalf of the window that is still away
+            // The window left the root before the window that flattened it (a window that left after it left the root
+            // with the orientation of the flattened container, it comes back into it). Wrap the children of the root
+            // again on behalf of the window that is still away
             let wrapper = rewrapRoot(parent, as: awaySlot)
             away.tilingSlot?.neighbor = wrapper
         }
         bind(
             to: parent,
             adaptiveWeight: restoredWeight(slot.adaptiveWeight, siblings: slot.siblings, in: parent),
-            index: insertionIndex(in: parent.children, after: slot.leftSiblings),
+            index: insertionIndex(in: parent.children, siblings: slot.siblings, index: slot.index),
         )
         return true
     }
@@ -209,8 +210,9 @@ extension Window {
                 index: neighborBinding.index,
             )
             // The container takes the place of the flattened one: its windows that are still away come back to it (and
-            // they are away from it for the share of the window below)
-            if let flattened = slot.parent {
+            // they are away from it for the share of the window below). Not a container that is still in a tree (e.g. the
+            // window comes back on another workspace)
+            if let flattened = slot.parent, flattened.parent == nil {
                 for window in allAwayWindows(of: workspace) where window.tilingSlot?.parent === flattened {
                     window.tilingSlot?.parent = container
                 }
@@ -318,7 +320,7 @@ private func bindBackEmptiedContainer(_ container: TilingContainer, on workspace
     container.bind(
         to: parent,
         adaptiveWeight: restoredWeight(record.adaptiveWeight, siblings: record.siblings, in: parent),
-        index: insertionIndex(in: parent.children, after: record.leftSiblings),
+        index: insertionIndex(in: parent.children, siblings: record.siblings, index: record.index),
     )
 }
 
@@ -373,10 +375,10 @@ private func awayNodes(of parent: TilingContainer) -> [AwayNode] {
     for window in allAwayWindows(of: workspace) {
         guard let slot = window.tilingSlot else { continue }
         if slot.parent === parent {
-            result.append(AwayNode(node: window, leftSiblings: slot.leftSiblings))
+            result.append(AwayNode(node: window, siblings: slot.siblings, index: slot.index))
         }
         if let record = slot.emptiedContainer, record.parent === parent, !result.contains(where: { $0.node === record.container }) {
-            result.append(AwayNode(node: record.container, leftSiblings: record.leftSiblings))
+            result.append(AwayNode(node: record.container, siblings: record.siblings, index: record.index))
         }
     }
     return result
@@ -396,7 +398,7 @@ private func siblingsIncludingAwayNodes(_ parent: TilingContainer) -> [WeightedS
     }
     let awayWindows = parent.nodeWorkspace.map(allAwayWindows(of:)) ?? []
     for away in awayNodes(of: parent) {
-        let index = insertionIndex(in: nodes, after: away.leftSiblings)
+        let index = insertionIndex(in: nodes, siblings: away.siblings, index: away.index)
         nodes.insert(away.node, at: index)
         // The windows of an emptied container are away, their slots point to it
         let windows = away.node is TilingContainer
@@ -407,17 +409,24 @@ private func siblingsIncludingAwayNodes(_ parent: TilingContainer) -> [WeightedS
     return result
 }
 
-/// Right after the last of `leftSiblings` that is in `nodes`. 0 if none of them is
+/// Right after the last of the siblings on the left (`siblings[..<index]`) that is in `nodes`. 0 if none of them is
 @MainActor
-private func insertionIndex(in nodes: [TreeNode], after leftSiblings: ArraySlice<WeightedSibling>) -> Int {
-    for sibling in leftSiblings.reversed() {
-        // The sibling, or the child that holds it now (e.g. its neighbor came back and wrapped it in a new container), or
-        // the child that holds its windows now (the normalization replaced the container)
+private func insertionIndex(in nodes: [TreeNode], siblings: [WeightedSibling], index: Int) -> Int {
+    func position(_ node: TreeNode?) -> Int? { node.flatMap { node in nodes.firstIndex { $0 === node } } }
+    for i in (0 ..< index).reversed() {
+        let sibling = siblings[i]
+        if let position = position(sibling.node) { return position + 1 }
+        // The child that holds the sibling now (e.g. its neighbor came back and wrapped it in a new container), or that
+        // holds its windows now (the normalization replaced the container). Not another sibling (the user moved it there),
+        // and not on the left of a sibling that was on its left (the user moved them)
         let candidates = [sibling.node].compactMap { $0 } + sibling.windows.compactMap(\.window)
         for candidate in candidates {
-            if let index = candidate.parentsWithSelf.lazy.compactMap({ ancestor in nodes.firstIndex { $0 === ancestor } }).first {
-                return index + 1
-            }
+            guard let child = candidate.parentsWithSelf.first(where: { ancestor in nodes.contains { $0 === ancestor } }),
+                  !siblings.contains(where: { $0.node === child }),
+                  let replacement = position(child),
+                  siblings[..<i].allSatisfy({ (position($0.node) ?? -1) < replacement })
+            else { continue }
+            return replacement + 1
         }
     }
     return 0

@@ -490,4 +490,81 @@ struct ProportionalWeightsTest {
             assertEquals(rects(workspace), before)
         }
     }
+
+    /// 1 leaves (the root takes the orientation of v), then 2 leaves the new root and comes back first: it comes back into
+    /// the root as it was when it left, then 1 wraps the children again
+    @Test func testWindowThatLeftAfterTheRootFlattenComesBackFirst() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window2: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                window2 = TestWindow.new(id: 2, parent: $0)
+                TestWindow.new(id: 3, parent: $0)
+            }
+        }
+        try await workspace.layoutWorkspace()
+        let before = rects(workspace)
+        try await setFullscreen([window1], true, workspace)
+        try await setFullscreen([window2], true, workspace)
+        try await setFullscreen([window2], false, workspace)
+        assertEquals(root.layoutDescription, .v_tiles([.window(2), .window(3)]))
+        try await setFullscreen([window1], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3)])]))
+        assertEquals(rects(workspace), before)
+    }
+
+    /// The user moves the left sibling of an away window into another sibling (a container): the window doesn't follow it
+    @Test func testLeftSiblingMovedIntoAnotherSibling() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window2: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0)
+            window2 = TestWindow.new(id: 2, parent: $0)
+            TestWindow.new(id: 3, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                TestWindow.new(id: 4, parent: $0)
+                TestWindow.new(id: 5, parent: $0)
+            }
+        }
+        try await workspace.layoutWorkspace()
+        try await setFullscreen([window2], true, workspace)
+        #expect(window1.focusWindow())
+        for _ in 0 ..< 2 {
+            await parseCommand("move right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            workspace.normalizeContainers()
+        }
+        try await setFullscreen([window2], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(2), .window(3), .v_tiles([.window(4), .window(5), .window(1)])]))
+    }
+
+    /// The container on the left of an away window is flattened (a window closed), the user swaps what is left of it:
+    /// the window comes back after the sibling that is still in order
+    @Test func testFlattenedLeftSiblingSwapped() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window2: TestWindow!
+        var window3: TestWindow!
+        var window4: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                window2 = TestWindow.new(id: 2, parent: $0)
+                window3 = TestWindow.new(id: 3, parent: $0)
+            }
+            window4 = TestWindow.new(id: 4, parent: $0)
+        }
+        try await workspace.layoutWorkspace()
+        try await setFullscreen([window4], true, workspace)
+        window3.closeAxWindow()
+        workspace.normalizeContainers()
+        #expect(window2.focusWindow())
+        await parseCommand("swap left").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await setFullscreen([window4], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(2), .window(1), .window(4)]))
+    }
 }
