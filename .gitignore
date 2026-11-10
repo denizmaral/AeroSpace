@@ -4,9 +4,7 @@
 /.*
 
 # Unignored top level .dirs
-!/.bundle
 
-/Gemfile.lock
 /xcode/.xcode-build
 
 # XCode User settings

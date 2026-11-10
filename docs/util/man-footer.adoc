@@ -1,20 +1,17 @@
 == Resources
 
-*Project homepage:* https://github.com/nikitabobko/AeroSpace +
-*Guide:* https://nikitabobko.github.io/AeroSpace/guide +
+*Project homepage:* https://github.com/denizmaral/MarSpace +
+*Guide:* https://github.com/denizmaral/MarSpace/blob/main/docs/guide.md +
 
 == BUGS
 
-Bugs can be reported to https://github.com/nikitabobko/AeroSpace/discussions/categories/potential-bugs
-
-Maintainers will move verified bugs to https://github.com/nikitabobko/AeroSpace/issues
+Bugs can be reported to https://github.com/denizmaral/MarSpace/issues
 
 == License
 
-Copyright (C) 2023 Nikita Bobko +
-Free use of this software is granted under the terms of the MIT License +
-You can find the full text of AeroSpace license and its dependencies in the 'legal' directory of the distributed zip archive.
+Free use of this software is granted under the terms of the MIT License. +
+MarSpace is based on AeroSpace, copyright (C) 2023 Nikita Bobko, MIT License.
 
 == AUTHOR
 
-Nikita Bobko and contributors
+Deniz Maral, and Nikita Bobko and the contributors of AeroSpace

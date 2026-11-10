@@ -1,83 +1,44 @@
-# Development Notes
+# Development
 
-To build/install from sources do the following:
-1. Install dependencies
-2. Create codesign certificate in `Keychain Access.app`
-3. Run one of the entry point scripts to build/install from sources
+## Setup
 
-If you struggle to build AeroSpace locally, you can also refer to [builds in GitHub Actions](https://github.com/nikitabobko/AeroSpace/actions?query=branch%3Amain)
+1. Install Xcode with Swift 6.4 (the version in `.swift-version`).
+2. For the scripts in the repo root, install [swiftly](https://github.com/swiftlang/swiftly) (it uses exactly the Swift
+   version of `.swift-version`) and bash 5: `brew install swiftly bash`. Optional: `brew install xcbeautify` for
+   readable Xcode logs.
+3. For the app bundle, create a code signing certificate in Keychain Access: Keychain Access › Certificate Assistant ›
+   Create a Certificate…, name `aerospace-codesign-certificate`, identity type Self-Signed Root, certificate type Code
+   Signing. Or pass your own identity with `--codesign-identity`. Not needed for debug builds.
 
-## Definitions
+Without swiftly or bash 5, `swift build --build-tests` and `swift test` still work, as long as Xcode's Swift matches
+`.swift-version`.
 
-**SPM.** Swift package manager and Swift build tool. In other words, `swift` CLI tool
+## Scripts
 
-## 1. Install dependencies
+| Script | What it does |
+|---|---|
+| `build-debug.sh` | Debug build with SPM into `.debug` |
+| `run-debug.sh` | Runs the debug build (a running MarSpace is turned off meanwhile) |
+| `run-cli.sh <args>` | Runs the `aerospace` CLI against the running server |
+| `swift-test.sh` | The unit tests |
+| `test.sh` | Everything a review checks: a build with warnings as errors, the tests, `lint.sh`, `generate.sh`, and no uncommitted generated files |
+| `format.sh`, `lint.sh` | swiftformat; swiftformat + swiftlint + periphery (unused code). The tools are downloaded into `.deps` |
+| `generate.sh` | Regenerates the generated files: the CLI help from `docs/aerospace-*.adoc`, `xcode/AeroSpace.xcodeproj` from `xcode/project.yml` |
+| `build-release.sh` | Signed release build of `MarSpace.app` and the `aerospace` CLI into `.release` |
+| `script/clean-project.sh` | Cleans the build when something went wrong |
 
-1.  Install Xcode from App Store https://apps.apple.com/us/app/xcode/id497799835
-2.  Install [swiftly](https://github.com/swiftlang/swiftly).
-    Swiftly is a Swift toolchain manager that will make sure that you use the same swift version as written in `.swift-version` file.
-    `brew install swiftly`
-3.  If you want to build shell completion, install rust, bash and fish
-    -   Install Rust using rustup. https://www.rust-lang.org/tools/install
-    -   `brew install bash fish`
-4.  If you want to build man pages, install Ruby >= 3.0. I recommend using [rbenv](https://github.com/rbenv/rbenv).
-    -   `rbenv install 3.3.4` (or whatever 3.x version)
-    -   Install asciidoctor using Ruby `bundler`. `cd AeroSpace && bundler install`
-5.  Install optional `xcbeautify` to make Xcode build logs readable. `brew install xcbeautify`
+The app needs the Accessibility permission. Open the bundle (`open .release/MarSpace.app`) rather than running its
+binary: otherwise macOS asks for the permission for the parent process.
 
-## 2. Create codesign certificate
+## Editors
 
-If you want to run AeroSpace as App Bundle (AeroSpace.app) you need to create self-signed certificate that will be used to codesign AeroSpace.
-Release artifact is built as App Bundle.
-If you only plan to build the debug version of AeroSpace, you can run it from the terminal and custom certificate is not required.
-
-1.  Open `Keychain Access.app`
-2.  Menu -> `Keychain Access` -> `Certificate Assistance` -> `Create a Certificate...`
-    -   Name: `aerospace-codesign-certificate`
-    -   Identity Type: `Self-Signed Root`
-    -   Certificate Type: `Code Signing`
-
-## 3. Entry point scripts
-
-**Debug build**
--   `build-debug.sh` - Build debug build to `.debug` dir by using SPM. (Xcode is not involved)
--   `test.sh` - Run tests.
--   `swiftformat.sh` - Format the code.
--   `run-debug.sh` - Run AeroSpace.app debug build.
--   `run-cli.sh` - Run `aerospace` in CLI. Arguments are forwarded to `aerospace` binary.
--   `build-docs.sh` - Build the site and man pages to `.site` and `.man` dirs respectively.
--   `build-shell-completion.sh` - Build shell completion to `.shell-completion`.
-    You can test that the completion works properly by sourcing the file `source ./.shell-completion/zsh/_aerospace`
--   `generate.sh` - Regenerate generated project files. `xcode/AeroSpace.xcodeproj` is generated, and some of the source files
-    (the source files have `Generated` suffix in their names).
-
-**Release build**
--   `build-release.sh` - Build release build to `.release` dir by using Xcode.
-
-## IDE
-
--   You can obviously [open the project in Xcode](#xcode).
--   You can use your editor of choice (Neovim, Vim, Emacs, Sublime, VS Code) by using [sourcekit-lsp LSP](https://github.com/apple/sourcekit-lsp).
-    I only tested it in Neovim
--   AppCode. The initial codebase was written in AppCode and the IDE was pretty solid.
-    But AppCode was unfortunately sunsetted, and it started falling apart.
-    Last time I checked it, it didn't support Swift 5.9 features, and I couldn't make it reliably import the project.
-    RIP
-
-## Xcode
-
-Even if you use LSP and another text editor, Xcode is still useful to attach debugger (though you can use `lldb` in CLI).
-
-1.  To open the project in Xcode: File -> Open -> Choose `Package.swift` file instead of `xcode/AeroSpace.xcodeproj`.
-    It's better to open `Package.swift`, because SPM project is more lightweight.
-    `xcode/AeroSpace.xcodeproj` is only used in `*release*.sh` build scripts.
-2.  After you opened the project in Xcode.
-    Edit Scheme... -> Options -> Console -> Choose `Terminal`.
-    This way Accessibility permission will be requested from Terminal.
-    If you don't change Console to `Terminal`, Accessibility permission will be requested on every rebuild, because the debug binary is unsigned.
+- Xcode: open `Package.swift` (not `xcode/AeroSpace.xcodeproj`, which only wraps the package into an app bundle for the
+  release build). In Edit Scheme › Options › Console, choose Terminal: the permission is then asked for Terminal once,
+  instead of for every unsigned debug build.
+- Any editor with [sourcekit-lsp](https://github.com/apple/sourcekit-lsp).
 
 ## Tips
 
-- Use built-in "Accessibility Inspector.app" to inspect accessibility properties of windows
-- Use [DeskPad](https://github.com/Stengo/DeskPad) or [BetterDisplay 2](https://github.com/waydabber/BetterDisplay) to emulate several monitors
-- You can use `script/clean-project.sh` to clean the project when something goes wrong.
+- Accessibility Inspector (comes with Xcode) shows the accessibility properties of windows
+- [DeskPad](https://github.com/Stengo/DeskPad) or [BetterDisplay](https://github.com/waydabber/BetterDisplay) emulate
+  more monitors

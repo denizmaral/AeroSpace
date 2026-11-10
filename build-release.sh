@@ -15,8 +15,6 @@ done
 ### BUILD ###
 #############
 
-./build-docs.sh --release
-./build-shell-completion.sh
 
 ./generate.sh
 ./script/check-uncommitted-files.sh
@@ -68,16 +66,3 @@ codesign -s "$codesign_identity" .release/aerospace
 ################
 
 ./script/validate-release-binaries.sh
-
-############
-### PACK ###
-############
-
-mkdir -p ".release/AeroSpace-v$build_version/manpage" && cp .man/*.1 ".release/AeroSpace-v$build_version/manpage"
-cp -r ./legal ".release/AeroSpace-v$build_version/legal"
-cp -r .shell-completion ".release/AeroSpace-v$build_version/shell-completion"
-cd .release
-    mkdir -p "AeroSpace-v$build_version/bin" && cp -r aerospace "AeroSpace-v$build_version/bin"
-    cp -r MarSpace.app "AeroSpace-v$build_version"
-    zip -r "AeroSpace-v$build_version.zip" "AeroSpace-v$build_version"
-cd -

@@ -5,16 +5,6 @@ import Testing
 @MainActor
 @Suite(.serializedGlobally)
 struct ConfigTest {
-    @Test func testParseI3Config() {
-        let toml = try! String(contentsOf: projectRoot.appending(component: "docs/config-examples/i3-like-config-example.toml"), encoding: .utf8)
-        let result = parseConfig(toml)
-        assertEquals(result.errors, [])
-        assertEquals(result.warnings, [])
-        assertEquals(result.config.execConfig, defaultConfig.execConfig)
-        assertEquals(result.config.enableNormalizationFlattenContainers, false)
-        assertEquals(result.config.enableNormalizationOppositeOrientationForNestedContainers, false)
-    }
-
     @Test func testEmptyConfig() {
         let result = parseConfig("")
         assertEquals(result.errors, [])

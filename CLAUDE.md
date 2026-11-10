@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-AeroSpace is an i3-like tiling window manager for macOS. It ships as two binaries: the `AeroSpace.app` server, which manages windows, and the `aerospace` CLI client, which talks to it. More docs: `dev-docs/development.md` (setup), `dev-docs/architecture.md`, and the user docs in `docs/*.adoc` (Asciidoc, rendered to the site and man pages).
+MarSpace is a tiling window manager for macOS, built on AeroSpace (MIT). It ships as two binaries: the `MarSpace.app` server, which manages windows, and the `aerospace` CLI client (compatible with AeroSpace's), which talks to it. More docs: `dev-docs/development.md` (setup), `dev-docs/architecture.md`, `dev-docs/socket-protocol.adoc`, the user guide `docs/guide.md`, and the command docs `docs/aerospace-*.adoc` (the source of the CLI help).
 
 ## Build, test, lint
 
@@ -21,7 +21,7 @@ Entry point scripts are in the repo root. All of them source `script/setup.sh`, 
 | Single suite / test | `swift test --filter DwindleTest` or `swift test --filter 'DwindleTest/testParseConfig'` |
 | Format / lint | `./format.sh` (swiftformat) and `./lint.sh` (format + swiftlint + periphery dead-code scan). Tools are downloaded into `.deps/` |
 | Regenerate generated files | `./generate.sh` |
-| Signed release `.app` → `.release/` | `./build-release.sh [--codesign-identity <id>]`. Needs a code-signing cert (default name `aerospace-codesign-certificate`), plus Ruby/asciidoctor, rust, bash and fish for the docs and completions |
+| Signed release `.app` → `.release/` | `./build-release.sh [--codesign-identity <id>]`. Needs a code-signing cert (default name `aerospace-codesign-certificate`) |
 
 **Without swiftly or bash 5**, plain `swift build --build-tests` and `swift test` from the repo root still work, as long as Xcode's Swift matches `.swift-version`. The generated `xcode/AeroSpace.xcodeproj` pins `TOOLCHAINS` to a swiftly toolchain id. When building the app bundle with `xcodebuild` directly (from `xcode/`, scheme `AeroSpace`):
 - pass `TOOLCHAINS=com.apple.dt.toolchain.XcodeDefault`;
@@ -62,9 +62,9 @@ The CLI parses the arguments, reporting parse errors and printing `--help` itsel
 - Commands run against a `CmdEnv` (target window or workspace, which `--window-id`/`--workspace` can override) and write to a `CmdIo`.
 
 Checklist for a new command (from `dev-docs/architecture.md`):
-- docs in `docs/aerospace-<cmd>.adoc` and `docs/commands.adoc`;
+- docs in `docs/aerospace-<cmd>.adoc` (the CLI help is generated from it);
 - decide whether `--window-id`/`--workspace` make sense;
-- shell-completion grammar in `grammar/commands-bnf-grammar.txt`;
+- an `Action` case (`settings/Action.swift`) if it should be pickable in the settings window;
 - then run `generate.sh`.
 
 ### Sessions and refresh (`AppBundle/layout/refresh.swift`)
@@ -88,7 +88,7 @@ Async functions take a `CancellationMode` (`.cancellable` / `.nonCancellable`). 
 - Workspaces are emulated: windows on invisible workspaces are moved into a screen corner. macOS Spaces are deliberately ignored.
 
 ### New-window placement (`AppBundle/tree/MacWindow.swift`)
-1. `MacWindow.getOrRegister` classifies a window as popup, dialog or tiling (see "Dialog heuristics" in `docs/guide.adoc`).
+1. `MacWindow.getOrRegister` classifies a window as popup, dialog or tiling (see "Dialogs" in `docs/guide.md`).
 2. A tiling window is bound right after the workspace's most recent window.
 3. The `on-window-detected` callbacks run (`runOnWindowDetected`).
 
@@ -99,12 +99,12 @@ A tiling window that leaves for a macOS native state (fullscreen, minimized, hid
 ### Layout (`AppBundle/layout/`)
 `layoutRecursive.swift` turns the tree and weights into rectangles, records `lastAppliedLayoutPhysicalRect`/`VirtualRect` on each node (also used by mouse resize and moves), and applies frames through the accessibility API.
 
-### Config (`AppBundle/config/`)
-- `Config` (`Config.swift`) holds the settings.
-- `configParser` in `parseConfig.swift` maps each TOML key to a key path and a parser function.
-- A comment there asks to prefer command flags over new TOML options where possible.
-- `docs/config-examples/default-config.toml` is bundled into the app and must parse without errors or warnings (`ConfigTest.testParseDefaultConfig`).
-- Document new options in `docs/guide.adoc`.
+### Settings (`AppBundle/settings/`) and the runtime config (`AppBundle/config/`)
+- The user edits typed `Settings` in the settings window (`settings/ui/`); there is no config file. `SettingsStore` keeps them in `~/Library/Application Support/MarSpace` (checksummed binary plist, atomic writes, backup; an unreadable file is never overwritten).
+- `Settings.compile()` (`SettingsCompiler.swift`) turns them into the runtime `Config` (`config/Config.swift`), through the command parser. Invalid parts are reported as `SettingsProblem`s and left out; edits are saved and applied even with problems.
+- Changing the stored format: bump `Settings.currentSchemaVersion` and add a step to `SettingsMigration`. Decoding is tolerant (missing fields get defaults).
+- The TOML parser (`parseConfig.swift`) is only used to take an AeroSpace config over at the first launch (`SettingsImport.swift`) and for the default settings: `docs/config-examples/default-config.toml` is bundled and must parse without errors or warnings (`ConfigTest.testParseDefaultConfig`).
+- A new option: a field in `Settings`, the compiler, a control in the settings window, and `docs/guide.md` if users need to know about it.
 - Hotkeys (`HotkeyBinding.swift`) use the HotKey library (Carbon `RegisterEventHotKey`). It consumes the key event and can't tell left from right modifiers. Binding modes enable and disable groups of hotkeys.
 
 ## Tests
@@ -122,7 +122,7 @@ The tests use Swift Testing. Patterns to follow:
 `CONTRIBUTING.md` says to "read the room": patches, commit messages and tests should look like the existing ones in the repo.
 
 Project values (README):
-- no configuration GUI;
+- settings are edited in the settings window, never in a text file;
 - practical features over appearance ("ricing" is low priority);
 - avoid "dark magic";
 - breaking changes only with careful consideration and a helpful message.
