@@ -139,6 +139,7 @@ extension Workspace {
     if frozenFocus.workspaceName != _lastKnownFocus.workspaceName {
         _prevFocusedWorkspaceName = _lastKnownFocus.workspaceName
         hasFocusedWorkspaceChanged = true
+        resetFocusFollowsMouse() // Other windows under the mouse, the mouse didn't move
     }
     if frozenFocus.monitorId_oneBased != _lastKnownFocus.monitorId_oneBased {
         hasFocusedMonitorChanged = true

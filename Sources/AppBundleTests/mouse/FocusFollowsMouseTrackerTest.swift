@@ -220,6 +220,20 @@ struct FocusFollowsMouseTrackerTest {
         assertEquals(tracker.mouseMoved(over: [gitHub], focused: gitHub, focusChanges: 0, now: at(1000), frontmost: { nil }), .stay)
     }
 
+    /// The keyboard shows another workspace while the mouse rests: other windows are under the mouse without it crossing a
+    /// window border. The first move doesn't focus the window under it, only entering another window does
+    @Test func testWindowsUnderTheRestingMouseChangedByAWorkspaceSwitch() {
+        let (first, second, third) = windows()
+        var tracker = FocusFollowsMouseTracker(windowsUnderMouse: [first], top: first)
+
+        tracker.takeTheNextWindowsAsTheyAre()
+        assertEquals(tracker.mouseMoved(over: [second], focused: third, focusChanges: 1, now: at(0), frontmost: { nil }), .leave)
+        assertEquals(tracker.mouseMoved(over: [second], focused: third, focusChanges: 1, now: at(500), frontmost: { nil }), .stay)
+        assertEquals(tracker.mouseMoved(over: [third], focused: third, focusChanges: 1, now: at(600), frontmost: { nil }), .leave)
+        assertEquals(tracker.mouseMoved(over: [second], focused: third, focusChanges: 1, now: at(700), frontmost: { nil }), .enter)
+        assertEquals(tracker.checked(real: second, focused: third, focusChanges: 1, now: at(705)), second)
+    }
+
     /// The hit test sees what the user sees, not the tiles: App Store (left) is 1000 wide in its 960 wide tile
     @Test func testWindowsUnderTheMouseAreFoundByTheirObservedFrames() async throws {
         let workspace = Workspace.get(byName: name)

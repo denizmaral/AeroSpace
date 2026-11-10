@@ -62,13 +62,11 @@ import Common
     }
 }
 
-/// E.g. after Mission Control, the mouse stopped over some window. It must not be focused until the mouse enters another
-/// window
+/// The windows under the mouse changed without the mouse crossing a window border: another workspace is shown, Mission
+/// Control was closed. The window under the mouse must not be focused until the mouse enters another window
 @MainActor func resetFocusFollowsMouse() {
     focusFollowsTask?.cancel()
-    let location = NSEvent.mouseLocation.withYAxisFlipped
-    let windows = location.monitorApproximation.visibleWorkspace.windowsUnderMouse(location)
-    mouseTracker = FocusFollowsMouseTracker(windowsUnderMouse: windows, top: windows.count == 1 ? windows.first : frontmostWindow(of: windows))
+    mouseTracker.takeTheNextWindowsAsTheyAre()
 }
 
 /// Decides when focus-follows-mouse checks which window is really under the mouse, and which window it focuses.
@@ -114,6 +112,8 @@ struct FocusFollowsMouseTracker {
     private var recheckAt: ContinuousClock.Instant? = nil
     /// ``focusChangesByOtherMeans`` when the running check started
     private var focusChangesAtCheckStart: UInt = 0
+    /// See ``takeTheNextWindowsAsTheyAre()``
+    private var isBaselineNeeded = false
 
     /// - Parameter windows: the windows under the mouse right now. The one on top (`top`, if known) is not focused until
     ///   the mouse enters another window
@@ -123,11 +123,26 @@ struct FocusFollowsMouseTracker {
         isRealWindowKnown = top != nil || windows.isEmpty
     }
 
+    /// The next mouse move takes the windows under the mouse as they are, without focusing: they changed without the mouse
+    /// crossing a window border (e.g. another workspace is shown while the mouse rests)
+    mutating func takeTheNextWindowsAsTheyAre() {
+        isBaselineNeeded = true
+        recheckAt = nil
+    }
+
     /// - Parameter windows: the windows whose observed frames contain the mouse location
     /// - Parameter frontmost: the frontmost of them in the stacking of the window server, nil if unknown. Asked only where
     ///   windows overlap, when the mouse enters there
     /// - Parameter focusChanges: ``focusChangesByOtherMeans``
     mutating func mouseMoved(over windows: [Window], focused: Window?, focusChanges: UInt, now: ContinuousClock.Instant, frontmost: () -> Window?) -> MouseMove {
+        if isBaselineNeeded {
+            isBaselineNeeded = false
+            windowIds = Set(windows.map(\.windowId))
+            let top = windows.count == 1 ? windows.first : frontmost()
+            realWindow = top
+            isRealWindowKnown = top != nil || windows.isEmpty
+            return .leave
+        }
         if windows.count == windowIds.count, windows.allSatisfy({ windowIds.contains($0.windowId) }) {
             guard let recheckAt, now >= recheckAt else { return .stay }
             self.recheckAt = nil
