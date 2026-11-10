@@ -13,11 +13,19 @@ open class Window: TreeNode, Hashable {
     weak var dwindleSplitAnchor: TreeNode? = nil
     /// The rect of the floating window as of the last layout. Allows hit testing without accessibility calls
     var lastLayoutFloatingRect: Rect? = nil
-    /// See ``setAxFrame(_:_:)``
+    /// See ``setAxFrame(_:_:readBack:)``
     private var sentFrame: SentFrame? = nil
-    /// See ``getAppliedFrame(_:)``
-    private var appliedFrame: Rect? = nil
-    /// Changes whenever the frame of the window may change: a frame is sent, or the sent frame is forgotten
+    /// Where the window is on the screen, as far as AeroSpace knows, without accessibility calls. Unlike the tile
+    /// (``lastAppliedLayoutPhysicalRect``: the place in the tree), it's what the user sees: a window refuses a size
+    /// smaller than its minimum (App Store is at least 1000 wide), or snaps to its character grid (Terminal).
+    ///
+    /// The frame that was sent, corrected when it's read back in the same accessibility job (``frameWasReadBack(_:generation:)``).
+    /// Floating windows are read by every layout (``observeFrame(_:)``). Code that deals with the screen (the focus
+    /// border, focus-follows-mouse) uses it, the layout and the tree commands use the tile
+    private(set) var observedFrame: Rect? = nil
+    /// The sent frame that ``observedFrame`` was read back for: sending it again gives the same frame
+    private var observedFrameRequest: SentFrame? = nil
+    /// Identifies the latest knowledge about the frame: a read back of an older send is stale
     private var frameGeneration: UInt = 0
     /// The native state (minimized, fullscreen) may have changed. See normalizeLayoutReason
     var isNativeStateCheckRequested: Bool = false
@@ -91,43 +99,60 @@ open class Window: TreeNode, Hashable {
     /// several accessibility round trips to the app (and wakes the app up), so unchanged frames are skipped. The sent
     /// frame is forgotten (``invalidateSentFrame()``) whenever the window may have been moved or resized by somebody
     /// else: AX moved/resized notifications, failed AX writes, app activation, Space/display changes, wake, etc.
+    ///
+    /// - Parameter readBack: read the frame back after it's applied, see ``observedFrame``. Not needed for a window that
+    ///   is hidden in a corner of the screen
     @MainActor
-    final func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+    final func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?, readBack: Bool = true) {
         let frame = SentFrame(topLeft: topLeft, size: size)
         if frame == sentFrame { return }
         sentFrame = frame
-        forgetAppliedFrame()
-        sendAxFrame(topLeft, size)
+        frameGeneration &+= 1
+        // Until it's read back: what the same request gave the previous time, otherwise what is sent (most windows accept it)
+        if frame != observedFrameRequest,
+           let origin = topLeft ?? observedFrame?.topLeftCorner,
+           let size = size ?? observedFrame?.size
+        {
+            setObservedFrame(Rect(topLeftX: origin.x, topLeftY: origin.y, width: size.width, height: size.height), request: nil)
+        }
+        sendAxFrame(topLeft, size, readBack: readBack ? frameGeneration : nil)
     }
 
-    /// The next ``setAxFrame(_:_:)`` sends the frame even if it's the same as the previous one
+    /// The next ``setAxFrame(_:_:readBack:)`` sends the frame even if it's the same as the previous one
     @MainActor
     final func invalidateSentFrame() {
         sentFrame = nil
-        forgetAppliedFrame()
+        frameGeneration &+= 1 // The window may have moved since a read back that is under way
     }
 
-    /// The frame that the window really has after the last sent frame. A window refuses a size smaller than its minimum:
-    /// e.g. App Store is at least 1000 wide, it's bigger than a 885 wide tile. One accessibility read after each frame
-    /// change of the window, nothing while the frame is the same. The read is queued after the pending frame job of the
-    /// app (see MacApp.setAxFrame), so it sees the frame that the app applied
+    /// - Parameter generation: the send that the frame was read back for
     @MainActor
-    final func getAppliedFrame(_ cm: CancellationMode) async throws -> Rect? {
-        if let appliedFrame { return appliedFrame }
-        let generation = frameGeneration
-        let rect = try await getAxRect(cm)
-        if generation == frameGeneration { appliedFrame = rect } // Not sent again meanwhile
-        return rect
+    final func frameWasReadBack(_ frame: Rect, generation: UInt) {
+        guard generation == frameGeneration else { return } // Sent again or moved meanwhile: a newer read back follows
+        setObservedFrame(frame, request: sentFrame)
+    }
+
+    /// - Parameter frame: read from the window just now
+    @MainActor
+    final func observeFrame(_ frame: Rect) {
+        frameGeneration &+= 1 // Newer than a read back that is under way
+        setObservedFrame(frame, request: nil)
     }
 
     @MainActor
-    private func forgetAppliedFrame() {
-        appliedFrame = nil
-        frameGeneration &+= 1
+    private func setObservedFrame(_ frame: Rect, request: SentFrame?) {
+        observedFrameRequest = request
+        if frame == observedFrame { return }
+        observedFrame = frame
+        FocusBorderController.shared.windowFrameDidChange(self)
     }
 
-    /// Use ``setAxFrame(_:_:)``
-    func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) { die("Not implemented") }
+    /// Use ``setAxFrame(_:_:readBack:)``
+    ///
+    /// - Parameter readBack: the generation to report the frame with to ``frameWasReadBack(_:generation:)``, nil if
+    ///   it's not needed
+    @MainActor
+    func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?, readBack: UInt?) { die("Not implemented") }
 }
 
 // periphery:ignore - the properties are only compared (Equatable)

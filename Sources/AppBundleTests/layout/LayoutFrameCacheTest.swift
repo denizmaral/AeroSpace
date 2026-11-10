@@ -63,43 +63,95 @@ struct LayoutFrameCacheTest {
         assertEquals(windows.map(\.sentFrames.count), [1, 2, 2])
     }
 
-    /// The focus border surrounds the frame that the window really has: App Store refuses to shrink to its tile
-    @Test func testAppliedFrameIsReadOncePerFrameChange() async throws {
+    /// The observed frame is what the user sees: App Store refuses to shrink to its tile
+    @Test func testObservedFrameIsTheFrameThatTheWindowAccepted() async throws {
         let workspace = Workspace.get(byName: name)
         let appStore = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        appStore.minimumSizeForTest = CGSize(width: 1000, height: 0)
+        let gitHub = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
         try await workspace.layoutWorkspace()
-        appStore.axRectForTest = Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1079)
 
-        assertEquals(try await appStore.getAppliedFrame(.cancellable)?.width, 1920)
-        try await workspace.layoutWorkspace() // Nothing is sent
-        assertEquals(try await appStore.getAppliedFrame(.cancellable)?.width, 1920)
-        assertEquals(appStore.axRectReadCount, 1)
-
-        // A new window takes the right half, App Store refuses to shrink to the left half
-        TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
-        try await workspace.layoutWorkspace()
-        appStore.axRectForTest = Rect(topLeftX: 0, topLeftY: 0, width: 1000, height: 1079)
-        assertEquals(try await appStore.getAppliedFrame(.cancellable)?.width, 1000)
-        assertEquals(appStore.axRectReadCount, 2)
-
-        // E.g. the app resized its window itself: kAXResizedNotification
-        appStore.invalidateSentFrame()
-        appStore.axRectForTest = Rect(topLeftX: 0, topLeftY: 0, width: 1100, height: 1079)
-        assertEquals(try await appStore.getAppliedFrame(.cancellable)?.width, 1100)
-        assertEquals(appStore.axRectReadCount, 3)
+        assertEquals(appStore.lastAppliedLayoutPhysicalRect?.width, 960) // The tile
+        assertEquals(appStore.observedFrame?.width, 1000)
+        assertEquals(gitHub.observedFrame, gitHub.lastAppliedLayoutPhysicalRect)
     }
 
-    /// A frame sent while the frame is read: the read may be from before it
-    @Test func testAppliedFrameReadDuringASendIsNotKept() async throws {
+    /// Until the frame is read back, the observed frame is what was sent: most windows accept it
+    @Test func testObservedFrameIsTheSentFrameUntilItIsReadBack() async throws {
+        let workspace = Workspace.get(byName: name)
+        let appStore = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        appStore.minimumSizeForTest = CGSize(width: 1000, height: 0)
+        appStore.heldReadBacksForTest = []
+        try await workspace.layoutWorkspace()
+        assertEquals(appStore.observedFrame?.width, 1920)
+
+        // A new window takes the right half, App Store refuses the left half
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await workspace.layoutWorkspace()
+        assertEquals(appStore.observedFrame?.width, 960)
+        appStore.deliverReadBacksForTest()
+        assertEquals(appStore.observedFrame?.width, 1000)
+    }
+
+    /// A read back of an older send arrives after a newer send
+    @Test func testReadBackOfAnOlderSendIsIgnored() async throws {
         let workspace = Workspace.get(byName: name)
         let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
-        try await workspace.layoutWorkspace()
-        window.axRectForTest = Rect(topLeftX: 0, topLeftY: 0, width: 1920, height: 1079)
+        window.heldReadBacksForTest = []
+        try await workspace.layoutWorkspace() // 1920 wide
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await workspace.layoutWorkspace() // 960 wide
+        for (frame, generation) in (window.heldReadBacksForTest ?? []).reversed() { // The older one arrives last
+            window.frameWasReadBack(frame, generation: generation)
+        }
+        assertEquals(window.observedFrame?.width, 960)
+    }
 
-        window.onAxRectReadForTest = { window.setAxFrame(CGPoint(x: 0, y: 0), CGSize(width: 960, height: 1079)) }
-        assertEquals(try await window.getAppliedFrame(.cancellable)?.width, 1920)
-        window.axRectForTest = Rect(topLeftX: 0, topLeftY: 0, width: 960, height: 1079) // The app applied the frame
-        assertEquals(try await window.getAppliedFrame(.cancellable)?.width, 960)
-        assertEquals(window.axRectReadCount, 2)
+    /// The window was moved or resized by somebody else while its frame was read back: the read back may be from before
+    @Test func testReadBackBeforeAnOutsideChangeIsIgnored() async throws {
+        let workspace = Workspace.get(byName: name)
+        let appStore = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        appStore.minimumSizeForTest = CGSize(width: 1000, height: 0)
+        appStore.heldReadBacksForTest = []
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await workspace.layoutWorkspace()
+        appStore.invalidateSentFrame() // kAXResizedNotification
+        appStore.deliverReadBacksForTest()
+        assertEquals(appStore.observedFrame?.width, 960) // Not confirmed. The next layout sends it again and reads it back
+        try await workspace.layoutWorkspace()
+        appStore.deliverReadBacksForTest()
+        assertEquals(appStore.observedFrame?.width, 1000)
+    }
+
+    /// The layout sends the same frame again after the sent frame was forgotten (e.g. the app was activated): the window
+    /// refuses it again, the observed frame doesn't jump to the tile and back
+    @Test func testSendingTheSameFrameAgainKeepsTheObservedFrame() async throws {
+        let workspace = Workspace.get(byName: name)
+        let appStore = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        appStore.minimumSizeForTest = CGSize(width: 1000, height: 0)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await workspace.layoutWorkspace()
+        assertEquals(appStore.observedFrame?.width, 1000)
+
+        appStore.invalidateSentFrame()
+        appStore.heldReadBacksForTest = []
+        try await workspace.layoutWorkspace()
+        assertEquals(appStore.sentFrames.count, 2)
+        assertEquals(appStore.observedFrame?.width, 1000)
+    }
+
+    /// Floating windows are read by every layout
+    @Test func testObservedFrameOfFloatingWindow() async throws {
+        let workspace = Workspace.get(byName: name)
+        let rect = Rect(topLeftX: 100, topLeftY: 200, width: 700, height: 500)
+        let floating = TestWindow.new(id: 1, parent: workspace.floatingWindowsContainer, rect: rect)
+        #expect(workspace.focusWorkspace()) // Otherwise the layout moves it to the monitor of the workspace
+        try await workspace.layoutWorkspace()
+        assertEquals(floating.sentFrames.count, 0)
+        assertEquals(floating.observedFrame, rect)
+
+        floating.axRectForTest = Rect(topLeftX: 300, topLeftY: 200, width: 700, height: 500) // Moved by the user
+        try await workspace.layoutWorkspace()
+        assertEquals(floating.observedFrame?.topLeftX, 300)
     }
 }

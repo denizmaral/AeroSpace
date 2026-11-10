@@ -3,11 +3,12 @@ import AppKit
 import Common
 
 final class TestWindow: Window, CustomStringConvertible {
-    /// What the accessibility API reports as the frame of the window
+    /// What the accessibility API reports as the frame of the window. A sent frame changes it like an app does
     var axRectForTest: Rect?
-    private(set) var axRectReadCount = 0
-    /// Runs at the await point of the next frame read
-    var onAxRectReadForTest: (@MainActor () -> Void)? = nil
+    /// The app refuses a smaller size, e.g. App Store is at least 1000 wide
+    var minimumSizeForTest: CGSize? = nil
+    /// The frames read back after sends, delivered by ``deliverReadBacksForTest()``. nil: delivered right away
+    var heldReadBacksForTest: [(frame: Rect, generation: UInt)]? = nil
     var isMacosFullscreenForTest = false
 
     @MainActor
@@ -33,11 +34,31 @@ final class TestWindow: Window, CustomStringConvertible {
         TestApp.shared.focusedWindow = self
     }
 
-    /// Frames that actually reached the window (unchanged frames are filtered by ``Window/setAxFrame(_:_:)``)
+    /// Frames that actually reached the window (unchanged frames are filtered by ``Window/setAxFrame(_:_:readBack:)``)
     private(set) var sentFrames: [(topLeft: CGPoint?, size: CGSize?)] = []
 
-    override func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
+    override func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?, readBack: UInt?) {
         sentFrames.append((topLeft, size))
+        let origin = topLeft ?? axRectForTest?.topLeftCorner ?? .zero
+        var applied = size ?? axRectForTest?.size ?? .zero
+        if let minimum = minimumSizeForTest {
+            applied = CGSize(width: max(applied.width, minimum.width), height: max(applied.height, minimum.height))
+        }
+        let frame = Rect(topLeftX: origin.x, topLeftY: origin.y, width: applied.width, height: applied.height)
+        axRectForTest = frame
+        guard let readBack else { return }
+        if heldReadBacksForTest != nil {
+            heldReadBacksForTest?.append((frame, readBack))
+        } else {
+            frameWasReadBack(frame, generation: readBack)
+        }
+    }
+
+    @MainActor
+    func deliverReadBacksForTest() {
+        let readBacks = heldReadBacksForTest ?? []
+        heldReadBacksForTest = []
+        for (frame, generation) in readBacks { frameWasReadBack(frame, generation: generation) }
     }
 
     override func closeAxWindow() {
@@ -47,12 +68,7 @@ final class TestWindow: Window, CustomStringConvertible {
     override func getTitle(_ cm: CancellationMode) async throws -> String { description }
 
     @MainActor override func getAxRect(_ cm: CancellationMode) async throws -> Rect? { // todo change to not Optional
-        axRectReadCount += 1
-        if let hook = onAxRectReadForTest {
-            onAxRectReadForTest = nil
-            hook()
-        }
-        return axRectForTest
+        axRectForTest
     }
 
     @MainActor override func getAxSize(_ cm: CancellationMode) async throws -> CGSize? {

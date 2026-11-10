@@ -164,7 +164,8 @@ final class MacApp: AbstractApp {
         }
     }
 
-    func setAxFrame(_ windowId: OpaqueWindowId, _ topLeft: CGPoint?, _ size: CGSize?) {
+    /// - Parameter readBack: see ``Window/sendAxFrame(_:_:readBack:)``
+    func setAxFrame(_ windowId: OpaqueWindowId, _ topLeft: CGPoint?, _ size: CGSize?, readBack generation: UInt?) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
         setFrameJobs[windowId] = withWindowAsync(windowId, .cancellable) { [axApp] window, job in
             let isApplied = try disableAnimations(app: axApp.threadGuarded, job) {
@@ -172,7 +173,11 @@ final class MacApp: AbstractApp {
             }
             if !isApplied { // E.g. the app is busy. Make the next layout send the frame again
                 Task.startUnstructured { @MainActor in Window.get(byId: windowId)?.invalidateSentFrame() }
+                return
             }
+            // What the app made of it, in the same job: it may refuse the size
+            guard let generation, let frame = try AppBundle::getAxRect(window: window, job: job) else { return }
+            Task.startUnstructured { @MainActor in Window.get(byId: windowId)?.frameWasReadBack(frame, generation: generation) }
         }
     }
 

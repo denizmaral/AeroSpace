@@ -196,7 +196,7 @@ final class MacWindow: Window {
                 let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: 1)
                 p = nodeMonitorInfo.visibleRect.bottomRightCorner - onePixelOffset
         }
-        setAxFrame(p, nil)
+        setAxFrame(p, nil, readBack: false) // Nothing on the screen deals with it until it's shown again
     }
 
     @MainActor
@@ -235,8 +235,8 @@ final class MacWindow: Window {
         try await macApp.getAxSize(windowId, cm)
     }
 
-    override func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
-        macApp.setAxFrame(windowId, topLeft, size)
+    override func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?, readBack: UInt?) {
+        macApp.setAxFrame(windowId, topLeft, size, readBack: readBack)
     }
 
     override func getAxRect(_ cm: CancellationMode) async throws -> Rect? {

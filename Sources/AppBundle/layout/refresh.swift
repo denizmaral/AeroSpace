@@ -52,7 +52,7 @@ func runHeavyCompleteRefreshSession(
             SecureInputPanel.shared.refresh()
             try await normalizeLayoutReason()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
-            await FocusBorderController.shared.update()
+            FocusBorderController.shared.update()
             WindowPlacementStore.persistIfChanged()
         }
     }
@@ -103,7 +103,7 @@ func runLightSession<T>(
         if focusBefore != focusAfter {
             focusAfter?.nativeFocus() // syncFocusToMacOs
         }
-        await FocusBorderController.shared.update()
+        FocusBorderController.shared.update()
         WindowPlacementStore.persistIfChanged()
         if !event.isFocusFollowsMouse { scheduleCancellableCompleteRefreshSession(event) }
         return result
