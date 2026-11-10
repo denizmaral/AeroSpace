@@ -118,7 +118,6 @@ private struct MenuBarPanel: View {
     private var actions: some View {
         HStack(spacing: 8) {
             Button { SettingsWindowController.shared.show() } label: { Label("Settings…", systemImage: "gearshape") }
-                .keyboardShortcut(",", modifiers: .command)
                 .help("Shortcuts, window rules, gaps, the focus border, …")
             Spacer()
             Button {
@@ -237,14 +236,9 @@ private enum AppIconCache {
     }
 }
 
-@MainActor @ViewBuilder
-func openConfigButton(showShortcutGroup: Bool = false) -> some View {
-    let button = Button("Open Settings") { SettingsWindowController.shared.show() }
-        .keyboardShortcut(",", modifiers: .command)
-    switch showShortcutGroup {
-        case true: shortcutGroup(label: Text("⌘ ,"), content: button)
-        case false: button
-    }
+@MainActor
+func openSettingsButton() -> some View {
+    Button("Open Settings") { SettingsWindowController.shared.show() }
 }
 
 func shortcutGroup(label: some View, content: some View) -> some View {

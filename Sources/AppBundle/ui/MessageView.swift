@@ -75,7 +75,7 @@ struct MessageView: View {
                 if let type = model.message?.type {
                     switch type {
                         case .config:
-                            openConfigButton(showShortcutGroup: true)
+                            openSettingsButton()
                     }
                 }
                 let closeButton = Button("Close") { model.message = nil }.keyboardShortcut(.defaultAction)
