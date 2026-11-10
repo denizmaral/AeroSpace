@@ -50,6 +50,11 @@ migration of AeroSpace's configuration, no TOML, defaults written in Swift.
 6. **No hidden semantic state.** Where an app opens is a window rule: visible, editable, undoable. The placement
    cache (windows back to their workspaces after a restart of MarSpace) stays a cache without meaning for the user. Only
    moves made by the user (a shortcut, a menu) are remembered, not moves by window rules or scripts
+7. **Old settings stay readable.** Every struct of the settings is `@DecodableWithDefaults`: a field that a newer MarSpace
+   added is missing from older settings, and gets its default value, at every level. Only what identifies an item is
+   required (the name of a mode, the key of a shortcut, the workspace of a monitor assignment). A test removes every key
+   of complete settings, one at a time, and requires them to load. Settings of a newer MarSpace (a higher
+   `schemaVersion`) are refused: saving them would drop what this version doesn't know
 
 ## What stays AeroSpace's, and why
 
@@ -86,6 +91,9 @@ Every phase is one commit and one deploy, and must reproduce the compiled result
    values); a window rule has one matcher (no "legacy" and command matchers) and its commands; the environment of
    `exec-and-forget` is a constant; the hidden keyboard layout preset is gone (no control showed it, the key names are
    the CLI's)
+7. **Tolerant decoding by construction**: a macro generates the decoding of every struct of the settings from the
+   default values of its fields. Before, only the top level was tolerant: a field added to a nested struct (e.g. a new
+   option in General) would have made everyone's settings unreadable
 
 ## Backlog (UX QA, after phase 1)
 

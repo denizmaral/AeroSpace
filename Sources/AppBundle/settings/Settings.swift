@@ -7,6 +7,7 @@ import HotKey
 ///
 /// Typed throughout: actions, keys, layouts and directions are enums. Strings are only user data: workspace and mode
 /// names, app bundle ids, title patterns, and custom command lines (the escape hatch for anything without a typed action)
+@DecodableWithDefaults
 struct Settings: Codable, Sendable, Equatable {
     /// 2: the shortcuts of the workspaces are generated (``workspaceShortcuts``)
     /// 3: window rules enter the fullscreen instead of toggling it
@@ -21,6 +22,7 @@ struct Settings: Codable, Sendable, Equatable {
     var workspaces = Workspaces()
     var automation = Automation()
 
+    @DecodableWithDefaults
     struct General: Codable, Sendable, Equatable {
         var startAtLogin = false
         var focusFollowsMouse = false
@@ -33,10 +35,12 @@ struct Settings: Codable, Sendable, Equatable {
         var automaticallyUnhideMacosHiddenApps = false
     }
 
+    @DecodableWithDefaults
     struct Appearance: Codable, Sendable, Equatable {
         var gaps = Gaps()
         var focusBorder = FocusBorder()
 
+        @DecodableWithDefaults
         struct Gaps: Codable, Sendable, Equatable {
             var innerHorizontal = 0
             var innerVertical = 0
@@ -46,6 +50,7 @@ struct Settings: Codable, Sendable, Equatable {
             var outerBottom = 0
         }
 
+        @DecodableWithDefaults
         struct FocusBorder: Codable, Sendable, Equatable {
             var isEnabled = false
             var color: BorderColor = .solid(ARGB(0xFF33_CCFF))
@@ -56,11 +61,13 @@ struct Settings: Codable, Sendable, Equatable {
 
     /// Shortcuts for every workspace whose name is one key (1 … 9, A … Z): these modifiers and the key that types the name on
     /// the keyboard layout of macOS. nil: no such shortcuts
+    @DecodableWithDefaults
     struct WorkspaceShortcuts: Codable, Sendable, Equatable {
         var goTo: KeyChord.Modifiers? = [.control, .option]
         var moveWindowTo: KeyChord.Modifiers? = [.control, .option, .shift]
     }
 
+    @DecodableWithDefaults
     struct BindingMode: Codable, Sendable, Equatable, Identifiable {
         var name: String
         var shortcuts: IdentifiedList<Shortcut> = []
@@ -68,19 +75,22 @@ struct Settings: Codable, Sendable, Equatable {
         var id: String { name }
     }
 
+    @DecodableWithDefaults
     struct Shortcut: Codable, Sendable, Equatable {
         var chord: KeyChord
-        var actions: IdentifiedList<Action>
+        var actions: IdentifiedList<Action> = []
     }
 
     /// The window rule runs its actions when a matching window appears (on-window-detected)
+    @DecodableWithDefaults
     struct WindowRule: Codable, Sendable, Equatable {
-        var condition = WindowCondition()
+        var condition = Settings.WindowCondition()
         var actions: IdentifiedList<Action> = []
         var checkFurtherRules = false
     }
 
     /// All the set fields must match
+    @DecodableWithDefaults
     struct WindowCondition: Codable, Sendable, Equatable {
         var appBundleId: String? = nil
         /// Case-insensitive regular expression, matches a substring
@@ -91,6 +101,7 @@ struct Settings: Codable, Sendable, Equatable {
         var duringStartup: Bool? = nil
     }
 
+    @DecodableWithDefaults
     struct Workspaces: Codable, Sendable, Equatable {
         /// Kept even when they are empty, in this order
         var persistent: [String] = []
@@ -98,12 +109,14 @@ struct Settings: Codable, Sendable, Equatable {
     }
 
     /// The workspace is shown on the first of the monitors that is connected
+    @DecodableWithDefaults
     struct MonitorAssignment: Codable, Sendable, Equatable {
         var workspace: String
-        var monitors: [MonitorSelector]
+        var monitors: [MonitorSelector] = []
     }
 
 
+    @DecodableWithDefaults
     struct Automation: Codable, Sendable, Equatable {
         var afterStartup: IdentifiedList<Action> = []
         var onFocusChanged: IdentifiedList<Action> = []
@@ -181,22 +194,6 @@ extension NewWindowPlacement: Codable {}
 extension Layout: Codable {}
 extension DefaultContainerOrientation: Codable {}
 
-extension Settings {
-    /// Settings of an older MarSpace miss newer fields: they get their defaults. Fields that are gone are ignored
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        let defaults = Settings()
-        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-        general = try container.decodeIfPresent(General.self, forKey: .general) ?? defaults.general
-        appearance = try container.decodeIfPresent(Appearance.self, forKey: .appearance) ?? defaults.appearance
-        modes = try container.decodeIfPresent([BindingMode].self, forKey: .modes) ?? defaults.modes
-        workspaceShortcuts = try container.decodeIfPresent(WorkspaceShortcuts.self, forKey: .workspaceShortcuts)
-            ?? WorkspaceShortcuts(goTo: nil, moveWindowTo: nil)
-        windowRules = try container.decodeIfPresent(IdentifiedList<WindowRule>.self, forKey: .windowRules) ?? defaults.windowRules
-        workspaces = try container.decodeIfPresent(Workspaces.self, forKey: .workspaces) ?? defaults.workspaces
-        automation = try container.decodeIfPresent(Automation.self, forKey: .automation) ?? defaults.automation
-    }
-}
 
 extension Settings.Shortcut {
     /// Just added, without an action yet: it's shown, and the engine skips it (it doesn't take its keys)
