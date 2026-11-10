@@ -67,7 +67,10 @@ extension Settings {
                 let location = "Shortcuts › \(mode.name) › \(notation)"
                 // A shortcut that was just added does nothing yet: it doesn't take its keys
                 guard shortcut.isComplete, let commands = compileActions(shortcut.actions, location, &problems, modeNames) else { continue }
-                let binding = HotkeyBinding(shortcut.chord.modifiers.eventFlags, shortcut.chord.key, commands, descriptionWithKeyNotation: notation)
+                let binding = HotkeyBinding(
+                    shortcut.chord.modifiers.eventFlags, shortcut.chord.key, commands,
+                    descriptionWithKeyNotation: notation, repeatsWhileHeld: shortcut.repeats,
+                )
                 if let existing = bindings[binding.descriptionWithKeyCode] {
                     let isWorkspaceShortcut = mode.name == mainModeId && workspaceBindings[binding.descriptionWithKeyCode] == existing
                     problems.append(.init(location: location, message: isWorkspaceShortcut ? "It's also the shortcut of a workspace" : "The shortcut is used twice"))

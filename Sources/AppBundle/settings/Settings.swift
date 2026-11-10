@@ -81,6 +81,9 @@ struct Settings: Codable, Sendable, Equatable {
     struct Shortcut: Codable, Sendable, Equatable {
         var chord: KeyChord
         var actions: IdentifiedList<Action> = []
+        /// The actions run again and again while the keys are held, like a key that types. nil: by what the shortcut does
+        /// (``repeats``)
+        var repeatsWhileHeld: Bool? = nil
     }
 
     /// The window rule runs its actions when a matching window appears (on-window-detected)
@@ -200,6 +203,16 @@ extension DefaultContainerOrientation: Codable {}
 extension Settings.Shortcut {
     /// Just added, without an action yet: it's shown, and the engine skips it (it doesn't take its keys)
     var isComplete: Bool { !actions.isEmpty }
+
+    /// Unless it's set: a shortcut that only makes the window bigger or smaller repeats, one step isn't the size one wants
+    var repeats: Bool {
+        repeatsWhileHeld ?? (isComplete && actions.allSatisfy {
+            switch $0 {
+                case .resize(_, .add), .resize(_, .subtract): true
+                default: false
+            }
+        })
+    }
 }
 
 extension Settings {

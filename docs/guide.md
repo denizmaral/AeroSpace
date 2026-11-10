@@ -125,6 +125,13 @@ for example, a window without a fullscreen button is treated as a dialog (except
 If a window floats or tiles when it shouldn't, add a window rule for its app (Settings › Window Rules) that makes it
 tiling or floating. Improvements to the guess are welcome: see `isDialogHeuristic` in the sources.
 
+## Shortcuts that repeat
+
+A shortcut can run again and again while its keys are held, like a key that types (Hyprland's `binde`), with the key
+repeat delay and rate of macOS (System Settings › Keyboard). Shortcuts that make the window bigger or smaller do so from
+the start: hold them until the size is right. Any other shortcut can: Settings › Shortcuts, the shortcut, **Repeat while
+the keys are held**.
+
 ## Shortcuts don't work?
 
 Another app may take the same keys first: check tools that listen to global keys, like Karabiner-Elements, skhd or

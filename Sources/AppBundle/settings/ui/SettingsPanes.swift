@@ -414,6 +414,8 @@ private struct ShortcutEditor: View {
             }
             Section {
                 ActionListEditor(actions: $shortcut.actions, modes: modes, workspaces: workspaces)
+                Toggle("Repeat while the keys are held", isOn: Binding(get: { shortcut.repeats }, set: { shortcut.repeatsWhileHeld = $0 }))
+                    .help("Like a key that types, with the key repeat of macOS. Shortcuts that resize the window repeat unless you turn it off")
             } header: {
                 Text("Does")
             }

@@ -40,7 +40,7 @@ struct SettingsCharacterizationTest {
         var lines = ["problems: \(problems.map(\.description))"]
         for (mode, bindings) in config.modes.sorted(by: { $0.key < $1.key }) {
             for (key, binding) in bindings.bindings.sorted(by: { $0.key < $1.key }) {
-                lines.append("binding \(mode) \(key): \(binding.commands.shellOfCommandsDescription)")
+                lines.append("binding \(mode) \(key): \(binding.commands.shellOfCommandsDescription)\(binding.repeatsWhileHeld ? " (repeats)" : "")")
             }
         }
         for callback in config.onWindowDetected {

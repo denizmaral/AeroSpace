@@ -14,7 +14,7 @@ binding main alt-ctrl-c: workspace C
 binding main alt-ctrl-comma: layout accordion horizontal vertical
 binding main alt-ctrl-d: workspace D
 binding main alt-ctrl-e: workspace E
-binding main alt-ctrl-equal: resize smart +50
+binding main alt-ctrl-equal: resize smart +50 (repeats)
 binding main alt-ctrl-f: workspace F
 binding main alt-ctrl-g: workspace G
 binding main alt-ctrl-h: focus left
@@ -23,7 +23,7 @@ binding main alt-ctrl-j: focus down
 binding main alt-ctrl-k: focus up
 binding main alt-ctrl-l: focus right
 binding main alt-ctrl-m: workspace M
-binding main alt-ctrl-minus: resize smart -50
+binding main alt-ctrl-minus: resize smart -50 (repeats)
 binding main alt-ctrl-n: workspace N
 binding main alt-ctrl-o: workspace O
 binding main alt-ctrl-p: workspace P
