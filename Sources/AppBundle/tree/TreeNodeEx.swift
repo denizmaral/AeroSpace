@@ -65,11 +65,7 @@ extension TreeNode {
     }
 
     var mostRecentWindowRecursive: Window? {
-        if let window = self as? Window { return window }
-        if let window = mostRecentChild?.mostRecentWindowRecursive { return window }
-        // The most recent child may be a container without windows: it's kept for windows in a macOS native state, see
-        // TilingSlot
-        return _mruChildren.lazy.compactMap(\.mostRecentWindowRecursive).first
+        self as? Window ?? mostRecentChild?.mostRecentWindowRecursive
     }
 
     var anyLeafWindowRecursive: Window? {
