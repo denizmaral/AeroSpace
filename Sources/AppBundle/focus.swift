@@ -103,9 +103,14 @@ extension Workspace {
 
 @MainActor private var _lastKnownFocus: FrozenFocus = _focus
 
-/// Focus changes that focus-follows-mouse didn't make: the keyboard, commands, cmd-tab, clicks. A check of the window under
-/// the mouse that started before one of them doesn't focus anything, the later action wins (see FocusFollowsMouseTracker)
+/// Focus changes that focus-follows-mouse didn't make: the keyboard, commands, cmd-tab, clicks, an app that takes the focus
+/// (e.g. it was just launched). A check of the window under the mouse that started before one of them doesn't focus
+/// anything, the later action wins (see FocusFollowsMouseTracker)
 @MainActor private(set) var focusChangesByOtherMeans: UInt = 0
+
+/// macOS focused another window than MarSpace: counted even in a session of focus-follows-mouse, which takes over the macOS
+/// focus before it focuses the window under the mouse
+@MainActor func countFocusChangeByMacOs() { focusChangesByOtherMeans &+= 1 }
 
 // Used by workspace-back-and-forth
 @MainActor var _prevFocusedWorkspaceName: String? = nil {

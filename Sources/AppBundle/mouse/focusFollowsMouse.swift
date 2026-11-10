@@ -52,15 +52,26 @@ import Common
             let target = mouseTracker.checked(real: real, focused: globalFocus.windowOrNil, focusChanges: focusChangesByOtherMeans, now: .now)
             focusLogger.info("ffm checked: real \(real?.windowId.description ?? "nil", privacy: .public), focused \(globalFocus.windowOrNil?.windowId.description ?? "nil", privacy: .public), focus changes \(focusChangesByOtherMeans), focuses \(target?.windowId.description ?? "nothing", privacy: .public)")
             guard let target else { return }
+            let focusChanges = focusChangesByOtherMeans
             // Not canceled by later mouse moves: the tracker took the window as the one under the mouse, it wouldn't try again
             Task.startUnstructured { @MainActor in
                 try await runLightSession(.focusFollowsMouse, token) {
-                    _ = target.focusWindow()
-                    target.nativeFocus()
+                    focusFollowsMouse(to: target, ifTheFocusDidntChangeSince: focusChanges)
                 }
             }
         }
     }
+}
+
+/// The session starts with the macOS focus, which may have changed since the check: e.g. an app that was just launched
+/// focused its window (moved to another workspace by its window rule). The later action wins
+@MainActor func focusFollowsMouse(to window: Window, ifTheFocusDidntChangeSince focusChanges: UInt) {
+    guard focusChangesByOtherMeans == focusChanges else {
+        focusLogger.info("ffm yields to the focus of \(globalFocus.windowOrNil?.windowId.description ?? "nil", privacy: .public)")
+        return
+    }
+    _ = window.focusWindow()
+    window.nativeFocus()
 }
 
 /// The windows under the mouse changed without the mouse crossing a window border: another workspace is shown, Mission

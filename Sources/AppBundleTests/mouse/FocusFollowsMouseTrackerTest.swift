@@ -192,6 +192,34 @@ struct FocusFollowsMouseTrackerTest {
         assertEquals(focusChangesByOtherMeans, before + 1)
     }
 
+    /// Mail is launched while the mouse crosses Terminal. The check focuses Terminal, but when its session starts, macOS has
+    /// focused the window of Mail, which its window rule moved to workspace M: Mail keeps the focus
+    @Test func testAnAppThatTakesTheFocusWinsOverAnEarlierCheck() {
+        let terminal = TestWindow.new(id: 1, parent: Workspace.get(byName: name).rootTilingContainer)
+        let mail = TestWindow.new(id: 2, parent: Workspace.get(byName: "M").rootTilingContainer)
+        _ = terminal.focusWindow()
+        updateFocusCache(terminal)
+        let focusChanges = focusChangesByOtherMeans // The check found Terminal under the mouse
+
+        updateFocusCache(mail) // The session takes over the macOS focus
+        focusFollowsMouse(to: terminal, ifTheFocusDidntChangeSince: focusChanges)
+        assertEquals(globalFocus.windowOrNil, mail)
+        assertEquals(globalFocus.workspace.name, "M")
+    }
+
+    /// The focus that focus-follows-mouse gave arrives in macOS later: not a change by other means
+    @Test func testItsOwnFocusInMacOsIsntAChangeByOtherMeans() {
+        let (first, second, _) = windows()
+        _ = first.focusWindow()
+        updateFocusCache(first)
+        let focusChanges = focusChangesByOtherMeans
+
+        focusFollowsMouse(to: second, ifTheFocusDidntChangeSince: focusChanges)
+        updateFocusCache(second)
+        assertEquals(globalFocus.windowOrNil, second)
+        assertEquals(focusChangesByOtherMeans, focusChanges)
+    }
+
     /// The mouse moves fast: focus-follows-mouse focuses the first window while the second one is checked
     @Test func testOwnFocusChangeDoesntCancelTheNextCheck() {
         let (first, second, third) = windows()
