@@ -34,12 +34,15 @@ struct ActionListEditor: View {
                 .help("Remove the action")
             }
         }
-        Button {
-            actions.append(.focus(.left))
-        } label: {
-            Label(actions.isEmpty ? "Add an action" : "Add another action", systemImage: "plus.circle")
+        // Nothing is added (and runs) until an action is chosen
+        ActionKindMenu(title: actions.isEmpty ? "Add an action" : "Add another action", systemImage: "plus.circle") { kind in
+            actions.append(kind.defaultAction(
+                previous: .focus(.left), mode: modes.first ?? mainModeId, workspace: workspaces.first ?? "1", context: context,
+            ))
         }
-        .buttonStyle(.borderless)
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 }
 
@@ -77,6 +80,14 @@ enum ActionKind: String, CaseIterable, Identifiable {
     }
 
     /// Separators in the menu
+    /// Their parameters go on a line of their own
+    var hasWideParameters: Bool {
+        switch self {
+            case .resize, .moveWorkspaceToMonitor, .fullscreen, .moveMouse, .custom: true
+            default: false
+        }
+    }
+
     static let groups: [[ActionKind]] = [
         [.focus, .move, .joinWith, .resize],
         [.workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor],
@@ -142,25 +153,29 @@ struct ActionEditor: View {
     var context: ActionContext = .shortcut
 
     var body: some View {
-        HStack(spacing: 8) {
-            Menu {
-                ForEach(ActionKind.groups.indices, id: \.self) { group in
-                    if group > 0 { Divider() }
-                    ForEach(ActionKind.groups[group]) { kind in
-                        Button(kind.title) {
-                            action = kind.defaultAction(
-                                previous: action, mode: modes.first ?? mainModeId, workspace: workspaces.first ?? "1", context: context,
-                            )
-                        }
-                    }
+        // A fixed layout per kind: switching layouts while a field is edited would recreate the field (and lose the focus)
+        if ActionKind(action).hasWideParameters {
+            VStack(alignment: .leading, spacing: 6) {
+                kindMenu
+                HStack(spacing: 8) {
+                    parameters
+                    Spacer(minLength: 0)
                 }
-            } label: {
-                Text(ActionKind(action).title)
             }
-            .fixedSize()
-            parameters
-            Spacer(minLength: 0)
+        } else {
+            HStack(spacing: 8) {
+                kindMenu
+                parameters
+                Spacer(minLength: 0)
+            }
         }
+    }
+
+    private var kindMenu: some View {
+        ActionKindMenu(title: ActionKind(action).title) { kind in
+            action = kind.defaultAction(previous: action, mode: modes.first ?? mainModeId, workspace: workspaces.first ?? "1", context: context)
+        }
+        .fixedSize()
     }
 
     @ViewBuilder
@@ -198,6 +213,26 @@ struct ActionEditor: View {
             case .custom(let line): CustomCommandField(line: line) { action = .custom($0) }
             case .workspaceBackAndForth, .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent, .reloadSettings:
                 EmptyView()
+        }
+    }
+}
+
+/// The kinds of actions, in groups
+private struct ActionKindMenu: View {
+    let title: String
+    var systemImage: String? = nil
+    let choose: @MainActor (ActionKind) -> Void
+
+    var body: some View {
+        Menu {
+            ForEach(ActionKind.groups.indices, id: \.self) { group in
+                if group > 0 { Divider() }
+                ForEach(ActionKind.groups[group]) { kind in
+                    Button(kind.title) { choose(kind) }
+                }
+            }
+        } label: {
+            if let systemImage { Label(title, systemImage: systemImage) } else { Text(title) }
         }
     }
 }

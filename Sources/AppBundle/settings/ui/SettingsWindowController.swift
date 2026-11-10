@@ -29,6 +29,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             window.setContentSize(NSSize(width: 920, height: 660))
             window.center()
             window.setFrameAutosaveName("MarSpaceSettings")
+            model.undoManager = window.undoManager // ⌘Z and Edit › Undo undo the removals
             self.window = window
         }
         NSApp.setActivationPolicy(.regular)

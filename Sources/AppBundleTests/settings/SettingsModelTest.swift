@@ -1,5 +1,6 @@
 @testable import AppBundle
 import Common
+import Foundation
 import Testing
 
 /// The settings window saves and applies every edit shortly after the last one: nothing the user did is lost, the invalid
@@ -94,6 +95,33 @@ struct SettingsModelTest {
 
         setHotkeysPaused(false)
         assertEquals(registeredHotkeys.filter(\.isEnabled).count, 1)
+    }
+
+    /// A removal can be undone: from the banner, and with ⌘Z (and redone with ⇧⌘Z)
+    @Test func testRemovalsCanBeUndone() {
+        var two = settings()
+        two.windowRules = [Settings.WindowRule(actions: [.closeWindow]), Settings.WindowRule(actions: [.balanceSizes])]
+        let model = SettingsModel(settings: two, apply: { _ in })
+        model.removing("Delete Rule", "Rule deleted") { model.settings.windowRules.remove(at: 0) }
+        assertEquals(model.removal?.message, "Rule deleted")
+        model.undoRemoval()
+        assertEquals(model.settings, two)
+        assertNil(model.removal)
+
+        let undoManager = UndoManager()
+        undoManager.groupsByEvent = false
+        model.undoManager = undoManager
+        undoManager.beginUndoGrouping()
+        model.removing("Delete Rule", "Rule deleted") { model.settings.windowRules.remove(at: 1) }
+        undoManager.endUndoGrouping()
+        assertEquals(undoManager.undoActionName, "Delete Rule")
+        undoManager.undo()
+        assertEquals(model.settings, two)
+        undoManager.redo()
+        assertEquals(model.settings.windowRules.count, 1)
+
+        model.removing("Delete Rule", "Rule deleted") {} // Nothing removed: nothing to undo
+        assertNil(model.removal)
     }
 
     /// MarSpace's own shortcuts are paused while a shortcut is recorded

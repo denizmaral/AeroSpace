@@ -29,7 +29,7 @@ struct ShortcutsToolbar: ToolbarContent {
                 Button("New mode…") { state.isAddingMode = true }
                 if state.modeName != mainModeId {
                     Button("Remove the \(state.modeName.capitalized) mode", role: .destructive) {
-                        model.settings.modes.removeAll { $0.name == state.modeName }
+                        model.removing("Remove Mode", "The \(state.modeName) mode was removed") { model.settings.modes.removeAll { $0.name == state.modeName } }
                         state.modeName = mainModeId
                     }
                 }
@@ -94,7 +94,7 @@ struct ShortcutsPane: View {
                 }
                 Section {
                     Button {
-                        model.settings.modes[modeIndex].shortcuts.append(Settings.Shortcut(chord: KeyChord([.control, .option], .f1), actions: [.focus(.left)]))
+                        model.settings.modes[modeIndex].shortcuts.append(Settings.Shortcut(chord: KeyChord([.control, .option], .f1), actions: [])) // Inert until an action is chosen
                         editing = model.settings.modes[modeIndex].shortcuts.count - 1
                     } label: {
                         Label("Add a shortcut", systemImage: "plus")
@@ -153,8 +153,10 @@ struct ShortcutsPane: View {
             workspaces: model.settings.workspaces.persistent,
             remove: {
                 editing = nil
-                if model.settings.modes.indices.contains(modeIndex), model.settings.modes[modeIndex].shortcuts.indices.contains(index) {
-                    model.settings.modes[modeIndex].shortcuts.remove(at: index)
+                model.removing("Delete Shortcut", "Shortcut deleted") {
+                    if model.settings.modes.indices.contains(modeIndex), model.settings.modes[modeIndex].shortcuts.indices.contains(index) {
+                        model.settings.modes[modeIndex].shortcuts.remove(at: index)
+                    }
                 }
             },
         )
@@ -513,7 +515,9 @@ struct WindowRulesPane: View {
                                     workspaces: model.settings.workspaces.persistent,
                                     remove: {
                                         editing = nil
-                                        if model.settings.windowRules.indices.contains(index) { model.settings.windowRules.remove(at: index) }
+                                        model.removing("Delete Rule", "Rule deleted") {
+                                            if model.settings.windowRules.indices.contains(index) { model.settings.windowRules.remove(at: index) }
+                                        }
                                     },
                                 )
                             }
@@ -529,7 +533,7 @@ struct WindowRulesPane: View {
             }
             Section {
                 Button {
-                    model.settings.windowRules.append(Settings.WindowRule(actions: [.moveWindowToWorkspace(model.settings.workspaces.persistent.first ?? "1")]))
+                    model.settings.windowRules.append(Settings.WindowRule()) // Inert until an action is chosen
                     editing = model.settings.windowRules.count - 1
                 } label: {
                     Label("Add a rule", systemImage: "plus")
@@ -569,6 +573,9 @@ private struct WindowRuleRow: View {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             }
             HStack(spacing: 6) {
+                if rule.actions.isEmpty {
+                    Text("Does nothing").font(.callout).foregroundStyle(.tertiary)
+                }
                 ForEach(Array(rule.actions.enumerated()), id: \.offset) { _, action in
                     HStack(spacing: 5) {
                         ActionIcon(action: action).scaleEffect(0.85)
@@ -684,6 +691,8 @@ private struct OptionalTextRow: View {
 
 struct WorkspacesPane: View {
     @Binding var workspaces: Settings.Workspaces
+    /// See ``SettingsModel/removing(_:_:)``
+    let removing: (String, String, () -> Void) -> Void
     @State private var newName = ""
 
     var body: some View {
@@ -691,7 +700,7 @@ struct WorkspacesPane: View {
             Section {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 8)], alignment: .leading, spacing: 8) {
                     ForEach(workspaces.persistent, id: \.self) { name in
-                        WorkspaceChip(name: name) { workspaces.persistent.removeAll { $0 == name } }
+                        WorkspaceChip(name: name) { removing("Remove Workspace", "Workspace \(name) removed") { workspaces.persistent.removeAll { $0 == name } } }
                     }
                 }
                 .padding(.vertical, 4)
@@ -711,7 +720,9 @@ struct WorkspacesPane: View {
             Section {
                 ForEach(workspaces.monitorAssignments.indices, id: \.self) { index in
                     MonitorAssignmentRow(assignment: $workspaces.monitorAssignments.element(index, or: Settings.MonitorAssignment(workspace: "", monitors: []))) {
-                        if workspaces.monitorAssignments.indices.contains(index) { workspaces.monitorAssignments.remove(at: index) }
+                        removing("Remove Monitor Assignment", "Monitor assignment removed") {
+                            if workspaces.monitorAssignments.indices.contains(index) { workspaces.monitorAssignments.remove(at: index) }
+                        }
                     }
                 }
                 Button {

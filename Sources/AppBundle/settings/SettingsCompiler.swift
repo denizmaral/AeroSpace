@@ -65,7 +65,8 @@ extension Settings {
             for shortcut in mode.shortcuts {
                 let notation = keyNames.notation(shortcut.chord)
                 let location = "Shortcuts › \(mode.name) › \(notation)"
-                guard let commands = compileActions(shortcut.actions, location, &problems) else { continue }
+                // A shortcut that was just added does nothing yet: it doesn't take its keys
+                guard !shortcut.actions.isEmpty, let commands = compileActions(shortcut.actions, location, &problems) else { continue }
                 let binding = HotkeyBinding(shortcut.chord.modifiers.eventFlags, shortcut.chord.key, commands, descriptionWithKeyNotation: notation)
                 if let existing = bindings[binding.descriptionWithKeyCode] {
                     let isWorkspaceShortcut = mode.name == mainModeId && workspaceBindings[binding.descriptionWithKeyCode] == existing
@@ -78,7 +79,8 @@ extension Settings {
 
         for (index, rule) in windowRules.enumerated() {
             let location = "Window rules › \(index + 1)"
-            guard let matcher = rule.condition.runtimeMatcher(location, &problems),
+            // A rule that was just added does nothing yet: it doesn't stop the next rules either
+            guard !rule.actions.isEmpty, let matcher = rule.condition.runtimeMatcher(location, &problems),
                   let commands = compileActions(rule.actions, location, &problems)
             else { continue }
             config.onWindowDetected.append(WindowDetectedCallback(matcher: .legacy(matcher), checkFurtherCallbacks: rule.checkFurtherRules, rawRun: commands))

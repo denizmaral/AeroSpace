@@ -109,6 +109,19 @@ struct SettingsTest {
         assertEquals(config.modes[mainModeId]?.bindings.count, 0)
     }
 
+    /// A shortcut or a rule that was just added does nothing until an action is chosen: it doesn't take its keys, and the rule
+    /// doesn't stop the next rules
+    @Test func testAddedShortcutsAndRulesDoNothingYet() {
+        var settings = Settings()
+        settings.workspaceShortcuts = .init(goTo: nil, moveWindowTo: nil)
+        settings.modes = [Settings.BindingMode(name: mainModeId, shortcuts: [Settings.Shortcut(chord: KeyChord([.control, .option], .f1), actions: [])])]
+        settings.windowRules = [Settings.WindowRule(), Settings.WindowRule(condition: .init(appBundleId: "com.apple.mail"), actions: [.moveWindowToWorkspace("M")])]
+        let (config, problems) = settings.compile()
+        assertEquals(problems, [])
+        assertEquals(config.modes[mainModeId]?.bindings.count, 0)
+        assertEquals(config.onWindowDetected.count, 1) // Only the Mail rule
+    }
+
     /// Every gap and border value distinct, so that no field can be mixed up with another
     @Test func testImportOfDistinctAppearanceValues() throws {
         try assertParity("""

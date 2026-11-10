@@ -35,7 +35,34 @@ struct SettingsView: View {
             }
         }
         .onChange(of: pane) { visited.insert(pane ?? .general) }
+        .overlay(alignment: .bottom) {
+            if let removal = model.removal {
+                UndoBanner(message: removal.message, undo: model.undoRemoval)
+                    .padding(.bottom, 16)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.25), value: model.removal)
         .frame(minWidth: 820, minHeight: 580)
+    }
+}
+
+/// "Rule deleted · Undo", for a few seconds after a removal
+private struct UndoBanner: View {
+    let message: String
+    let undo: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "trash").foregroundStyle(.secondary)
+            Text(message)
+            Button("Undo", action: undo).keyboardShortcut("z", modifiers: .command)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(Capsule().strokeBorder(.separator))
+        .shadow(color: .black.opacity(0.2), radius: 8, y: 2)
     }
 }
 
@@ -50,7 +77,7 @@ struct SettingsPaneView: View {
             case .appearance: AppearancePane(appearance: $model.settings.appearance)
             case .shortcuts: ShortcutsPane(model: model, state: shortcutsState)
             case .windowRules: WindowRulesPane(model: model)
-            case .workspaces: WorkspacesPane(workspaces: $model.settings.workspaces)
+            case .workspaces: WorkspacesPane(workspaces: $model.settings.workspaces, removing: model.removing)
             case .automation: AutomationPane(model: model)
         }
     }
@@ -124,6 +151,7 @@ struct SettingsIconTile: View {
 
 private struct GeneralPane: View {
     @Binding var general: Settings.General
+    @State private var showsNormalization = false
 
     var body: some View {
         Form {
@@ -166,9 +194,15 @@ private struct GeneralPane: View {
                 LabeledContent("Accordion padding") {
                     ValueSlider(value: $general.accordionPadding, range: 0 ... 100, unit: "pt")
                 }
-                DisclosureGroup("Tree normalization") {
+                DisclosureGroup(isExpanded: $showsNormalization) {
                     Toggle("Merge containers with a single window", isOn: $general.flattenContainers)
                     Toggle("Alternate the orientation of nested containers", isOn: $general.oppositeOrientationForNestedContainers)
+                } label: {
+                    // The whole row toggles it, not only the chevron
+                    Button { withAnimation(.snappy(duration: 0.2)) { showsNormalization.toggle() } } label: {
+                        Text("Tree normalization").frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
