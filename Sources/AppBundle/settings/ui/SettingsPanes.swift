@@ -137,19 +137,27 @@ struct ShortcutsPane: View {
         .contentShape(Rectangle())
         .onTapGesture { editing = index }
         .popover(isPresented: Binding(get: { editing == index }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
-            ShortcutEditor(
-                shortcut: $model.settings.modes.element(modeIndex).shortcuts.element(index),
-                isRecording: $model.isRecordingShortcut,
-                modes: model.settings.modes.map(\.name),
-                workspaces: model.settings.workspaces.persistent,
-                remove: {
-                    editing = nil
-                    if model.settings.modes.indices.contains(modeIndex), model.settings.modes[modeIndex].shortcuts.indices.contains(index) {
-                        model.settings.modes[modeIndex].shortcuts.remove(at: index)
-                    }
-                },
-            )
+            if model.settings.modes.indices.contains(modeIndex), model.settings.modes[modeIndex].shortcuts.indices.contains(index) {
+                shortcutEditor(modeIndex, index)
+            }
         }
+    }
+
+    /// Only for a shortcut that exists: the content of a closing popover is built again after its shortcut was removed
+    private func shortcutEditor(_ modeIndex: Int, _ index: Int) -> some View {
+        ShortcutEditor(
+            shortcut: $model.settings.modes.element(modeIndex, or: Settings.BindingMode(name: mainModeId))
+                .shortcuts.element(index, or: Settings.Shortcut(chord: KeyChord([], .escape), actions: [])),
+            isRecording: $model.isRecordingShortcut,
+            modes: model.settings.modes.map(\.name),
+            workspaces: model.settings.workspaces.persistent,
+            remove: {
+                editing = nil
+                if model.settings.modes.indices.contains(modeIndex), model.settings.modes[modeIndex].shortcuts.indices.contains(index) {
+                    model.settings.modes[modeIndex].shortcuts.remove(at: index)
+                }
+            },
+        )
     }
 
     /// The matching shortcuts in a readable order: by action, then by parameter (directions in reading order, workspaces
@@ -496,16 +504,19 @@ struct WindowRulesPane: View {
                         .contentShape(Rectangle())
                         .onTapGesture { editing = index }
                         .popover(isPresented: Binding(get: { editing == index }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
-                            WindowRuleEditor(
-                                rule: $model.settings.windowRules.element(index),
-                                problems: model.problems(at: "Window rules › \(index + 1)"),
-                                modes: model.settings.modes.map(\.name),
-                                workspaces: model.settings.workspaces.persistent,
-                                remove: {
-                                    editing = nil
-                                    if model.settings.windowRules.indices.contains(index) { model.settings.windowRules.remove(at: index) }
-                                },
-                            )
+                            // Built again while it closes, after the rule was removed
+                            if model.settings.windowRules.indices.contains(index) {
+                                WindowRuleEditor(
+                                    rule: $model.settings.windowRules.element(index, or: Settings.WindowRule()),
+                                    problems: model.problems(at: "Window rules › \(index + 1)"),
+                                    modes: model.settings.modes.map(\.name),
+                                    workspaces: model.settings.workspaces.persistent,
+                                    remove: {
+                                        editing = nil
+                                        if model.settings.windowRules.indices.contains(index) { model.settings.windowRules.remove(at: index) }
+                                    },
+                                )
+                            }
                         }
                 }
                 .onMove { model.settings.windowRules.move(fromOffsets: $0, toOffset: $1) }
@@ -699,7 +710,7 @@ struct WorkspacesPane: View {
 
             Section {
                 ForEach(workspaces.monitorAssignments.indices, id: \.self) { index in
-                    MonitorAssignmentRow(assignment: $workspaces.monitorAssignments.element(index)) {
+                    MonitorAssignmentRow(assignment: $workspaces.monitorAssignments.element(index, or: Settings.MonitorAssignment(workspace: "", monitors: []))) {
                         if workspaces.monitorAssignments.indices.contains(index) { workspaces.monitorAssignments.remove(at: index) }
                     }
                 }
