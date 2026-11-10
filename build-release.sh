@@ -1,5 +1,4 @@
-#!/usr/bin/env bash
-cd "$(dirname "$0")"
+#!/usr/bin/env bashcd "$(dirname "$0")"
 source ./script/setup.sh
 
 build_version="0.0.0-SNAPSHOT"
@@ -82,13 +81,3 @@ cd .release
     cp -r MarSpace.app "AeroSpace-v$build_version"
     zip -r "AeroSpace-v$build_version.zip" "AeroSpace-v$build_version"
 cd -
-
-#################
-### Brew Cask ###
-#################
-for cask_name in aerospace aerospace-dev; do
-    ./script/build-brew-cask.sh \
-        --cask-name "$cask_name" \
-        --zip-uri ".release/AeroSpace-v$build_version.zip" \
-        --build-version "$build_version"
-done

@@ -53,9 +53,6 @@ If you only plan to build the debug version of AeroSpace, you can run it from th
 
 **Release build**
 -   `build-release.sh` - Build release build to `.release` dir by using Xcode.
--   `install-from-sources.sh` - Build release build from sources and install it as `aerospace-dev` brew cask.
-    This script is "work in progress".
-    Use it on your own risk.
 
 ## IDE
 

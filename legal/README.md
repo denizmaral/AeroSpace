@@ -1,10 +1,11 @@
 # LICENSE
 
-The AeroSpace itself is licensed under MIT. See [LICENSE](./LICENSE.txt) for the full license text.
+MarSpace is licensed under MIT. See [LICENSE](./LICENSE.txt) for the full license text. MarSpace is based on
+[AeroSpace](https://github.com/nikitabobko/AeroSpace), MIT licensed too.
 
 ## Bundled dependencies and materials
 
-AeroSpace bundles the following dependencies and uses the following materials:
+MarSpace bundles the following dependencies and uses the following materials:
 
 **HotKey**.
 [HotKey GitHub link](https://github.com/soffes/HotKey).

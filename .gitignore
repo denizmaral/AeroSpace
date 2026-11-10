@@ -5,7 +5,6 @@
 
 # Unignored top level .dirs
 !/.bundle
-!/.github
 
 /Gemfile.lock
 /xcode/.xcode-build
