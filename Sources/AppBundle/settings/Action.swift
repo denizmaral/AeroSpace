@@ -7,12 +7,21 @@ import Common
 /// CLI, nothing is implemented twice
 enum Action: Codable, Sendable, Equatable {
     case focus(CardinalDirection)
+    /// The next or the previous window of the workspace, and around at the end (Hyprland's `cyclenext`)
+    case cycleFocus(Cycle)
+    /// The window that had the focus before (Hyprland's `focuscurrentorlast`)
+    case focusBackAndForth
     case move(CardinalDirection)
+    /// The window and its neighbor change places, their containers stay as they are (Hyprland's `swapwindow`)
+    case swap(CardinalDirection)
     case joinWith(CardinalDirection)
     case resize(ResizeCmdArgs.Dimension, ResizeAmount)
     case workspace(String)
     case workspaceBackAndForth
     case moveWindowToWorkspace(String)
+    /// Moves the window and goes there with it (Hyprland's `movetoworkspace`; ``moveWindowToWorkspace(_:)`` stays, like
+    /// `movetoworkspacesilent`)
+    case moveWindowToWorkspaceAndFollow(String)
     case moveWorkspaceToMonitor(MonitorStep, wrapAround: Bool)
     /// Cycles through the layouts: e.g. tiles and accordion, horizontal and vertical, floating and tiling
     case layout([LayoutOption])
@@ -37,6 +46,10 @@ enum Action: Codable, Sendable, Equatable {
         case set(UInt)
     }
 
+    enum Cycle: String, Codable, Sendable, CaseIterable {
+        case next, previous
+    }
+
     enum MonitorStep: String, Codable, Sendable, CaseIterable {
         case next, prev
     }
@@ -58,7 +71,10 @@ enum Action: Codable, Sendable, Equatable {
     private var words: [String] {
         switch self {
             case .focus(let direction): ["focus", direction.rawValue]
+            case .cycleFocus(let step): ["focus", "--boundaries-action", "wrap-around-the-workspace", step.dfsDirection.rawValue]
+            case .focusBackAndForth: ["focus-back-and-forth"]
             case .move(let direction): ["move", direction.rawValue]
+            case .swap(let direction): ["swap", direction.rawValue]
             case .joinWith(let direction): ["join-with", direction.rawValue]
             case .resize(let dimension, let amount):
                 switch amount {
@@ -69,6 +85,7 @@ enum Action: Codable, Sendable, Equatable {
             case .workspace(let name): ["workspace", name]
             case .workspaceBackAndForth: ["workspace-back-and-forth"]
             case .moveWindowToWorkspace(let name): ["move-node-to-workspace", name]
+            case .moveWindowToWorkspaceAndFollow(let name): ["move-node-to-workspace", "--focus-follows-window", name]
             case .moveWorkspaceToMonitor(let step, let wrapAround):
                 wrapAround ? ["move-workspace-to-monitor", "--wrap-around", step.rawValue] : ["move-workspace-to-monitor", step.rawValue]
             case .layout(let options): ["layout"] + options.map(\.rawValue)
@@ -99,7 +116,12 @@ enum Action: Codable, Sendable, Equatable {
         let args: any CmdArgs
         switch self {
             case .focus(let direction): args = FocusCmdArgs(rawArgs: rawArgs.slice, cardinalOrDfsDirection: .direction(direction))
+            case .cycleFocus(let step):
+                args = FocusCmdArgs(rawArgs: rawArgs.slice, cardinalOrDfsDirection: .dfsNextPrev(step.dfsDirection))
+                    .with(\.rawBoundariesAction, .wrapAroundTheWorkspace)
+            case .focusBackAndForth: args = FocusBackAndForthCmdArgs(rawArgs: rawArgs.slice)
             case .move(let direction): args = MoveCmdArgs(rawArgs: rawArgs, direction: direction)
+            case .swap(let direction): args = SwapCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(.direction(direction)))
             case .joinWith(let direction): args = JoinWithCmdArgs(rawArgs: rawArgs, direction: direction)
             case .resize(let dimension, let amount):
                 let units: ResizeCmdArgs.Units = switch amount {
@@ -108,17 +130,18 @@ enum Action: Codable, Sendable, Equatable {
                     case .set(let value): .set(value)
                 }
                 args = ResizeCmdArgs(rawArgs: rawArgs, dimension: dimension, units: units)
-            case .workspace(let name), .moveWindowToWorkspace(let name):
+            case .workspace(let name), .moveWindowToWorkspace(let name), .moveWindowToWorkspaceAndFollow(let name):
                 // E.g. `next` would be a direction
                 let target: WorkspaceTarget
                 switch WorkspaceName.parse(name) {
                     case .success(let name): target = .direct(name)
                     case .failure(let message): return .failure(message, EXIT_CODE_TWO)
                 }
-                args = if case .workspace = self {
-                    WorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target))
-                } else {
-                    MoveNodeToWorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target))
+                args = switch self {
+                    case .workspace: WorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target))
+                    case .moveWindowToWorkspaceAndFollow:
+                        MoveNodeToWorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target)).with(\.focusFollowsWindow, true)
+                    default: MoveNodeToWorkspaceCmdArgs(rawArgs: rawArgs.slice).with(\.target, .initialized(target))
                 }
             case .workspaceBackAndForth: args = WorkspaceBackAndForthCmdArgs(rawArgs: rawArgs.slice)
             case .moveWorkspaceToMonitor(let step, let wrapAround):
@@ -142,6 +165,10 @@ enum Action: Codable, Sendable, Equatable {
         }
         return args.toCommand().map { .cmd($0) }
     }
+}
+
+extension Action.Cycle {
+    fileprivate var dfsDirection: DfsNextPrev { self == .next ? .dfsNext : .dfsPrev }
 }
 
 extension Action.LayoutOption {

@@ -370,7 +370,10 @@ struct ActionIcon: View {
     private var symbol: String {
         switch action {
             case .focus(let direction): "arrow.\(direction.rawValue)"
+            case .cycleFocus(let step): step == .next ? "arrow.forward.to.line" : "arrow.backward.to.line"
+            case .focusBackAndForth: "arrow.uturn.backward.square"
             case .move(let direction): "arrow.\(direction.rawValue).square"
+            case .swap: "arrow.left.arrow.right.square"
             case .joinWith: "rectangle.split.2x1"
             case .resize: "arrow.left.and.right"
             case .workspaceBackAndForth: "arrow.uturn.backward"
@@ -385,7 +388,7 @@ struct ActionIcon: View {
             case .reloadSettings: "arrow.clockwise"
             case .moveMouse: "cursorarrow"
             case .custom: "terminal"
-            case .workspace, .moveWindowToWorkspace, nil: "questionmark"
+            case .workspace, .moveWindowToWorkspace, .moveWindowToWorkspaceAndFollow, nil: "questionmark"
         }
     }
 }
@@ -451,7 +454,8 @@ private enum ShortcutGroup: CaseIterable, Identifiable {
 
     init(action: Action) {
         self = switch ActionKind(action) {
-            case .focus, .move, .joinWith, .resize, .fullscreen, .closeWindow, .closeAllWindowsButCurrent: .windows
+            case .focus, .cycleFocus, .focusBackAndForth, .move, .swap, .joinWith, .resize, .fullscreen, .closeWindow,
+                 .closeAllWindowsButCurrent: .windows
             case .workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor: .workspaces
             case .layout, .flattenWorkspaceTree, .balanceSizes: .layout
             case .enterMode, .reloadSettings, .moveMouse, .custom: .other
@@ -465,7 +469,7 @@ extension Action {
         switch self {
             case .focus(let direction), .move(let direction), .joinWith(let direction):
                 "\(CardinalDirection.allCases.firstIndex(of: direction) ?? 0)"
-            case .workspace(let name), .moveWindowToWorkspace(let name), .enterMode(let name): name
+            case .workspace(let name), .moveWindowToWorkspace(let name), .moveWindowToWorkspaceAndFollow(let name), .enterMode(let name): name
             default: commandLine
         }
     }
@@ -476,7 +480,10 @@ extension Action {
     var summary: String {
         switch self {
             case .focus(let direction): "Focus \(direction.rawValue)"
+            case .cycleFocus(let step): step == .next ? "Focus the next window" : "Focus the previous window"
+            case .focusBackAndForth: "Focus the last focused window"
             case .move(let direction): "Move \(direction.rawValue)"
+            case .swap(let direction): "Swap with the window \(direction == .left || direction == .right ? "on the \(direction.rawValue)" : direction == .up ? "above" : "below")"
             case .joinWith(let direction): "Join with \(direction.rawValue)"
             case .resize(let dimension, .add(let value)): "Grow \(dimension.rawValue) by \(value)"
             case .resize(let dimension, .subtract(let value)): "Shrink \(dimension.rawValue) by \(value)"
@@ -484,6 +491,7 @@ extension Action {
             case .workspace(let name): "Go to workspace \(name)"
             case .workspaceBackAndForth: "Previous workspace"
             case .moveWindowToWorkspace(let name): "Move the window to workspace \(name)"
+            case .moveWindowToWorkspaceAndFollow(let name): "Move the window to workspace \(name) and go there"
             case .moveWorkspaceToMonitor(let step, _): step == .next ? "Move the workspace to the next monitor" : "Move the workspace to the previous monitor"
             case .layout(let options): "Layout: " + options.map(\.rawValue).joined(separator: " / ")
             case .fullscreen(.marSpace): "Fullscreen"

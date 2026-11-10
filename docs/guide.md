@@ -18,6 +18,14 @@ MarSpace arranges the windows of a workspace in a tree, like [i3](https://i3wm.o
 You move around the tree in four directions with the **Focus** shortcuts, and change it with **Move** (swap a window
 with its neighbor, or move it out of its container) and **Join with** (put two windows into a new container).
 
+Shortcuts can also do what Hyprland users know by other names (Settings › Shortcuts, the action menu):
+
+- **Cycle through the windows**: the next or the previous window of the workspace, and around at the end (`cyclenext`)
+- **Focus the last focused window**: back to the window that had the focus before, and forth again (`focuscurrentorlast`)
+- **Swap with a window**: the window and its neighbor change places, their containers stay as they are (`swapwindow`)
+- **Move the window to a workspace**, with **Go there too**: the window goes and you follow it (`movetoworkspace`), or
+  it goes and you stay (`movetoworkspacesilent`)
+
 ### Layouts
 
 - **Tiles**: the windows share the space of the container side by side (horizontal) or on top of each other (vertical)

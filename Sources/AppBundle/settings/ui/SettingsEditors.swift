@@ -48,7 +48,7 @@ struct ActionListEditor: View {
 
 /// The kind of an action, for the picker. Each kind has the parameters of its action
 enum ActionKind: String, CaseIterable, Identifiable {
-    case focus, move, joinWith, resize
+    case focus, cycleFocus, focusBackAndForth, move, swap, joinWith, resize
     case workspace, workspaceBackAndForth, moveWindowToWorkspace, moveWorkspaceToMonitor
     case layout, fullscreen, flattenWorkspaceTree, balanceSizes
     case closeWindow, closeAllWindowsButCurrent
@@ -59,7 +59,10 @@ enum ActionKind: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
             case .focus: "Focus a window"
+            case .cycleFocus: "Cycle through the windows"
+            case .focusBackAndForth: "Focus the last focused window"
             case .move: "Move the window"
+            case .swap: "Swap with a window"
             case .joinWith: "Join with a window"
             case .resize: "Resize the window"
             case .workspace: "Go to a workspace"
@@ -89,7 +92,8 @@ enum ActionKind: String, CaseIterable, Identifiable {
     }
 
     static let groups: [[ActionKind]] = [
-        [.focus, .move, .joinWith, .resize],
+        [.focus, .cycleFocus, .focusBackAndForth],
+        [.move, .swap, .joinWith, .resize],
         [.workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor],
         [.layout, .fullscreen, .flattenWorkspaceTree, .balanceSizes],
         [.closeWindow, .closeAllWindowsButCurrent],
@@ -100,12 +104,15 @@ enum ActionKind: String, CaseIterable, Identifiable {
     init(_ action: Action) {
         self = switch action {
             case .focus: .focus
+            case .cycleFocus: .cycleFocus
+            case .focusBackAndForth: .focusBackAndForth
             case .move: .move
+            case .swap: .swap
             case .joinWith: .joinWith
             case .resize: .resize
             case .workspace: .workspace
             case .workspaceBackAndForth: .workspaceBackAndForth
-            case .moveWindowToWorkspace: .moveWindowToWorkspace
+            case .moveWindowToWorkspace, .moveWindowToWorkspaceAndFollow: .moveWindowToWorkspace
             case .moveWorkspaceToMonitor: .moveWorkspaceToMonitor
             case .layout: .layout
             case .fullscreen, .enterFullscreen, .exitFullscreen: .fullscreen
@@ -124,7 +131,10 @@ enum ActionKind: String, CaseIterable, Identifiable {
     func defaultAction(previous: Action, mode: String, workspace: String, context: ActionContext) -> Action {
         switch self {
             case .focus: .focus(.left)
+            case .cycleFocus: .cycleFocus(.next)
+            case .focusBackAndForth: .focusBackAndForth
             case .move: .move(.left)
+            case .swap: .swap(.left)
             case .joinWith: .joinWith(.left)
             case .resize: .resize(.smart, .add(50))
             case .workspace: .workspace(workspace)
@@ -182,11 +192,23 @@ struct ActionEditor: View {
     private var parameters: some View {
         switch action {
             case .focus(let direction): DirectionPicker(direction: direction) { action = .focus($0) }
+            case .cycleFocus(let step):
+                Picker("", selection: Binding(get: { step }, set: { action = .cycleFocus($0) })) {
+                    Text("Next").tag(Action.Cycle.next)
+                    Text("Previous").tag(Action.Cycle.previous)
+                }
+                .pickerStyle(.segmented).labelsHidden().fixedSize()
             case .move(let direction): DirectionPicker(direction: direction) { action = .move($0) }
+            case .swap(let direction): DirectionPicker(direction: direction) { action = .swap($0) }
             case .joinWith(let direction): DirectionPicker(direction: direction) { action = .joinWith($0) }
             case .resize(let dimension, let amount): ResizeEditor(dimension: dimension, amount: amount) { action = .resize($0, $1) }
             case .workspace(let name): WorkspaceField(name: name, workspaces: workspaces) { action = .workspace($0) }
-            case .moveWindowToWorkspace(let name): WorkspaceField(name: name, workspaces: workspaces) { action = .moveWindowToWorkspace($0) }
+            case .moveWindowToWorkspace(let name):
+                WorkspaceField(name: name, workspaces: workspaces) { action = .moveWindowToWorkspace($0) }
+                followToggle(name, isOn: false)
+            case .moveWindowToWorkspaceAndFollow(let name):
+                WorkspaceField(name: name, workspaces: workspaces) { action = .moveWindowToWorkspaceAndFollow($0) }
+                followToggle(name, isOn: true)
             case .moveWorkspaceToMonitor(let step, let wrapAround):
                 Picker("", selection: Binding(get: { step }, set: { action = .moveWorkspaceToMonitor($0, wrapAround: wrapAround) })) {
                     Text("Next").tag(Action.MonitorStep.next)
@@ -211,8 +233,22 @@ struct ActionEditor: View {
                 }
                 .labelsHidden().fixedSize()
             case .custom(let line): CustomCommandField(line: line) { action = .custom($0) }
-            case .workspaceBackAndForth, .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent, .reloadSettings:
+            case .focusBackAndForth, .workspaceBackAndForth, .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent,
+                 .reloadSettings:
                 EmptyView()
+        }
+    }
+
+    /// Moving a window to a workspace: stay here, or go there with it. Only a shortcut can: a window rule moves a window
+    /// that has just appeared, without the user
+    @ViewBuilder
+    private func followToggle(_ workspace: String, isOn: Bool) -> some View {
+        if context == .shortcut || isOn {
+            Toggle("Go there too", isOn: Binding(
+                get: { isOn },
+                set: { action = $0 ? .moveWindowToWorkspaceAndFollow(workspace) : .moveWindowToWorkspace(workspace) },
+            ))
+            .help("Shows the workspace with the window. Otherwise the window goes and you stay")
         }
     }
 }

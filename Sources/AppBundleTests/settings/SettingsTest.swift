@@ -15,6 +15,8 @@ struct SettingsTest {
     @Test func testTypedActionsBuildTheCommandsOfTheirCommandLines() {
         let actions: [Action] = [
             .focus(.left), .focus(.down), .move(.up), .move(.right), .joinWith(.left), .joinWith(.down),
+            .cycleFocus(.next), .cycleFocus(.previous), .focusBackAndForth, .swap(.left), .swap(.up),
+            .moveWindowToWorkspaceAndFollow("B"), .moveWindowToWorkspaceAndFollow("1#main"),
             .resize(.smart, .add(50)), .resize(.width, .subtract(50)), .resize(.height, .set(300)), .resize(.smartOpposite, .add(1)),
             .workspace("T"), .workspace("1#main"), .workspace("A+B"), .workspaceBackAndForth,
             .moveWindowToWorkspace("B"), .moveWindowToWorkspace("1#main"),
@@ -38,6 +40,8 @@ struct SettingsTest {
         }
         assertEquals(Action.workspace("1#main").commandLine, "workspace '1#main'") // Not a comment
         assertEquals(Action.resize(.width, .add(50)).commandLine, "resize width +50")
+        assertEquals(Action.cycleFocus(.previous).commandLine, "focus --boundaries-action wrap-around-the-workspace dfs-prev")
+        assertEquals(Action.moveWindowToWorkspaceAndFollow("T").commandLine, "move-node-to-workspace --focus-follows-window T")
         guard case .failure = Action.layout([]).command else { Issue.record("A layout command without a layout"); return }
     }
 
@@ -125,5 +129,35 @@ struct SettingsTest {
         let (config, problems) = settings.compile()
         assertEquals(problems, [SettingsProblem(location: "Shortcuts › main › alt-s", message: "The 'service' mode doesn't exist")])
         assertEquals(config.modes[mainModeId]?.bindings.keys.sorted(), ["alt-m"])
+    }
+
+    /// What Hyprland binds as cyclenext, focuscurrentorlast, swapwindow and movetoworkspace: actions of the settings window,
+    /// run by the commands of the engine
+    @Test func testFocusCyclesSwapsAndFollows() async throws {
+        func run(_ action: Action) async throws {
+            guard case .cmd(let command) = action.command else { throw CancellationError() }
+            _ = await command.run(.defaultEnv, .emptyStdin)
+        }
+        let workspace = Workspace.get(byName: name)
+        let windows = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TestWindow.new(id: 2, parent: $0)
+            TestWindow.new(id: 3, parent: $0)
+        }.allLeafWindowsRecursive
+        #expect(windows[2].focusWindow())
+
+        try await run(.cycleFocus(.next)) // Around the end
+        assertEquals(globalFocus.windowOrNil?.windowId, 1)
+        try await run(.cycleFocus(.previous))
+        assertEquals(globalFocus.windowOrNil?.windowId, 3)
+
+        try await run(.swap(.left))
+        assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(1), .window(3), .window(2)]))
+        assertEquals(globalFocus.windowOrNil?.windowId, 3)
+
+        try await run(.moveWindowToWorkspaceAndFollow("other"))
+        assertEquals(globalFocus.workspace.name, "other")
+        assertEquals(globalFocus.windowOrNil?.windowId, 3)
+        assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(1), .window(2)]))
     }
 }
