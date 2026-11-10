@@ -1,64 +1,105 @@
-# Contributing
+# Contributing to MarSpace
 
-The main and the most important rule: **read the room!**
+Thank you for taking the time to look at MarSpace! Every contribution is welcome, and you don't need to write code to
+help: a clear bug report, an idea with a good use case, a fix in the docs or a screenshot of a layout that goes wrong
+helps as much as a pull request.
 
-* Does your patch look like typical commit in the repo?
-* Does your commit message look like typical commit message in the repo?
-* Does your test look like typical test in the repo?
-* etc.
+If you're unsure about anything, open an issue and ask. There are no silly questions.
 
-## Submiting bugs and feature ideas
+## Ways to help
 
-Submit bugs to https://github.com/nikitabobko/AeroSpace/discussions/categories/potential-bugs
+- **Report a bug.** Something doesn't tile, focus jumps, a shortcut doesn't fire? Tell us.
+- **Suggest a feature.** Start with what you're trying to do; we'll figure out the best way to get there together.
+- **Improve the docs.** The README, this guide, and the developer notes in [dev-docs](./dev-docs) can always be clearer.
+- **Send a fix or a feature.** Small, focused pull requests are the easiest to review and merge.
+- **Spread the word.** Tell a friend, or write about your setup.
 
-Submit feature ideas to https://github.com/nikitabobko/AeroSpace/discussions/categories/feature-ideas
+## Reporting a bug
 
-Rules:
-* Search for duplicates (in GitHub Issues and Discussions) before creating a new discussion
-* Upvote for issues/discussions that you find useful
+Open an issue on [GitHub](https://github.com/denizmaral/MarSpace/issues). These help a lot:
 
-**Consider including in bug reports**
+- What you did, what you expected, and what happened instead
+- A screenshot or a short screen recording, if it's about windows or the settings window
+- The output of `aerospace debug-windows`, if a window is handled wrongly
+- The relevant settings: a screenshot of the settings pane is perfect (the settings file is binary, there is no config
+  to paste)
+- Your MarSpace version (`aerospace --version`) and your macOS version
 
-* `aerospace debug-windows` output, if the problem is about handling some windows
-* Screenshots of problematic windows
-* Videos of problematic windows
-* What did you try to resolve the issue?
-* Your config
-* AeroSpace version
-* macOS version
+## Suggesting a feature
 
-**Consider including in feature request**
+The most helpful part of a feature request is the use case: what you do every day and where MarSpace gets in the way.
+Alternatives you considered, and how other window managers solve it, are welcome too.
 
-* Use cases!
-* Alternative approaches
-* Links to docs of similar features in other window managers that you know
-* Synopsis, if you suggest a new command
-* Mental model description
+A few principles guide what gets in:
 
-## Submiting code
+- Practical features first, looks second
+- Settings are edited in the settings window, never in a text file
+- No "dark magic": MarSpace uses public macOS APIs (and the one private call it already has), and never asks you to
+  disable System Integrity Protection
+- Changes that break existing setups only with very good reasons and a helpful migration
 
-There are 2 options:
-1. Send email patches to: `echo YWVyb3NwYWNlLXBhdGNoZXNAYm9ia28ueHl6Cg== | base64 --decode`
-2. Send GitHub PRs
+## Your first code contribution
 
-**License Agreement**. By contributing changes to this repository, you agree to license your contributions under the MIT license.
+### Build and run
 
-Maintainers can apply your patch with arbitrary modifications.
+You need macOS and Xcode with Swift 6.4 (see `.swift-version`).
 
-## Spread the word
+```sh
+swift build   # build everything
+swift test    # run the unit tests
+```
 
-Do you like the project? Does AeroSpace finally fix your problems with windows management on macOS? Good to hear it!
+The scripts in the repo root do the rest. They need [swiftly](https://github.com/swiftlang/swiftly) and bash 5
+(`brew install swiftly bash`):
 
-* Spread the word in social networks! (Don't forget to share the link :) )
-* Talk about AeroSpace to your colleagues and friends
-* Write a blogpost about your workflows
-* Record a YouTube video
+```sh
+./run-debug.sh       # run a debug build of the app (a running MarSpace is turned off meanwhile)
+./run-cli.sh <args>  # talk to it with the CLI, e.g. ./run-cli.sh list-windows --all
+./test.sh            # everything a review checks: warnings as errors, tests, formatting, lint, unused code
+```
 
-## Share your workflow and tips
+The first time, macOS asks for the Accessibility permission: MarSpace can't move windows without it. More details are
+in [dev-docs/development.md](./dev-docs/development.md).
 
-Submit your tips to [the Goodies page](https://nikitabobko.github.io/AeroSpace/goodies). The source code of the page can be found in `./docs` directory
+### Find your way around
 
-## Support the project financially
+- `Sources/AppBundle`: the app. Nearly everything happens here
+  - `settings/`: the settings model, its storage, and the settings window (`settings/ui`)
+  - `tree/`: workspaces, containers and windows
+  - `layout/`: turning the tree into window frames
+  - `mouse/`: focus follows mouse, mouse moves and resizes
+  - `command/`: the commands behind shortcuts and the `aerospace` CLI
+- `Sources/Cli`: the `aerospace` command line client
+- `Sources/AppBundleTests`: the tests
 
-Supporting the project financially counts as a contribution (even if it's just a $1/month).
-You can sponsor the project on GitHub Sponsors page: https://github.com/sponsors/nikitabobko
+[dev-docs/architecture.md](./dev-docs/architecture.md) explains how the pieces fit together.
+
+### Make the change
+
+- **Match the code around you.** Naming, structure, comments and tests should look like what's already there.
+- **Add a test** for a behavior change or a bug fix. The tests use Swift Testing; the existing suites are good
+  templates.
+- **Keep it warning-free.** Release builds treat warnings as errors.
+- **Format and lint** with `./format.sh` and `./lint.sh`.
+- **Don't edit generated files** (`*Generated.swift`, `xcode/AeroSpace.xcodeproj`): change their source and run
+  `./generate.sh`.
+
+### Open the pull request
+
+- One topic per pull request. Several small ones beat one big one.
+- Describe what changes for the user, and why. A screenshot helps for anything visible.
+- A commit message says what changed and why, like the ones in `git log`.
+
+Don't worry about getting everything perfect: review is a conversation, and we'll get it over the line together.
+
+## Be kind
+
+Be respectful and patient with each other. Everyone here is volunteering their time.
+
+## License
+
+MarSpace is MIT licensed (see [LICENSE.txt](./LICENSE.txt)). By contributing, you agree that your contributions are
+licensed under the MIT license too.
+
+MarSpace is built on [AeroSpace](https://github.com/nikitabobko/AeroSpace) by Nikita Bobko and its contributors. If you
+find a bug that AeroSpace has too, consider reporting it there as well.
