@@ -12,7 +12,6 @@ import Foundation
         if isDebug {
             await toggleReleaseServerIfDebug(.off)
             interceptTermination(SIGINT)
-            interceptTermination(SIGKILL)
         }
 
         _ = await reloadConfig_nonCancellable()

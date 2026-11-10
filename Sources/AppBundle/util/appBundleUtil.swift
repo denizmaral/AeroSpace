@@ -12,7 +12,7 @@ func interceptTermination(_ _signal: Int32) {
     signal(_signal, { (signal: Int32) in
         check(Thread.current.isMainThread)
         Task.startUnstructured { @MainActor in
-            terminationHandler?.beforeTermination()
+            runTerminationHandlerOnce()
             exit(signal)
         }
     } as sig_t)
@@ -21,6 +21,26 @@ func interceptTermination(_ _signal: Int32) {
 @MainActor
 func initTerminationHandler() {
     unsafe _terminationHandler = AppServerTerminationHandler()
+    // `kill`, e.g. by a script that restarts MarSpace: quit like the menu does (the default action of SIGTERM ends the
+    // process right away, with the windows of the workspaces that aren't shown still in the corner of the screen)
+    signal(SIGTERM, SIG_IGN)
+    let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
+    source.setEventHandler { MainActor.assumeIsolated { NSApplication.shared.terminate(nil) } }
+    source.resume()
+    sigtermSource = source
+}
+
+@MainActor private var sigtermSource: (any DispatchSourceSignal)? = nil // Kept alive
+
+@MainActor var didRunTerminationHandler = false
+
+/// Puts the windows back on screen before MarSpace quits, however it quits: "Quit" in the menu, ⌘Q or the Dock while the
+/// settings window is open, logging out, `kill`. Only once: "Quit" runs it and then terminates the app, which runs it again
+@MainActor
+func runTerminationHandlerOnce() {
+    if didRunTerminationHandler { return }
+    didRunTerminationHandler = true
+    terminationHandler?.beforeTermination()
 }
 
 private struct AppServerTerminationHandler: TerminationHandler {

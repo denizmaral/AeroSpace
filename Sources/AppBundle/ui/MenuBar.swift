@@ -122,7 +122,7 @@ private struct MenuBarPanel: View {
             Spacer()
             Button {
                 Task.startUnstructured {
-                    terminationHandler?.beforeTermination()
+                    runTerminationHandlerOnce()
                     terminateApp()
                 }
             } label: {

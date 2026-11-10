@@ -53,4 +53,10 @@ public final class MarSpaceAppDelegate: NSObject, NSApplicationDelegate {
         SettingsWindowController.shared.show()
         return false
     }
+
+    /// Every way to quit (⌘Q and the Dock while the settings window is open, logging out, `kill`) puts the windows back on
+    /// screen, not only "Quit" in the menu: the windows of the workspaces that aren't shown would stay in the corner
+    public func applicationWillTerminate(_ notification: Notification) {
+        runTerminationHandlerOnce()
+    }
 }
