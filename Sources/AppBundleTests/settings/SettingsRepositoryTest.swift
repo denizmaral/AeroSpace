@@ -146,4 +146,21 @@ struct SettingsRepositoryTest {
         data[data.count - 1] ^= 0xFF
         try data.write(to: url)
     }
+
+    /// A newer MarSpace may change the format of the file itself: it's not a damaged file, the backup (older settings)
+    /// doesn't replace it
+    @Test func testAFileOfANewerFormatIsNotReplacedByTheBackup() throws {
+        try store.save(settings(focusFollowsMouse: false))
+        try store.save(settings(focusFollowsMouse: true)) // The first save is the backup now
+        var newer = try Data(contentsOf: store.fileUrl)
+        newer[4] = 2 // The format version of the header
+        try newer.write(to: store.fileUrl)
+
+        guard case .unreadable(let reason) = store.load() else {
+            Issue.record("Expected unreadable")
+            return
+        }
+        #expect(reason.contains("newer"))
+        assertEquals(try Data(contentsOf: store.fileUrl), newer)
+    }
 }

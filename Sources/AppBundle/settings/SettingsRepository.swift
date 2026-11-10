@@ -52,6 +52,9 @@ struct SettingsRepository: Sendable {
         if case .failure(.newerVersion(let version)) = main {
             return .unreadable(reason: "The settings were written by a newer MarSpace (schema \(version))")
         }
+        if case .failure(.newerFormat(let version)) = main {
+            return .unreadable(reason: "The settings were written by a newer MarSpace (file format \(version))")
+        }
         guard backupExists, case .success(let settings) = Self.read(backupUrl) else {
             return .unreadable(reason: "The settings file is damaged and there is no valid backup: \(main.failureDescription)")
         }
@@ -94,6 +97,7 @@ struct SettingsRepository: Sendable {
         case missing
         case damaged(String)
         case newerVersion(Int)
+        case newerFormat(UInt16)
     }
 
     private static let magic: UInt32 = 0x5453_534D // "MSST" little-endian
@@ -115,7 +119,10 @@ struct SettingsRepository: Sendable {
         // Memory-mapped: nothing is copied before the checksum says the data is good
         guard let data = try? Data(contentsOf: url, options: .alwaysMapped) else { return .failure(.missing) }
         guard data.count >= headerSize, data.loadLE(UInt32.self, at: 0) == magic else { return .failure(.damaged("not a settings file")) }
-        guard data.loadLE(UInt16.self, at: 4) == formatVersion else { return .failure(.damaged("unknown format")) }
+        let version = data.loadLE(UInt16.self, at: 4)
+        // A newer file format isn't damage: the backup (older settings) must not replace the file
+        guard version <= formatVersion else { return .failure(.newerFormat(version)) }
+        guard version == formatVersion else { return .failure(.damaged("unknown format")) }
         let payloadLength = Int(data.loadLE(UInt32.self, at: 8))
         guard data.count == headerSize + payloadLength else { return .failure(.damaged("wrong length")) }
         let payload = data[(data.startIndex + headerSize)...]
