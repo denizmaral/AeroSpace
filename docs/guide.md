@@ -49,6 +49,12 @@ A window that leaves the layout for a while (macOS fullscreen, minimized, its ap
 When MarSpace itself is restarted, the windows go back to their workspaces and to their places and sizes in the layout
 (until the Mac is restarted: macOS gives the windows new ids then).
 
+### Gaps
+
+Settings › Appearance sets the gap between the windows and the gaps at the screen edges. With **No gaps around a single
+window**, a workspace with one tiling window gives it the whole screen: the gaps come back with the second window (like
+Hyprland's smart gaps).
+
 ### Floating windows
 
 Floating windows aren't part of the tree, but Focus still reaches them: a floating window belongs to the smallest

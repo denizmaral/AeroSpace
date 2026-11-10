@@ -48,6 +48,8 @@ struct Settings: Codable, Sendable, Equatable {
             var outerRight = 0
             var outerTop = 0
             var outerBottom = 0
+            /// A workspace with one tiling window: the window fills the screen, without the gaps at the screen edges
+            var noneAroundSingleWindow = false
         }
 
         @DecodableWithDefaults

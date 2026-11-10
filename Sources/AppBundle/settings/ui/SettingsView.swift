@@ -319,6 +319,8 @@ private struct AppearancePane: View {
                     LabeledContent("Left") { ValueSlider(value: $appearance.gaps.outerLeft, range: 0 ... 60, unit: "pt") }
                     LabeledContent("Right") { ValueSlider(value: $appearance.gaps.outerRight, range: 0 ... 60, unit: "pt") }
                 }
+                Toggle("No gaps around a single window", isOn: $appearance.gaps.noneAroundSingleWindow)
+                    .help("A workspace with one tiling window: the window fills the screen")
             }
 
             Section("Focus border") {

@@ -27,6 +27,8 @@ struct Config: Withable {
     var onFocusedMonitorChanged: Shell<any Command> = .empty
 
     var gaps: Gaps = .zero
+    /// No outer gaps around the only tiling window of a workspace (Hyprland's "smart gaps")
+    var smartGaps: Bool = false
     var workspaceToMonitorForceAssignment: [String: [MonitorDescription]] = [:]
     var modes: [String: Mode] = [:]
     var onWindowDetected: [WindowDetectedCallback] = []

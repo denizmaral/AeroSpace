@@ -38,6 +38,7 @@ extension Settings {
             inner: .init(vertical: gaps.innerVertical, horizontal: gaps.innerHorizontal),
             outer: .init(left: gaps.outerLeft, bottom: gaps.outerBottom, top: gaps.outerTop, right: gaps.outerRight),
         )
+        config.smartGaps = gaps.noneAroundSingleWindow
         let border = appearance.focusBorder
         config.focusBorder = FocusBorder(enabled: border.isEnabled, color: border.color.runtimeColor, width: border.width, radius: border.radius)
 

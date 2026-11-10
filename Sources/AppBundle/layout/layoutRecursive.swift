@@ -6,13 +6,22 @@ extension Workspace {
     func layoutWorkspace() async throws { // todo revisit API
         if isEffectivelyEmpty { return }
         let rect = rootTilingRect
-        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height, virtual: workspaceMonitorInfo.visibleRectPaddedByOuterGaps, LayoutContext(self))
+        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height, virtual: tilingRectPaddedByOuterGaps, LayoutContext(self))
+    }
+
+    /// The part of the monitor for the tiling windows: without the gaps at the screen edges. A single tiling window gets
+    /// the whole monitor with "no gaps around a single window" (`smartGaps`): there is nothing to tell apart
+    @MainActor
+    var tilingRectPaddedByOuterGaps: Rect {
+        config.smartGaps && rootTilingContainer.hasSingleInhabitedWindow
+            ? workspaceMonitorInfo.visibleRect
+            : workspaceMonitorInfo.visibleRectPaddedByOuterGaps
     }
 
     /// The rect that the layout gives the root tiling container
     @MainActor
     var rootTilingRect: Rect {
-        let rect = workspaceMonitorInfo.visibleRectPaddedByOuterGaps
+        let rect = tilingRectPaddedByOuterGaps
         // If monitors are aligned vertically and the monitor below has smaller width, then macOS may not allow the
         // window on the upper monitor to take full width. rect.height - 1 resolves this problem
         // But I also faced this problem in monitors horizontal configuration. ¯\_(ツ)_/¯
@@ -69,6 +78,22 @@ extension TreeNode {
                  .macosPopupWindowsContainer, .macosHiddenAppsWindowsContainer:
                 return // Nothing to do for weirdos
         }
+    }
+}
+
+extension TilingContainer {
+    /// Exactly one window that is there (see ``WindowLifeStatus``), however deep
+    fileprivate var hasSingleInhabitedWindow: Bool { inhabitedWindowCount(upTo: 2) == 1 }
+
+    private func inhabitedWindowCount(upTo limit: Int) -> Int {
+        var count = 0
+        for child in children where count < limit {
+            switch child.tilingTreeNodeCasesOrDie() {
+                case .window(let window): count += window.lifeStatus.isInhabited ? 1 : 0
+                case .tilingContainer(let container): count += container.inhabitedWindowCount(upTo: limit - count)
+            }
+        }
+        return count
     }
 }
 
