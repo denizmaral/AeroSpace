@@ -93,6 +93,7 @@ extension Window {
                 if width > 0 || height > 0 {
                     learnedMinimumSize = CGSize(width: max(learnedMinimumSize.width, width), height: max(learnedMinimumSize.height, height))
                     learnedMinimumSizeWorkspace = nodeWorkspace?.name
+                    backOffMinimumSizeProbeIfWrong()
                     return .learned
                 }
             }
@@ -108,7 +109,8 @@ extension Window {
     @MainActor
     var effectiveMinimumSize: CGSize { learnedMinimumSize }
 
-    private static let minimumSizeProbeInterval: Duration = .seconds(30)
+    static let minimumSizeProbeInterval: Duration = .seconds(30)
+    private static let minimumSizeMaxProbeInterval: Duration = .seconds(30 * 60)
     private static let minimumSizeProbeStep: CGFloat = 4 * minimumSizeTolerance
 
     /// A smaller minimum can't be observed (see ``forgetMinimumSize()``): a window that doesn't shrink by itself (e.g.
@@ -118,7 +120,7 @@ extension Window {
     func probeMinimumSizeDropIfDue() {
         guard minimumSizeCheckTask == nil, let requested = minimumSizeCheckableRect, minimumSizeProbe(requested) != nil else { return }
         let now = ContinuousClock.now
-        if let last = lastMinimumSizeProbe, now - last < Self.minimumSizeProbeInterval { return }
+        if let last = lastMinimumSizeProbe, now - last < minimumSizeProbeInterval { return }
         lastMinimumSizeProbe = now
         minimumSizeCheckTask = Task.startUnstructured { @MainActor [weak self] in
             defer { self?.minimumSizeCheckTask = nil }
@@ -146,12 +148,25 @@ extension Window {
         if isAccepted {
             if probe.width < requested.width { takeFairShare(.h) }
             if probe.height < requested.height { takeFairShare(.v) }
+            minimumSizeDroppedByProbe = minimum
             forgetMinimumSizeAndRecheckAfterLayout()
             scheduleCancellableCompleteRefreshSession(.minimumSizeLearned)
         } else {
             setAxFrame(requested.topLeftCorner, CGSize(width: requested.width, height: requested.height))
         }
         return isAccepted
+    }
+
+    /// Some apps accept the probe and grow the window back to their minimum asynchronously: the same minimum is learned
+    /// again right away. The window would jiggle on every probe, it's probed less often
+    @MainActor
+    private func backOffMinimumSizeProbeIfWrong() {
+        guard let dropped = minimumSizeDroppedByProbe else { return }
+        minimumSizeDroppedByProbe = nil
+        func isSame(_ old: CGFloat, _ new: CGFloat) -> Bool { old == 0 || abs(old - new) <= 2 * Self.minimumSizeTolerance }
+        if isSame(dropped.width, learnedMinimumSize.width) && isSame(dropped.height, learnedMinimumSize.height) {
+            minimumSizeProbeInterval = min(minimumSizeProbeInterval * 4, Self.minimumSizeMaxProbeInterval)
+        }
     }
 
     /// The size to probe if the layout holds the window at its learned minimum in any dimension, otherwise nil

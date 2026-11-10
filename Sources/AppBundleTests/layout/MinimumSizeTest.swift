@@ -472,6 +472,32 @@ struct MinimumSizeDropTest {
         assertEquals(window.sentFrames.count, sentFramesCount)
     }
 
+    /// The app accepts the probe, then grows the window back to its minimum asynchronously. The same minimum is learned
+    /// again, the window is probed less often
+    @Test func testWrongProbeBacksOff() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = try await heldWindow(workspace)
+        window.minimumSizeForTest = .zero // Accepts the probe
+        assertEquals(try await window.probeMinimumSizeDrop(), true)
+        window.minimumSizeForTest = CGSize(width: 1300, height: 0) // Grows back
+        try await workspace.layoutWorkspace() // 960, refused
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
+        assertEquals(window.effectiveMinimumSize.width, 1300)
+        assertEquals(window.minimumSizeProbeInterval, .seconds(120))
+    }
+
+    /// The minimum really dropped (to a size that is still bigger than the regular size). No back off
+    @Test func testRealDropDoesntBackOff() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = try await heldWindow(workspace)
+        window.minimumSizeForTest = CGSize(width: 1100, height: 0)
+        assertEquals(try await window.probeMinimumSizeDrop(), true)
+        try await workspace.layoutWorkspace() // 960, refused
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
+        assertEquals(window.effectiveMinimumSize.width, 1100)
+        assertEquals(window.minimumSizeProbeInterval, .seconds(30))
+    }
+
     @Test func testProbeIsRateLimited() async throws {
         let workspace = Workspace.get(byName: name)
         let window = try await heldWindow(workspace)
