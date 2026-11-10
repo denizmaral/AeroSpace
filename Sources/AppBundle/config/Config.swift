@@ -7,7 +7,7 @@ import OrderedCollections
 /// nothing bound, the defaults of the engine
 @MainActor var config = Config()
 /// `aerospace config --config-path`: the settings file
-@MainActor var configUrl: URL = SettingsRepository.applicationSupport.fileUrl
+@MainActor let configUrl: URL = SettingsRepository.applicationSupport.fileUrl
 
 struct Config: Withable {
     var afterStartupCommand: Shell<any Command> = .empty

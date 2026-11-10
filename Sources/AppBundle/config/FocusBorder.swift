@@ -1,7 +1,7 @@
 import AppKit
 import Common
 
-/// `[focus-border]` config section. A colored border around the focused window, drawn by AeroSpace itself
+/// The focus border (Settings › Appearance): a colored border around the focused window, drawn by MarSpace itself
 struct FocusBorder: Withable, Equatable {
     var enabled: Bool = false
     var color: FocusBorderColor = .solid(0xFF33_CCFF)

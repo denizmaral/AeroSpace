@@ -44,7 +44,6 @@ struct ReloadConfigResult: Equatable {
             ? nil
             : Message(description: "\(aeroSpaceAppName) Settings", body: lines.joined(separator: "\n\n"))
     }
-    if !args.dryRun { configUrl = SettingsRepository.applicationSupport.fileUrl }
     return ReloadConfigResult(errors: errors, warnings: loaded.notices, warningsAsErrors: args.warningsAsErrors)
 }
 

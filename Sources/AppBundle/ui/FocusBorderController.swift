@@ -1,7 +1,7 @@
 import AppKit
 import Common
 
-/// Draws `[focus-border]` around the focused window.
+/// Draws the focus border (Settings › Appearance) around the focused window.
 ///
 /// The border is drawn by a click-through panel that is `width` points bigger than the window on every side, so the
 /// border lives in the gap around the window. Even when the app raises its window above the panel, the border stays

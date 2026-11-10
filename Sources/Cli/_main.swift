@@ -46,9 +46,9 @@ struct Main {
             if serverVersionAndHash != nil && cliClientVersionAndHash != serverVersionAndHash {
                 eprint(
                     """
-                    Warning: AeroSpace client/server versions don't match. Possible fixes:
+                    Warning: the versions of the aerospace client and the MarSpace server don't match. Possible fixes:
                       - Restart MarSpace.app (server restart is required after each update)
-                      - Reinstall and restart AeroSpace (corrupted installation)
+                      - Reinstall and restart MarSpace (corrupted installation)
                     """,
                 )
             }
@@ -122,12 +122,12 @@ struct Main {
         if ans.exitCode != EXIT_CODE_ZERO && ans.serverVersionAndHash != cliClientVersionAndHash {
             eprint(
                 """
-                Warning: AeroSpace client/server versions don't match
+                Warning: the versions of the aerospace client and the MarSpace server don't match
                   - aerospace CLI client version: \(cliClientVersionAndHash)
                   - MarSpace.app server version: \(ans.serverVersionAndHash)
                   Possible fixes:
                   - Restart MarSpace.app (server restart is required after each update)
-                  - Reinstall and restart AeroSpace (corrupted installation)
+                  - Reinstall and restart MarSpace (corrupted installation)
                 """,
             )
         }

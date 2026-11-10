@@ -109,7 +109,7 @@ private func newConnection(_ connection: NWConnection) async { // todo add exit 
                         )
                     }
                 if request.windowId == nil || request.workspace == nil {
-                    answer.stderr += "\n\nAeroSpace client has sent incomplete JSON request. 'windowId' or/and 'workspace' fields are missing. Please forward your AEROSPACE_WINDOW_ID and AEROSPACE_WORKSPACE environment variables to these JSON fields. If the appropriate environment variables are empty, pass explicit 'null' in the JSON."
+                    answer.stderr += "\n\nThe client has sent an incomplete JSON request. 'windowId' or/and 'workspace' fields are missing. Please forward your AEROSPACE_WINDOW_ID and AEROSPACE_WORKSPACE environment variables to these JSON fields. If the appropriate environment variables are empty, pass explicit 'null' in the JSON."
                 }
                 await answerToClient(answer)
                 continue
