@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import Common
 import SwiftUI
 
 private let iconSize = CGSize(width: 50, height: 50)
