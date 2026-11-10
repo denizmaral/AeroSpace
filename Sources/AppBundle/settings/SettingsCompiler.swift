@@ -61,12 +61,8 @@ extension Settings {
             for shortcut in mode.shortcuts {
                 let notation = keyNames.notation(shortcut.chord)
                 let location = "Shortcuts › \(mode.name) › \(notation)"
-                let binding = HotkeyBinding(
-                    shortcut.chord.modifiers.eventFlags,
-                    shortcut.chord.key,
-                    compileActions(shortcut.actions, location, &problems),
-                    descriptionWithKeyNotation: notation,
-                )
+                guard let commands = compileActions(shortcut.actions, location, &problems) else { continue }
+                let binding = HotkeyBinding(shortcut.chord.modifiers.eventFlags, shortcut.chord.key, commands, descriptionWithKeyNotation: notation)
                 if let existing = bindings[binding.descriptionWithKeyCode] {
                     let isWorkspaceShortcut = mode.name == mainModeId && workspaceBindings[binding.descriptionWithKeyCode] == existing
                     problems.append(.init(location: location, message: isWorkspaceShortcut ? "It's also the shortcut of a workspace" : "The shortcut is used twice"))
@@ -78,18 +74,17 @@ extension Settings {
 
         for (index, rule) in windowRules.enumerated() {
             let location = "Window rules › \(index + 1)"
-            guard let matcher = rule.condition.runtimeMatcher(location, &problems) else { continue }
-            config.onWindowDetected.append(WindowDetectedCallback(
-                matcher: .legacy(matcher),
-                checkFurtherCallbacks: rule.checkFurtherRules,
-                rawRun: compileActions(rule.actions, location, &problems),
-            ))
+            guard let matcher = rule.condition.runtimeMatcher(location, &problems),
+                  let commands = compileActions(rule.actions, location, &problems)
+            else { continue }
+            config.onWindowDetected.append(WindowDetectedCallback(matcher: .legacy(matcher), checkFurtherCallbacks: rule.checkFurtherRules, rawRun: commands))
         }
 
-        config.afterStartupCommand = compileActions(automation.afterStartup, "Automation › After startup", &problems)
-        config.onFocusChanged = compileActions(automation.onFocusChanged, "Automation › Focus changed", &problems)
-        config.onFocusedMonitorChanged = compileActions(automation.onFocusedMonitorChanged, "Automation › Focused monitor changed", &problems)
-        config.onModeChanged = compileActions(automation.onModeChanged, "Automation › Mode changed", &problems)
+        let empty = Shell<any Command>.newCompound([], Shell<any Command>.seq)
+        config.afterStartupCommand = compileActions(automation.afterStartup, "Automation › After startup", &problems) ?? empty
+        config.onFocusChanged = compileActions(automation.onFocusChanged, "Automation › Focus changed", &problems) ?? empty
+        config.onFocusedMonitorChanged = compileActions(automation.onFocusedMonitorChanged, "Automation › Focused monitor changed", &problems) ?? empty
+        config.onModeChanged = compileActions(automation.onModeChanged, "Automation › Mode changed", &problems) ?? empty
 
         if !modes.contains(where: { $0.name == mainModeId }) {
             problems.append(.init(location: "Shortcuts", message: "The '\(mainModeId)' mode is missing"))
@@ -98,19 +93,19 @@ extension Settings {
     }
 }
 
-/// Actions run one after the other, like a list of command lines
+/// Actions run one after the other, like a list of command lines. Nil if one of them is invalid: the others alone might do
+/// something else than intended (e.g. close the window that should have been moved first)
 @MainActor
-private func compileActions(_ actions: [Action], _ location: String, _ problems: inout [SettingsProblem]) -> Shell<any Command> {
-    let shells = actions.compactMap { action -> Shell<any Command>? in
+private func compileActions(_ actions: [Action], _ location: String, _ problems: inout [SettingsProblem]) -> Shell<any Command>? {
+    var shells: [Shell<any Command>] = []
+    for action in actions {
         switch parseCommand(action.commandLine, allowExecAndForget: true, allowEval: false) {
-            case .cmd(let shell): return shell
-            case .help: return nil
-            case .failure(let failure):
-                problems.append(.init(location: location, message: failure.msg))
-                return nil
+            case .cmd(let shell): shells.append(shell)
+            case .help: problems.append(.init(location: location, message: "'\(action.commandLine)' only prints a help text"))
+            case .failure(let failure): problems.append(.init(location: location, message: failure.msg))
         }
     }
-    return .newCompound(shells, Shell<any Command>.seq)
+    return shells.count == actions.count ? .newCompound(shells, Shell<any Command>.seq) : nil
 }
 
 extension BorderColor {

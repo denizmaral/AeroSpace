@@ -4,6 +4,19 @@ import Foundation
 import HotKey
 
 @MainActor private var hotkeys: [String: HotKey] = [:]
+@MainActor var registeredHotkeys: [HotKey] { Array(hotkeys.values) }
+
+/// While a shortcut is recorded in the settings window, MarSpace's shortcuts are off: they would take its keys. Also when the
+/// config is applied meanwhile (an edit, a change of the keyboard layout, `reload-config`)
+@MainActor private(set) var areHotkeysPaused = false
+
+@MainActor func setHotkeysPaused(_ paused: Bool) {
+    areHotkeysPaused = paused
+    let bindings = activeMode.flatMap { config.modes[$0] }?.bindings ?? [:]
+    for (binding, key) in hotkeys {
+        key.isEnabled = !paused && bindings.keys.contains(binding)
+    }
+}
 
 @MainActor func resetHotKeys() {
     // Explicitly unregister all hotkeys. We cannot always rely on destruction of the HotKey object to trigger
@@ -45,7 +58,7 @@ extension HotKey {
         })
     }
     for (binding, key) in hotkeys {
-        key.isEnabled = targetBindings.keys.contains(binding)
+        key.isEnabled = !areHotkeysPaused && targetBindings.keys.contains(binding)
     }
     let oldMode = activeMode
     activeMode = targetMode

@@ -30,7 +30,7 @@ struct ReloadConfigResult {
     forceConfigUrl: URL? = nil,
 ) async -> ReloadConfigResult {
     if let forceConfigUrl { return await reloadTomlConfig_nonCancellable(args: args, url: forceConfigUrl) }
-    let loaded = loadSettings()
+    let loaded = loadSettings(dryRun: args.dryRun)
     let (newConfig, problems) = loaded.settings.compile()
     let errors = problems.map(\.description)
     if !args.noGui {

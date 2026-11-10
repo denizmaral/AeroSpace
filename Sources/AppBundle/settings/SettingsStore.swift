@@ -8,8 +8,9 @@ import Foundation
 /// - Atomic: the new file is written next to the old one and renamed over it. The previous valid file becomes the backup.
 ///   A crash at any point leaves a valid file or a valid backup
 /// - A damaged file is replaced by the backup (and kept aside for diagnosis), never silently by defaults
+/// - A file that can't be read (damaged, or written by a newer MarSpace) is never overwritten: a save keeps it aside
 /// - Only the user can read and write it (0600, the folder 0700)
-/// - Versioned: settings written by a newer MarSpace are not read (and not overwritten)
+/// - Versioned: settings written by a newer MarSpace are not read
 ///
 /// Format (little-endian):
 /// ```
@@ -40,7 +41,8 @@ struct SettingsStore: Sendable {
         case unreadable(reason: String)
     }
 
-    func load() -> LoadResult {
+    /// `repair`: a damaged file is replaced by the backup on the disk. Without it, the disk isn't changed (a dry run)
+    func load(repair: Bool = true) -> LoadResult {
         let manager = FileManager.default
         let fileExists = manager.fileExists(atPath: fileUrl.path)
         let backupExists = manager.fileExists(atPath: backupUrl.path)
@@ -53,8 +55,9 @@ struct SettingsStore: Sendable {
         guard backupExists, case .success(let settings) = Self.read(backupUrl) else {
             return .unreadable(reason: "The settings file is damaged and there is no valid backup: \(main.failureDescription)")
         }
+        guard repair else { return .loaded(settings) }
         // A crash between the two renames of `save` leaves only the backup: nothing to keep aside
-        let damaged = directory.appending(path: "Settings.damaged-\(Int(Date().timeIntervalSince1970)).marspace")
+        let damaged = asideUrl("damaged")
         if fileExists { try? manager.moveItem(at: fileUrl, to: damaged) }
         try? manager.copyItem(at: backupUrl, to: fileUrl)
         return fileExists ? .restoredFromBackup(settings, damagedFileKeptAt: damaged) : .loaded(settings)
@@ -71,11 +74,27 @@ struct SettingsStore: Sendable {
         guard manager.createFile(atPath: temporary.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
             throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: temporary.path])
         }
-        // The previous file becomes the backup only if it's valid: a damaged file must not replace a good backup
-        if case .success = Self.read(fileUrl) {
-            try Self.rename(fileUrl, to: backupUrl)
+        // The previous file becomes the backup only if it's valid: a damaged file must not replace a good backup. A file
+        // that can't be read (damaged, or written by a newer MarSpace) is kept aside, never overwritten
+        if manager.fileExists(atPath: fileUrl.path) {
+            switch Self.read(fileUrl) {
+                case .success: try Self.rename(fileUrl, to: backupUrl)
+                case .failure: try manager.moveItem(at: fileUrl, to: asideUrl("unreadable"))
+            }
         }
         try Self.rename(temporary, to: fileUrl)
+    }
+
+    /// A copy of the file as it is, once: e.g. before a migration, an older MarSpace can still read the copy
+    func keepCopy(named name: String) {
+        let copy = directory.appending(path: name)
+        guard !FileManager.default.fileExists(atPath: copy.path) else { return }
+        try? FileManager.default.copyItem(at: fileUrl, to: copy)
+    }
+
+    /// A file kept aside for the user or for diagnosis, e.g. `Settings.damaged-1762800000-1A2B3C4D.marspace`
+    private func asideUrl(_ kind: String) -> URL {
+        directory.appending(path: "Settings.\(kind)-\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8)).marspace")
     }
 
     private enum ReadFailure: Error {

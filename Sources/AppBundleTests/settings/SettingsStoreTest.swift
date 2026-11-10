@@ -104,6 +104,59 @@ struct SettingsStoreTest {
         #expect(reason.contains("newer"))
     }
 
+    /// A save never overwrites a file that can't be read (written by a newer MarSpace): it's kept aside, byte for byte
+    @Test func testSavingOverSettingsOfANewerMarSpaceKeepsThemAside() throws {
+        var newer = settings(focusFollowsMouse: true)
+        newer.schemaVersion = Settings.currentSchemaVersion + 1
+        try store.save(newer)
+        let newerBytes = try Data(contentsOf: store.fileUrl)
+        try store.save(settings(focusFollowsMouse: false))
+        assertEquals(store.load(), .loaded(settings(focusFollowsMouse: false)))
+        assertEquals(try keptAside("unreadable"), [newerBytes])
+    }
+
+    @Test func testSavingOverADamagedFileWithoutBackupKeepsItAside() throws {
+        try store.save(settings(focusFollowsMouse: true))
+        try flipLastByte(store.fileUrl)
+        let damaged = try Data(contentsOf: store.fileUrl)
+        try store.save(settings(focusFollowsMouse: false))
+        assertEquals(try keptAside("unreadable"), [damaged])
+    }
+
+    /// `reload-config --dry-run`: the backup is read, the disk isn't changed
+    @Test func testLoadingWithoutRepairDoesNotChangeTheDisk() throws {
+        try store.save(settings(focusFollowsMouse: false))
+        try store.save(settings(focusFollowsMouse: true))
+        try flipLastByte(store.fileUrl)
+        let files = try FileManager.default.contentsOfDirectory(atPath: store.directory.path).sorted()
+        let damaged = try Data(contentsOf: store.fileUrl)
+        assertEquals(store.load(repair: false), .loaded(settings(focusFollowsMouse: false)))
+        assertEquals(try FileManager.default.contentsOfDirectory(atPath: store.directory.path).sorted(), files)
+        assertEquals(try Data(contentsOf: store.fileUrl), damaged)
+    }
+
+    /// Settings of an older schema: a dry run migrates them in memory only. Otherwise the old file is kept, for an older
+    /// MarSpace
+    @Test func testMigrationKeepsACopyOfTheOldFile() throws {
+        var old = settings(focusFollowsMouse: true)
+        old.schemaVersion = 1
+        try store.save(old)
+        let oldBytes = try Data(contentsOf: store.fileUrl)
+        assertEquals(loadSettings(store: store, dryRun: true).settings.schemaVersion, Settings.currentSchemaVersion)
+        assertEquals(try Data(contentsOf: store.fileUrl), oldBytes)
+
+        _ = loadSettings(store: store)
+        assertEquals(try Data(contentsOf: store.directory.appending(path: "Settings.schema-1.marspace")), oldBytes)
+        guard case .loaded(let migrated) = store.load() else { Issue.record("Expected the migrated settings"); return }
+        assertEquals(migrated.schemaVersion, Settings.currentSchemaVersion)
+    }
+
+    private func keptAside(_ kind: String) throws -> [Data] {
+        try FileManager.default.contentsOfDirectory(atPath: store.directory.path)
+            .filter { $0.hasPrefix("Settings.\(kind)-") }
+            .map { try Data(contentsOf: store.directory.appending(path: $0)) }
+    }
+
     private func flipLastByte(_ url: URL) throws {
         var data = try Data(contentsOf: url)
         data[data.count - 1] ^= 0xFF

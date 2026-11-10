@@ -12,19 +12,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     func show() {
         if let model {
-            model.settings = loadSettings().settings // E.g. restored from the backup meanwhile. Unchanged settings aren't applied
+            model.reload(loadSettings().settings) // E.g. restored from the backup meanwhile
         } else {
             let model = SettingsModel(
                 settings: loadSettings().settings,
                 apply: { await applySettings($0) },
-                onRecordingChange: { isRecording in
-                    // MarSpace's shortcuts would take the keys of the shortcut that is being recorded
-                    if isRecording {
-                        resetHotKeys()
-                    } else {
-                        Task.startUnstructured { await activateMode_nonCancellable(activeMode) }
-                    }
-                },
+                onRecordingChange: { setHotkeysPaused($0) }, // They would take the keys of the shortcut that is recorded
             )
             self.model = model
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))

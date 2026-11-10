@@ -128,7 +128,7 @@ struct SettingsTest {
         settings.windowRules = [Settings.WindowRule(condition: .init(windowTitlePattern: "(unclosed"), actions: [.focus(.left)])]
         let (config, problems) = settings.compile()
         assertEquals(problems.map(\.location), ["Shortcuts › main › alt-h", "Window rules › 1"])
-        assertEquals(config.modes["main"]?.bindings.count, 2)
+        assertEquals(config.modes["main"]?.bindings.keys.sorted(), ["alt-j"]) // alt-h is left out
         assertEquals(config.onWindowDetected.count, 0)
     }
 
