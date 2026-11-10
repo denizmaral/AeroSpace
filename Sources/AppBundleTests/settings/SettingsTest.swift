@@ -112,4 +112,18 @@ struct SettingsTest {
         assertEquals(config.modes["main"]?.bindings.keys.sorted(), ["alt-j"]) // alt-h is left out
         assertEquals(config.onWindowDetected.count, 0)
     }
+
+    /// A shortcut that switches to a mode that doesn't exist (it was removed, the shortcut wasn't) would leave the user
+    /// without any shortcut: it's a problem, shown where it is, and left out
+    @Test func testSwitchingToAMissingModeIsAProblem() {
+        var settings = Settings()
+        settings.workspaceShortcuts = .init(goTo: nil, moveWindowTo: nil)
+        settings.modes = [Settings.BindingMode(name: mainModeId, shortcuts: [
+            Settings.Shortcut(chord: KeyChord([.option], .s), actions: [.enterMode("service")]),
+            Settings.Shortcut(chord: KeyChord([.option], .m), actions: [.focus(.left), .enterMode(mainModeId)]),
+        ])]
+        let (config, problems) = settings.compile()
+        assertEquals(problems, [SettingsProblem(location: "Shortcuts › main › alt-s", message: "The 'service' mode doesn't exist")])
+        assertEquals(config.modes[mainModeId]?.bindings.keys.sorted(), ["alt-m"])
+    }
 }

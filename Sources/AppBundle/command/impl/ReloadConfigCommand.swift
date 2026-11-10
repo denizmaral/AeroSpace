@@ -44,7 +44,8 @@ struct ReloadConfigResult {
     let oldConfig = config
     config = newConfig
     removeHotkeys(notIn: Set(newConfig.modes.values.flatMap(\.bindings.keys)))
-    await activateMode_nonCancellable(activeMode)
+    // The active mode may be gone (removed in the settings window): its shortcuts are, and the one that leaves it too
+    await activateMode_nonCancellable(activeMode.map { newConfig.modes[$0] != nil ? $0 : mainModeId })
     if newConfig.startAtLogin != oldConfig.startAtLogin || !isLoginItemSynced {
         isLoginItemSynced = true
         syncStartAtLogin()

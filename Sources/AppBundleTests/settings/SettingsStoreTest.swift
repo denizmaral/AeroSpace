@@ -185,4 +185,22 @@ struct SettingsStoreTest {
         model.isRecordingShortcut = false
         assertEquals(reported, [true, false])
     }
+
+    /// The mode that the user is in is removed in the settings window: its shortcuts are gone, the one that leaves it too
+    @Test func testARemovedActiveModeFallsBackToMain() async {
+        func compiled(modes: [String]) -> Config {
+            var settings = Settings()
+            settings.workspaceShortcuts = .init(goTo: nil, moveWindowTo: nil)
+            settings.modes = modes.map { Settings.BindingMode(name: $0, shortcuts: []) }
+            return settings.compile().config
+        }
+        defer { resetHotKeys() }
+        await applyConfig_nonCancellable(compiled(modes: [mainModeId, "service"]))
+        await activateMode_nonCancellable("service")
+        await applyConfig_nonCancellable(compiled(modes: [mainModeId, "service"]))
+        assertEquals(activeMode, "service")
+
+        await applyConfig_nonCancellable(compiled(modes: [mainModeId]))
+        assertEquals(activeMode, mainModeId)
+    }
 }

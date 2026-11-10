@@ -19,7 +19,8 @@ aerospace mode [-h|--help] [--] <binding-mode>
 // tag::body[]
 {manpurpose}
 
-See xref:guide.adoc#binding-modes[the guide] for documentation about binding modes
+A binding mode is a set of shortcuts (Settings › Shortcuts). The command fails if the mode doesn't exist: a mode
+without shortcuts couldn't be left again
 // end::body[]
 
 // =========================================================== Options

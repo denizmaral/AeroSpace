@@ -58,13 +58,14 @@ extension Settings {
 
         let keyNames = KeyNames.standard
         let workspaceBindings = workspaceShortcutBindings(keyNames, keyForCharacter, &problems)
+        let modeNames = Set(modes.map(\.name))
         for mode in modes {
             var bindings: [String: HotkeyBinding] = mode.name == mainModeId ? workspaceBindings : [:]
             for shortcut in mode.shortcuts {
                 let notation = keyNames.notation(shortcut.chord)
                 let location = "Shortcuts › \(mode.name) › \(notation)"
                 // A shortcut that was just added does nothing yet: it doesn't take its keys
-                guard shortcut.isComplete, let commands = compileActions(shortcut.actions, location, &problems) else { continue }
+                guard shortcut.isComplete, let commands = compileActions(shortcut.actions, location, &problems, modeNames) else { continue }
                 let binding = HotkeyBinding(shortcut.chord.modifiers.eventFlags, shortcut.chord.key, commands, descriptionWithKeyNotation: notation)
                 if let existing = bindings[binding.descriptionWithKeyCode] {
                     let isWorkspaceShortcut = mode.name == mainModeId && workspaceBindings[binding.descriptionWithKeyCode] == existing
@@ -79,16 +80,16 @@ extension Settings {
             let location = "Window rules › \(index + 1)"
             // A rule that was just added does nothing yet: it doesn't stop the next rules either
             guard rule.isComplete, let matcher = rule.condition.runtimeMatcher(location, &problems),
-                  let commands = compileActions(rule.actions, location, &problems)
+                  let commands = compileActions(rule.actions, location, &problems, modeNames)
             else { continue }
             config.onWindowDetected.append(WindowDetectedCallback(matcher: matcher, checkFurtherCallbacks: rule.checkFurtherRules, run: commands))
         }
 
         let empty = Shell<any Command>.newCompound([], Shell<any Command>.seq)
-        config.afterStartupCommand = compileActions(automation.afterStartup, "Automation › After startup", &problems) ?? empty
-        config.onFocusChanged = compileActions(automation.onFocusChanged, "Automation › Focus changed", &problems) ?? empty
-        config.onFocusedMonitorChanged = compileActions(automation.onFocusedMonitorChanged, "Automation › Focused monitor changed", &problems) ?? empty
-        config.onModeChanged = compileActions(automation.onModeChanged, "Automation › Mode changed", &problems) ?? empty
+        config.afterStartupCommand = compileActions(automation.afterStartup, "Automation › After startup", &problems, modeNames) ?? empty
+        config.onFocusChanged = compileActions(automation.onFocusChanged, "Automation › Focus changed", &problems, modeNames) ?? empty
+        config.onFocusedMonitorChanged = compileActions(automation.onFocusedMonitorChanged, "Automation › Focused monitor changed", &problems, modeNames) ?? empty
+        config.onModeChanged = compileActions(automation.onModeChanged, "Automation › Mode changed", &problems, modeNames) ?? empty
 
         if !modes.contains(where: { $0.name == mainModeId }) {
             problems.append(.init(location: "Shortcuts", message: "The '\(mainModeId)' mode is missing"))
@@ -99,10 +100,22 @@ extension Settings {
 
 /// Actions run one after the other, like a list of command lines. Nil if one of them is invalid: the others alone might do
 /// something else than intended (e.g. close the window that should have been moved first)
+///
+/// - Parameter modeNames: the modes of the settings. Switching to another one (e.g. a mode that was removed) would leave
+///   the user without any shortcut: no mode, no bindings
 @MainActor
-private func compileActions(_ actions: some Collection<Action>, _ location: String, _ problems: inout [SettingsProblem]) -> Shell<any Command>? {
+private func compileActions(
+    _ actions: some Collection<Action>,
+    _ location: String,
+    _ problems: inout [SettingsProblem],
+    _ modeNames: Set<String>,
+) -> Shell<any Command>? {
     var shells: [Shell<any Command>] = []
     for action in actions {
+        if case .enterMode(let name) = action, !modeNames.contains(name) {
+            problems.append(.init(location: location, message: "The '\(name)' mode doesn't exist"))
+            continue
+        }
         switch action.command {
             case .cmd(let shell): shells.append(shell)
             case .help: problems.append(.init(location: location, message: "'\(action.commandLine)' only prints a help text"))
