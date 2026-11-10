@@ -9,7 +9,7 @@ struct BalanceSizesCommand: Command {
     func run(_ env: CmdEnv, _ io: CmdIo) -> BinaryExitCode {
         guard let target = args.resolveTargetOrReportError(env, io) else { return .fail }
         for window in target.workspace.rootTilingContainer.allLeafWindowsRecursive {
-            window.forgetMinimumSizeAndRecheck() // The user asks for equal sizes explicitly
+            window.forgetMinimumSizeAndRecheckAfterLayout() // The user asks for equal sizes explicitly
         }
         balance(target.workspace.rootTilingContainer)
         return .succ

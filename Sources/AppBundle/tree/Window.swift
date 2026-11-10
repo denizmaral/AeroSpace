@@ -21,7 +21,7 @@ open class Window: TreeNode, Hashable {
     var learnedMinimumSizeWorkspace: String? = nil
     var minimumSizeCheckTask: Task<(), any Error>? = nil
     var isMinimumSizeRecheckRequested: Bool = false
-    var minimumSizeCheckCooldownEnd: ContinuousClock.Instant? = nil
+    var isMinimumSizeRecheckAfterLayoutRequested: Bool = false
     /// The native state (minimized, fullscreen) may have changed. See normalizeLayoutReason
     var isNativeStateCheckRequested: Bool = false
 

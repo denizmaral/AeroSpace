@@ -337,4 +337,79 @@ struct MinimumSizeCheckRaceTest {
         assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
         assertEquals(window.effectiveMinimumSize.width, 1012)
     }
+
+    @Test func testJitteringWindowLearnsTheBiggerSizeWhenItComesFirst() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1000)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 960: the window stays 1000
+        readWidths(window, [1012]) // Then 1000 after the frame is sent again
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
+        assertEquals(window.effectiveMinimumSize.width, 1012)
+    }
+
+    /// E.g. an Electron app applies an older (bigger) frame late. A very different size isn't a confirmation: the check
+    /// continues until the window refuses the same size twice
+    @Test func testLateFrameIsNotLearned() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1000)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 960: the window stays 1000
+        readWidths(window, [1400]) // Then 1000 after the frame is sent again
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .learned)
+        assertEquals(window.effectiveMinimumSize.width, 1000)
+    }
+
+    /// A notification that arrives during the cooldown after an inconclusive check must not be lost
+    @Test func testRequestDuringTheCooldownIsNotLost() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1000)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 960: the window stays 1000
+        readWidths(window, [1100, 1300, 1100, 1300]) // Very different sizes every time: inconclusive
+        window.scheduleMinimumSizeCheck(confirmationDelay: .milliseconds(10), cooldown: .milliseconds(400))
+        try await Task.sleep(for: .milliseconds(200))
+        assertEquals(window.effectiveMinimumSize, .zero)
+        #expect(window.minimumSizeCheckTask != nil) // The cooldown
+        window.scheduleMinimumSizeCheck() // E.g. kAXResizedNotification
+        try await Task.sleep(for: .milliseconds(500))
+        assertEquals(window.effectiveMinimumSize.width, 1000)
+        #expect(window.minimumSizeCheckTask == nil)
+    }
+
+    /// The layout weights follow the mouse during the drag. The check must not send the layout frame over the drag, nor
+    /// learn the dragged size. The window is checked after the drag
+    @Test func testWindowDraggedWithMouseIsCheckedAfterTheDrag() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        let window = appWindow(workspace, minimumWidth: 1000)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO)
+        try await workspace.layoutWorkspace() // 960: the window stays 1000
+
+        currentlyManipulatedWithMouseWindowId = window.windowId
+        window.setActualRectForTest(try #require(window.lastAppliedLayoutPhysicalRect).with(\.width, 1400))
+        window.invalidateSentFrame() // resizedObs
+        let sentFramesCount = window.sentFrames.count
+        assertEquals(try await window.checkMinimumSize(confirmationDelay: .zero), .fits)
+        assertEquals(window.sentFrames.count, sentFramesCount)
+        assertEquals(window.effectiveMinimumSize, .zero)
+
+        try await resetManipulatedWithMouseIfPossible() // The mouse button is released
+        try await workspace.layoutWorkspace() // 960: the window stays 1000
+        try await Task.sleep(for: .milliseconds(800))
+        assertEquals(window.effectiveMinimumSize.width, 1000)
+    }
+}
+
+/// The next reads of the window size return `widths`, one per read (e.g. an app that jitters or applies late frames)
+@MainActor
+private func readWidths(_ window: TestWindow, _ widths: [CGFloat]) {
+    guard let width = widths.first else { return }
+    window.onGetAxSizeForTest = {
+        window.setActualRectForTest(window.lastAppliedLayoutPhysicalRect?.with(\.width, width))
+        readWidths(window, Array(widths.dropFirst()))
+    }
 }
