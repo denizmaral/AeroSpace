@@ -16,15 +16,23 @@ struct TilingSlotTest {
 
     /// The window enters native fullscreen, the session normalizes the containers, `meanwhile` runs, the window leaves
     /// native fullscreen
-    private func fullscreenRoundTrip(_ window: TestWindow, _ workspace: Workspace, meanwhile: () -> Void = {}) async throws {
+    private func fullscreenRoundTrip(_ window: TestWindow, _ workspace: Workspace, meanwhile: () async throws -> Void = {}) async throws {
         window.isMacosFullscreenForTest = true
-        try await normalizeLayoutReason()
+        try await session(workspace)
         #expect(window.parent === workspace.macOsNativeFullscreenWindowsContainer)
-        workspace.normalizeContainers()
-        meanwhile()
+        try await meanwhile()
+        try await workspace.layoutWorkspace()
         window.isMacosFullscreenForTest = false
+        try await session(workspace)
+    }
+
+    /// The same steps as on the device: the complete refresh session lays out right after normalizeLayoutReason (the
+    /// layout keeps the lengths in the weights), the next session normalizes the containers and lays out again
+    private func session(_ workspace: Workspace) async throws {
         try await normalizeLayoutReason()
+        try await workspace.layoutWorkspace()
         workspace.normalizeContainers()
+        try await workspace.layoutWorkspace()
     }
 
     @Test func testSameContainer() async throws {
@@ -97,8 +105,7 @@ struct TilingSlotTest {
 
     private func setFullscreen(_ windows: [TestWindow], _ isFullscreen: Bool, _ workspace: Workspace) async throws {
         for window in windows { window.isMacosFullscreenForTest = isFullscreen }
-        try await normalizeLayoutReason()
-        workspace.normalizeContainers()
+        try await session(workspace)
     }
 
     /// E.g. two windows of the app are hidden or minimized ("Minimize All"). They come back in their order whichever
@@ -299,8 +306,96 @@ struct TilingSlotTest {
         try await setFullscreen([window3], true, workspace)
         window3.closeAxWindow()
         workspace.normalizeContainers()
+        try await workspace.layoutWorkspace()
         assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2)]))
         assertEquals(root.children.map { $0.getWeight(.h) }, [420, 1500])
+    }
+
+    /// E.g. Zen Browser next to a stack of two terminals: every window comes back to its exact rect
+    @Test func testExactRectsAfterRoundTrip() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var zen: TestWindow!
+        workspace.rootTilingContainer.apply {
+            zen = TestWindow.new(id: 1, parent: $0, adaptiveWeight: 1200)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 720).apply {
+                TestWindow.new(id: 2, parent: $0, adaptiveWeight: 700)
+                TestWindow.new(id: 3, parent: $0, adaptiveWeight: 379)
+            }
+        }
+        try await workspace.layoutWorkspace()
+        let rects = workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.lastAppliedLayoutPhysicalRect)
+        try await fullscreenRoundTrip(zen, workspace)
+        assertEquals(workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.lastAppliedLayoutPhysicalRect), rects)
+    }
+
+    /// The container of the window is flattened while it's away. The window and its neighbor get their heights back
+    @Test func testExactRectsInFlattenedContainer() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window3: TestWindow!
+        workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                TestWindow.new(id: 2, parent: $0, adaptiveWeight: 700)
+                window3 = TestWindow.new(id: 3, parent: $0, adaptiveWeight: 379)
+            }
+        }
+        try await workspace.layoutWorkspace()
+        let rects = workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.lastAppliedLayoutPhysicalRect)
+        try await fullscreenRoundTrip(window3, workspace)
+        assertEquals(workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.lastAppliedLayoutPhysicalRect), rects)
+    }
+
+    /// E.g. the app is hidden and unhidden: both windows come back in the same session
+    @Test func testExactWeightsWhenWindowsComeBackTogether() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var windows: [TestWindow] = []
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0, adaptiveWeight: 500)
+            windows.append(TestWindow.new(id: 2, parent: $0, adaptiveWeight: 900))
+            windows.append(TestWindow.new(id: 3, parent: $0, adaptiveWeight: 520))
+        }
+        try await setFullscreen(windows, true, workspace)
+        try await setFullscreen(windows, false, workspace)
+        assertEquals(root.children.map { $0.getWeight(.h) }, [500, 900, 520])
+    }
+
+    /// The user resizes a window while another one is away. The resize must not be undone when the window comes back
+    @Test func testResizeWhileAwayIsKept() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window2: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0, adaptiveWeight: 500)
+            window2 = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 900)
+            TestWindow.new(id: 3, parent: $0, adaptiveWeight: 520)
+        }
+        try await fullscreenRoundTrip(window2, workspace) {
+            assertEquals(window1.focusWindow(), true)
+            await parseCommand("resize width +200").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        }
+        // Not restored to 500: window 1 is bigger than its old share
+        let widths = root.children.map { $0.lastAppliedLayoutPhysicalRect?.width ?? 0 }
+        #expect(widths[0] > 500 && widths.allSatisfy { $0 > 0 }, "\(widths)")
+        assertEquals(widths.reduce(0, +), 1920)
+    }
+
+    /// A sibling is closed while the window is away: the window comes back to its old size, the others share the rest
+    @Test func testOldSizeAfterSiblingIsClosed() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window2: TestWindow!
+        var window3: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0, adaptiveWeight: 500)
+            window2 = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 900)
+            window3 = TestWindow.new(id: 3, parent: $0, adaptiveWeight: 520)
+        }
+        try await fullscreenRoundTrip(window2, workspace) { window3.closeAxWindow() }
+        assertEquals(root.children.map { $0.lastAppliedLayoutPhysicalRect?.width }, [1020, 900])
     }
 
     /// The slot is gone: the window is placed as a new window
