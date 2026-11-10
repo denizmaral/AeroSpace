@@ -1,6 +1,6 @@
 # Settings architecture
 
-Status: phase 1 done (2026-11-10), phase 2 next.
+Status: phases 1 and 2 done (2026-11-10), phase 3 next.
 
 ## Why
 

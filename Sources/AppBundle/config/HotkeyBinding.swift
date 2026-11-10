@@ -18,6 +18,14 @@ import HotKey
     }
 }
 
+/// Unregisters the hotkeys of keys that aren't bound anymore. The others stay registered
+@MainActor func removeHotkeys(notIn keys: Set<String>) {
+    for (key, hotkey) in hotkeys where !keys.contains(key) {
+        hotkey.isEnabled = false // Explicitly: a running hotkey handler may keep it alive
+        hotkeys[key] = nil
+    }
+}
+
 @MainActor func resetHotKeys() {
     // Explicitly unregister all hotkeys. We cannot always rely on destruction of the HotKey object to trigger
     // unregistration because we might be running inside a hotkey handler that is keeping its HotKey object alive.

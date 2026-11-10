@@ -37,11 +37,20 @@ struct ReloadConfigResult {
     return ReloadConfigResult(isOk: errors.isEmpty, stdout: errors.joined(separator: "\n\n"), stderr: loaded.notices.joined(separator: "\n\n"))
 }
 
-/// Applies a compiled config: shortcuts, login item, focus follows mouse. The next refresh session lays the windows out
+/// Applies a compiled config, by what changed (dev-docs/settings-architecture.md): the hotkeys of keys that no mode uses
+/// anymore are removed and new ones registered (the others stay: their commands are looked up when they fire), the login
+/// item changes only when "open at login" does. The next refresh session lays the windows out
 @MainActor func applyConfig_nonCancellable(_ newConfig: Config) async {
-    resetHotKeys()
+    let oldConfig = config
     config = newConfig
+    removeHotkeys(notIn: Set(newConfig.modes.values.flatMap(\.bindings.keys)))
     await activateMode_nonCancellable(activeMode)
-    syncStartAtLogin()
+    if newConfig.startAtLogin != oldConfig.startAtLogin || !isLoginItemSynced {
+        isLoginItemSynced = true
+        syncStartAtLogin()
+    }
     syncFocusFollowsMouse(config)
 }
+
+/// The login item is synced with the first config of the run (the settings may have changed while MarSpace wasn't running)
+@MainActor private var isLoginItemSynced = false

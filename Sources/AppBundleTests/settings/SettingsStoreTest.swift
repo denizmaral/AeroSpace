@@ -153,6 +153,29 @@ struct SettingsStoreTest {
 
     /// A removal can be undone: from the banner, and with ⌘Z (and redone with ⇧⌘Z)
 
+    /// Applying settings changes only what changed: a hotkey whose keys are still bound stays registered (its commands are
+    /// looked up when it fires), keys that aren't bound anymore are unregistered, new ones registered
+    @Test func testHotkeysAreAppliedByWhatChanged() async {
+        func compiled(_ shortcuts: [(Key, Action)]) -> Config {
+            var settings = Settings()
+            settings.workspaceShortcuts = .init(goTo: nil, moveWindowTo: nil)
+            settings.modes = [Settings.BindingMode(name: mainModeId, shortcuts: IdentifiedList(shortcuts.map {
+                Settings.Shortcut(chord: KeyChord([.control, .option, .shift, .command], $0.0), actions: [$0.1])
+            }))]
+            return settings.compile().config
+        }
+        defer { resetHotKeys() }
+        await applyConfig_nonCancellable(compiled([(.f17, .focus(.left)), (.f18, .focus(.right))]))
+        let before = registeredHotkeys // Kept alive: a freed hotkey's memory (and identifier) could be reused
+        assertEquals(before.count, 2)
+
+        await applyConfig_nonCancellable(compiled([(.f17, .focus(.up)), (.f19, .focus(.down))])) // F17 changed, F18 gone, F19 new
+        let after = registeredHotkeys
+        assertEquals(after.count, 2)
+        assertEquals(after.count(where: { new in before.contains { $0 === new } }), 1) // F17: the same hotkey
+        assertEquals(config.modes[mainModeId]?.bindings.values.map(\.commands.shellOfCommandsDescription).sorted(), ["focus down", "focus up"])
+    }
+
     /// MarSpace's own shortcuts are paused while a shortcut is recorded
     @Test func testRecordingIsReported() {
         var reported: [Bool] = []
