@@ -26,23 +26,6 @@ struct TilingSlot {
     /// The window was the last child of its parent: the normalization removes the empty container. The first of its
     /// windows that comes back binds it back
     fileprivate var emptiedContainer: EmptiedContainer?
-    /// The weights of the container before its first window left. See `restoredWeight`
-    fileprivate var weights: TilingSlotWeights? = nil
-}
-
-/// The weights of the children of a container before the first of its windows left for a macOS native state. Shared by
-/// the slots of all its windows that are away
-private final class TilingSlotWeights {
-    let orientation: Orientation
-    /// Including the windows that left
-    var weights: [(node: WeakTreeNode, weight: CGFloat)]
-    /// The windows that left (the others took their space while they were away)
-    var leftWindows: Set<ObjectIdentifier> = []
-
-    init(orientation: Orientation, weights: [(node: WeakTreeNode, weight: CGFloat)]) {
-        self.orientation = orientation
-        self.weights = weights
-    }
 }
 
 private struct EmptiedContainer {
@@ -104,10 +87,9 @@ extension Window {
     /// The window is away in a macOS native state, and the window that split it in dwindle placement is closed. The
     /// weight goes back to the window when it comes back. See ``returnWeightToDwindleSplitAnchor()``
     @MainActor
-    func addWeightToTilingSlot(_ weight: CGFloat, of parent: TilingContainer, from closed: Window) {
+    func addWeightToTilingSlot(_ weight: CGFloat, of parent: TilingContainer) {
         guard let slot = tilingSlot, slot.parent === parent, slot.orientation == parent.orientation else { return }
         tilingSlot?.adaptiveWeight += weight
-        slot.weights?.transfer(from: closed, to: self)
     }
 
     @MainActor
@@ -127,61 +109,9 @@ extension Window {
             parent.layout = slot.layout
             bind(to: parent, adaptiveWeight: slot.adaptiveWeight, index: slot.isAfterNeighbor ? INDEX_BIND_LAST : 0)
         } else {
-            let weight = restoredWeight(slot, parent)
-            bind(to: parent, adaptiveWeight: weight, index: insertionIndex(in: parent.children, after: slot.leftSiblings))
+            bind(to: parent, adaptiveWeight: slot.adaptiveWeight, index: insertionIndex(in: parent.children, after: slot.leftSiblings))
         }
         return true
-    }
-
-    /// The layout keeps the lengths of the children in their weights: while windows are away, the other children take
-    /// their space, every layout shifts all of them by the same amount. If nothing else changed meanwhile (the children
-    /// that never left are all there and were only shifted, no other children, no resize, no minimum sizes), the weights
-    /// of the children are restored as they were before the first window left: the windows come back to their exact
-    /// sizes, in any order. Otherwise the layout shares the space as usual
-    ///
-    /// - Returns: the weight of the window
-    @MainActor
-    private func restoredWeight(_ slot: TilingSlot, _ parent: TilingContainer) -> CGFloat {
-        guard let snapshot = slot.weights, snapshot.orientation == parent.orientation, parent.layout == .tiles else {
-            return slot.adaptiveWeight
-        }
-        let orientation = parent.orientation
-        var recorded: [ObjectIdentifier: CGFloat] = [:]
-        for (node, weight) in snapshot.weights {
-            if let node = node.node { recorded[ObjectIdentifier(node)] = weight }
-        }
-        let children = parent.inhabitedChildren
-        let stayed = snapshot.weights.compactMap(\.node.node).filter { !snapshot.leftWindows.contains(ObjectIdentifier($0)) }
-        let isSameChildren = children.allSatisfy { recorded[ObjectIdentifier($0)] != nil } &&
-            stayed.allSatisfy { node in children.contains { $0 === node } }
-        let shifts = isSameChildren ? stayed.map { $0.getWeight(orientation) - recorded[ObjectIdentifier($0)].orDie() } : []
-        if isSameChildren && (shifts.max() ?? 0) - (shifts.min() ?? 0) <= 1 {
-            for child in children {
-                child.setWeight(orientation, recorded[ObjectIdentifier(child)].orDie())
-            }
-            if let weight = recorded[ObjectIdentifier(self)] { return weight }
-        }
-        return proportionalWeight(snapshot, recorded, children, orientation) ?? slot.adaptiveWeight
-    }
-
-    /// Something else changed while the window was away (e.g. a window was closed, or resized): the window gets its old
-    /// share of the container, the other children share the rest in their current proportions
-    @MainActor
-    private func proportionalWeight(
-        _ snapshot: TilingSlotWeights,
-        _ recorded: [ObjectIdentifier: CGFloat],
-        _ children: [TreeNode],
-        _ orientation: Orientation,
-    ) -> CGFloat? {
-        let total = snapshot.weights.reduce(0) { $0 + $1.weight }
-        let current = children.reduce(0) { $0 + $1.getWeight(orientation) }
-        guard let own = recorded[ObjectIdentifier(self)], own > 0, own < total, current > 0 else { return nil }
-        let weight = own / total * current
-        let scale = (current - weight) / current
-        for child in children {
-            child.setWeight(orientation, child.getWeight(orientation) * scale)
-        }
-        return weight
     }
 
     /// The normalization flattened the parent: the window splits its neighbor again
@@ -230,10 +160,8 @@ extension Window {
                 slot.layout,
                 index: neighborBinding.index,
             )
-            // The same neighbor as when the window left: the weights of both are known
-            let isSameNeighbor = neighbor === slot.neighbor && isAfterNeighbor == slot.isAfterNeighbor
-            neighbor.bind(to: container, adaptiveWeight: isSameNeighbor ? slot.neighborAdaptiveWeight : WEIGHT_AUTO, index: 0)
-            bind(to: container, adaptiveWeight: isSameNeighbor ? slot.adaptiveWeight : WEIGHT_AUTO, index: isAfterNeighbor ? INDEX_BIND_LAST : 0)
+            neighbor.bind(to: container, adaptiveWeight: WEIGHT_AUTO, index: 0)
+            bind(to: container, adaptiveWeight: WEIGHT_AUTO, index: isAfterNeighbor ? INDEX_BIND_LAST : 0)
         }
         return true
     }
@@ -267,32 +195,7 @@ extension TilingSlot {
             isRootFlattened: parent.isRootContainer && parent.children.count == 1 && neighbor is TilingContainer,
             neighborAdaptiveWeight: neighbor?.getWeight(parent.orientation) ?? WEIGHT_AUTO,
             emptiedContainer: emptiedContainer,
-            weights: TilingSlotWeights.shared(leaving: window, parent, previous.adaptiveWeight),
         )
-    }
-}
-
-extension TilingSlotWeights {
-    /// The weights of the container before the first of its windows that are away left
-    @MainActor
-    static func shared(leaving window: Window, _ parent: TilingContainer, _ weight: CGFloat) -> TilingSlotWeights {
-        let orientation = parent.orientation
-        let snapshot = awayWindows(of: parent).lazy.compactMap { $0.tilingSlot?.weights }.first { $0.orientation == orientation }
-            ?? TilingSlotWeights(
-                orientation: orientation,
-                weights: parent.inhabitedChildren.map { (WeakTreeNode(node: $0), $0.getWeight(orientation)) } + [(WeakTreeNode(node: window), weight)],
-            )
-        snapshot.leftWindows.insert(ObjectIdentifier(window))
-        return snapshot
-    }
-
-    /// The window that split `anchor` (dwindle) is closed while the anchor is away: the anchor gets its weight back
-    func transfer(from closed: Window, to anchor: Window) {
-        guard let from = weights.firstIndex(where: { $0.node.node === closed }),
-              let to = weights.firstIndex(where: { $0.node.node === anchor })
-        else { return }
-        weights[to].weight += weights[from].weight
-        weights.remove(at: from)
     }
 }
 

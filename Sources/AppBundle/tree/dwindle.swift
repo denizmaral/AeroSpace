@@ -269,7 +269,7 @@ extension Window {
         if anchor.parent === parent {
             anchor.setWeight(orientation, anchor.getWeight(orientation) + weight)
         } else if let anchor = anchor as? Window { // E.g. the anchor is in native fullscreen. It gets the weight when it comes back
-            anchor.addWeightToTilingSlot(weight, of: parent, from: self)
+            anchor.addWeightToTilingSlot(weight, of: parent)
         }
     }
 }
