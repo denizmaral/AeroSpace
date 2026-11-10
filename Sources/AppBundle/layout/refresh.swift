@@ -160,10 +160,16 @@ private func refresh() async throws {
     Workspace.garbageCollectUnusedWorkspaces()
 }
 
-func refreshObs(_: AXObserver, _: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
+func refreshObs(_: AXObserver, _ ax: AXUIElement, notif: CFString, _: UnsafeMutableRawPointer?) {
     let notif = notif as String
+    let isNativeStateChange = notif == kAXWindowMiniaturizedNotification || notif == kAXWindowDeminiaturizedNotification
+    let nativeWindowId = isNativeStateChange ? ax.containingNativeWindowId() : nil
+    let pid = isNativeStateChange ? ax.pid : nil
     Task.startUnstructured { @MainActor in
         if !TrayMenuModel.shared.isEnabled { return }
+        if let nativeWindowId, let pid { // See normalizeLayoutReason
+            Window.get(byNativeId: nativeWindowId, pid: pid)?.isNativeStateCheckRequested = true
+        }
         scheduleCancellableCompleteRefreshSession(.ax(notif))
     }
 }

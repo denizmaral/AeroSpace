@@ -84,11 +84,13 @@ final class MacWindow: Window {
 
     @MainActor func setNativeFullscreen(_ value: Bool) {
         invalidateSentFrame() // macOS changes the frame. Also, the pending frame job is canceled
+        isNativeStateCheckRequested = true
         macApp.setNativeFullscreen(windowId, value)
     }
 
     @MainActor func setNativeMinimized(_ value: Bool) {
         invalidateSentFrame() // The pending frame job is canceled
+        isNativeStateCheckRequested = true
         macApp.setNativeMinimized(windowId, value)
     }
 

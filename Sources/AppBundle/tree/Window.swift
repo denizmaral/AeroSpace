@@ -22,6 +22,8 @@ open class Window: TreeNode, Hashable {
     var minimumSizeCheckTask: Task<(), any Error>? = nil
     var isMinimumSizeRecheckRequested: Bool = false
     var minimumSizeCheckCooldownEnd: ContinuousClock.Instant? = nil
+    /// The native state (minimized, fullscreen) may have changed. See normalizeLayoutReason
+    var isNativeStateCheckRequested: Bool = false
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
