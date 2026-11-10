@@ -45,11 +45,14 @@ struct ResizeCommand: Command {
         }
         guard let orientation else { return .fail }
         guard let node else { return .fail }
-        let diff: CGFloat = switch args.units.val {
-            case .set(let unit): CGFloat(unit) - node.getWeight(orientation)
+        // The units are pixels, the weights are proportions (see TilingContainer.pixelsToWeight)
+        let length = node.lastAppliedLayoutVirtualRect?.getDimension(orientation) ?? node.getWeight(orientation)
+        let pixels: CGFloat = switch args.units.val {
+            case .set(let unit): CGFloat(unit) - length
             case .add(let unit): CGFloat(unit)
             case .subtract(let unit): -CGFloat(unit)
         }
+        let diff = parent.pixelsToWeight(pixels)
 
         let inhabitedSiblings = parent.inhabitedChildren.filter { $0 != node }
         guard let childDiff = diff.div(inhabitedSiblings.count) else { return .fail }

@@ -65,11 +65,10 @@ extension TreeNode {
                 let siblings = parent.inhabitedChildren.filter { child in !ignored.contains { $0 === child } }
                 guard let index = siblings.firstIndex(of: self) else { return nil }
                 let orientation = parent.orientation
-                let weights = siblings.map { $0.getWeight(orientation) }
                 // The same math as in layoutTiles
-                let delta = (parentRect.getDimension(orientation) - weights.reduce(0, +)) / CGFloat(siblings.count)
-                let offset = weights[..<index].reduce(0, +) + delta * CGFloat(index)
-                let length = weights[index] + delta
+                let lengths = parent.proportionalLengths(siblings, total: parentRect.getDimension(orientation))
+                let offset = lengths[..<index].reduce(0, +)
+                let length = lengths[index]
                 return switch orientation {
                     case .h: Rect(topLeftX: parentRect.topLeftX + offset, topLeftY: parentRect.topLeftY, width: length, height: parentRect.height)
                     case .v: Rect(topLeftX: parentRect.topLeftX, topLeftY: parentRect.topLeftY + offset, width: parentRect.width, height: length)
@@ -258,7 +257,7 @@ extension Window {
         if anchor.parent === parent {
             anchor.setWeight(orientation, anchor.getWeight(orientation) + weight)
         } else if let anchor = anchor as? Window { // E.g. the anchor is in native fullscreen. It gets the weight when it comes back
-            anchor.addWeightToTilingSlot(weight, of: parent)
+            anchor.addWeightToTilingSlot(weight, of: parent, from: self)
         }
     }
 }

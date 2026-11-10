@@ -39,6 +39,16 @@ func resetManipulatedWithMouseIfPossible() async throws {
 }
 
 private let adaptiveWeightBeforeResizeWithMouseKey = TreeNodeUserDataKey<CGFloat>(key: "adaptiveWeightBeforeResizeWithMouseKey")
+private let weightScaleBeforeResizeWithMouseKey = TreeNodeUserDataKey<CGFloat>(key: "weightScaleBeforeResizeWithMouseKey")
+
+extension TilingContainer {
+    /// Weight per pixel when the drag started. The weights change during the drag, the scale must not
+    @MainActor
+    fileprivate func getWeightScaleBeforeResize() -> CGFloat {
+        getUserData(key: weightScaleBeforeResizeWithMouseKey)
+            ?? pixelsToWeight(1).also { putUserData(key: weightScaleBeforeResizeWithMouseKey, data: $0) }
+    }
+}
 
 @MainActor
 private func resizeWithMouse(_ window: Window) async throws { // todo cover with tests
@@ -71,10 +81,14 @@ private func resizeWithMouse(_ window: Window) async throws { // todo cover with
                             let parent = $0.parent as? TilingContainer
                             return parent?.orientation == orientation && parent?.layout == .tiles
                         }
-                        .forEach { $0.setWeight(orientation, $0.getWeightBeforeResize(orientation) + diff) }
+                        .forEach { node in
+                            // `diff` is in pixels, the weights are proportions (see TilingContainer.pixelsToWeight)
+                            let scale = (node.parent as? TilingContainer)?.getWeightScaleBeforeResize() ?? 1
+                            node.setWeight(orientation, node.getWeightBeforeResize(orientation) + diff * scale)
+                        }
                     let inhabitedSiblings = (parent.children.slice(startIndex ..< untilIndex) ?? [])
                         .filter { $0.tilingTreeNodeCasesOrDie().isInhabited }
-                    guard let siblingDiff = diff.div(inhabitedSiblings.count) else { return }
+                    guard let siblingDiff = (diff * parent.getWeightScaleBeforeResize()).div(inhabitedSiblings.count) else { return }
                     for sibling in inhabitedSiblings {
                         sibling.setWeight(orientation, sibling.getWeightBeforeResize(orientation) - siblingDiff)
                     }
@@ -87,14 +101,13 @@ private func resizeWithMouse(_ window: Window) async throws { // todo cover with
 extension TreeNode {
     @MainActor
     fileprivate func getWeightBeforeResize(_ orientation: Orientation) -> CGFloat {
-        let currentWeight = getWeight(orientation) // Check assertions
-        return getUserData(key: adaptiveWeightBeforeResizeWithMouseKey)
-            ?? (lastAppliedLayoutVirtualRect?.getDimension(orientation) ?? currentWeight)
-            .also { putUserData(key: adaptiveWeightBeforeResizeWithMouseKey, data: $0) }
+        getUserData(key: adaptiveWeightBeforeResizeWithMouseKey)
+            ?? getWeight(orientation).also { putUserData(key: adaptiveWeightBeforeResizeWithMouseKey, data: $0) }
     }
 
     fileprivate func resetResizeWeightBeforeResizeRecursive() {
         cleanUserData(key: adaptiveWeightBeforeResizeWithMouseKey)
+        cleanUserData(key: weightScaleBeforeResizeWithMouseKey)
         for child in children {
             child.resetResizeWeightBeforeResizeRecursive()
         }

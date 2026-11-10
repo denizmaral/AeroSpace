@@ -119,13 +119,14 @@ extension TilingContainer {
         var virtualPoint = virtual.topLeftCorner
 
         let inhabitedChildren = inhabitedChildren
+        guard let lastIndex = inhabitedChildren.indices.last else { return }
+        // The weights are proportions, the layout doesn't change them (see TilingContainer.proportionalLengths)
+        let total = orientation == .h ? width : height
+        lastLayoutLength = total
+        let lengths = proportionalLengths(inhabitedChildren, total: total)
 
-        guard let delta = ((orientation == .h ? width : height) - CGFloat(inhabitedChildren.sumOfDouble { $0.getWeight(orientation) }))
-            .div(inhabitedChildren.count) else { return }
-
-        let lastIndex = inhabitedChildren.indices.last
         for (i, child) in inhabitedChildren.enumerated() {
-            child.setWeight(orientation, child.getWeight(orientation) + delta)
+            let length = lengths[i]
             let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
             // Gaps. Consider 4 cases:
             // 1. Multiple children. Layout first child
@@ -135,18 +136,18 @@ extension TilingContainer {
             let gap = rawGap - (i == 0 ? rawGap / 2 : 0) - (i == lastIndex ? rawGap / 2 : 0)
             try await child.layoutRecursive(
                 i == 0 ? point : point.addingOffset(orientation, rawGap / 2),
-                width: orientation == .h ? child.hWeight - gap : width,
-                height: orientation == .v ? child.vWeight - gap : height,
+                width: orientation == .h ? length - gap : width,
+                height: orientation == .v ? length - gap : height,
                 virtual: Rect(
                     topLeftX: virtualPoint.x,
                     topLeftY: virtualPoint.y,
-                    width: orientation == .h ? child.hWeight : width,
-                    height: orientation == .v ? child.vWeight : height,
+                    width: orientation == .h ? length : width,
+                    height: orientation == .v ? length : height,
                 ),
                 context,
             )
-            virtualPoint = orientation == .h ? virtualPoint.addingXOffset(child.hWeight) : virtualPoint.addingYOffset(child.vWeight)
-            point = orientation == .h ? point.addingXOffset(child.hWeight) : point.addingYOffset(child.vWeight)
+            virtualPoint = virtualPoint.addingOffset(orientation, length)
+            point = point.addingOffset(orientation, length)
         }
     }
 
