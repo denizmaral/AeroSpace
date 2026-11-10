@@ -29,7 +29,7 @@ struct ShortcutsToolbar: ToolbarContent {
                 Button("New mode…") { state.isAddingMode = true }
                 if state.modeName != mainModeId {
                     Button("Remove the \(state.modeName.capitalized) mode", role: .destructive) {
-                        model.removing("Remove Mode", "The \(state.modeName) mode was removed") { model.settings.modes.removeAll { $0.name == state.modeName } }
+                        model.removing("Remove Mode", "The \(state.modeName) mode was removed") { settings in settings.modes.removeAll { $0.name == state.modeName } }
                         state.modeName = mainModeId
                     }
                 }
@@ -50,7 +50,7 @@ struct ShortcutsPane: View {
     @Bindable var model: SettingsModel
     /// The mode and the search: the toolbar of the window edits them (see ``ShortcutsToolbar``)
     @Bindable var state: ShortcutsPaneState
-    @State private var editing: Int? = nil
+    @State private var editing: IdentifiedList<Settings.Shortcut>.ID? = nil
     @State private var newModeName = ""
 
     private var modeIndex: Int? { model.settings.modes.firstIndex { $0.name == state.modeName } }
@@ -80,10 +80,10 @@ struct ShortcutsPane: View {
                 let shortcuts = model.settings.modes[modeIndex].shortcuts
                 let displayed = displayed(shortcuts)
                 ForEach(ShortcutGroup.allCases) { group in
-                    let indices = displayed.filter { ShortcutGroup(shortcuts[$0]) == group }
-                    if !indices.isEmpty {
+                    let inGroup = displayed.filter { ShortcutGroup($0.shortcut) == group }
+                    if !inGroup.isEmpty {
                         Section {
-                            ForEach(indices, id: \.self) { index in row(modeIndex, index) }
+                            ForEach(inGroup, id: \.id) { row($0.id, $0.shortcut) }
                         } header: {
                             Text(group.title)
                         }
@@ -94,8 +94,9 @@ struct ShortcutsPane: View {
                 }
                 Section {
                     Button {
-                        model.settings.modes[modeIndex].shortcuts.append(Settings.Shortcut(chord: KeyChord([.control, .option], .f1), actions: [])) // Inert until an action is chosen
-                        editing = model.settings.modes[modeIndex].shortcuts.count - 1
+                        // Does nothing (and isn't registered) until an action is chosen
+                        model.store.update("Add Shortcut") { $0.modes[modeIndex].shortcuts.append(Settings.Shortcut(chord: KeyChord([.control, .option], .f1), actions: [])) }
+                        editing = model.settings.modes[modeIndex].shortcuts.lastId
                     } label: {
                         Label("Add a shortcut", systemImage: "plus")
                     }
@@ -127,36 +128,45 @@ struct ShortcutsPane: View {
         .onChange(of: state.modeName) { editing = nil }
     }
 
-    private func row(_ modeIndex: Int, _ index: Int) -> some View {
-        let shortcut = model.settings.modes[modeIndex].shortcuts[index]
+    private func row(_ id: IdentifiedList<Settings.Shortcut>.ID, _ shortcut: Settings.Shortcut) -> some View {
         let keyNames = KeyNames.of(model.settings.general.keyboardLayout)
         return ShortcutRow(
             shortcut: shortcut,
             problem: model.problems(at: "Shortcuts › \(state.modeName) › \(keyNames.notation(shortcut.chord))").first,
         )
         .contentShape(Rectangle())
-        .onTapGesture { editing = index }
-        .popover(isPresented: Binding(get: { editing == index }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
-            if model.settings.modes.indices.contains(modeIndex), model.settings.modes[modeIndex].shortcuts.indices.contains(index) {
-                shortcutEditor(modeIndex, index)
-            }
+        .onTapGesture { editing = id }
+        .popover(isPresented: Binding(get: { editing == id }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
+            // Built again while it closes, after the shortcut may have been removed
+            if let current = currentShortcut(id) { shortcutEditor(id, current) }
         }
     }
 
-    /// Only for a shortcut that exists: the content of a closing popover is built again after its shortcut was removed
-    private func shortcutEditor(_ modeIndex: Int, _ index: Int) -> some View {
-        ShortcutEditor(
-            shortcut: $model.settings.modes.element(modeIndex, or: Settings.BindingMode(name: mainModeId))
-                .shortcuts.element(index, or: Settings.Shortcut(chord: KeyChord([], .escape), actions: [])),
+    /// The shortcut of the shown mode with the id. nil: it was removed
+    private func currentShortcut(_ id: IdentifiedList<Settings.Shortcut>.ID) -> Settings.Shortcut? {
+        model.settings.modes.first { $0.name == state.modeName }?.shortcuts[id: id]
+    }
+
+    private func shortcutEditor(_ id: IdentifiedList<Settings.Shortcut>.ID, _ initial: Settings.Shortcut) -> some View {
+        let modeName = state.modeName
+        // By the name of the mode and the id of the shortcut: a removed shortcut is read as it was and isn't written
+        let binding = Binding<Settings.Shortcut>(
+            get: { currentShortcut(id) ?? initial },
+            set: { value in
+                model.store.update { settings in
+                    if let mode = settings.modes.firstIndex(where: { $0.name == modeName }) { settings.modes[mode].shortcuts[id: id] = value }
+                }
+            },
+        )
+        return ShortcutEditor(
+            shortcut: binding,
             isRecording: $model.isRecordingShortcut,
             modes: model.settings.modes.map(\.name),
             workspaces: model.settings.workspaces.persistent,
             remove: {
                 editing = nil
-                model.removing("Delete Shortcut", "Shortcut deleted") {
-                    if model.settings.modes.indices.contains(modeIndex), model.settings.modes[modeIndex].shortcuts.indices.contains(index) {
-                        model.settings.modes[modeIndex].shortcuts.remove(at: index)
-                    }
+                model.removing("Delete Shortcut", "Shortcut deleted") { settings in
+                    if let mode = settings.modes.firstIndex(where: { $0.name == modeName }) { settings.modes[mode].shortcuts[id: id] = nil }
                 }
             },
         )
@@ -164,23 +174,23 @@ struct ShortcutsPane: View {
 
     /// The matching shortcuts in a readable order: by action, then by parameter (directions in reading order, workspaces
     /// naturally sorted). The stored order doesn't change
-    private func displayed(_ shortcuts: [Settings.Shortcut]) -> [Int] {
+    private func displayed(_ shortcuts: IdentifiedList<Settings.Shortcut>) -> [(id: IdentifiedList<Settings.Shortcut>.ID, shortcut: Settings.Shortcut, index: Int)] {
         let keyNames = KeyNames.of(model.settings.general.keyboardLayout)
         let query = state.search.trimmingCharacters(in: .whitespaces).lowercased()
-        return shortcuts.indices
-            .filter { index in
+        return zip(shortcuts.ids, shortcuts).enumerated().map { (id: $1.0, shortcut: $1.1, index: $0) }
+            .filter { entry in
                 guard !query.isEmpty else { return true }
-                let shortcut = shortcuts[index]
+                let shortcut = entry.shortcut
                 return keyNames.notation(shortcut.chord).contains(query) || KeyLabels.symbols(shortcut.chord).lowercased().contains(query)
                     || shortcut.actions.contains { $0.summary.lowercased().contains(query) || $0.commandLine.lowercased().contains(query) }
             }
             .sorted { lhs, rhs in
-                let (a, b) = (shortcuts[lhs].actions.first, shortcuts[rhs].actions.first)
+                let (a, b) = (lhs.shortcut.actions.first, rhs.shortcut.actions.first)
                 let (kindA, kindB) = (a.map { ActionKind.allCases.firstIndex(of: ActionKind($0)) ?? 0 } ?? .max, b.map { ActionKind.allCases.firstIndex(of: ActionKind($0)) ?? 0 } ?? .max)
                 if kindA != kindB { return kindA < kindB }
                 let (keyA, keyB) = (a?.sortKey ?? "", b?.sortKey ?? "")
                 if keyA != keyB { return keyA.localizedStandardCompare(keyB) == .orderedAscending }
-                return lhs < rhs
+                return lhs.index < rhs.index
             }
     }
 }
@@ -496,34 +506,15 @@ extension Action {
 
 struct WindowRulesPane: View {
     @Bindable var model: SettingsModel
-    @State private var editing: Int? = nil
+    @State fileprivate var editing: IdentifiedList<Settings.WindowRule>.ID? = nil
 
     var body: some View {
         List {
             Section {
-                ForEach(model.settings.windowRules.indices, id: \.self) { index in
-                    WindowRuleRow(rule: model.settings.windowRules[index], hasProblem: !model.problems(at: "Window rules › \(index + 1)").isEmpty)
-                        .contentShape(Rectangle())
-                        .onTapGesture { editing = index }
-                        .popover(isPresented: Binding(get: { editing == index }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
-                            // Built again while it closes, after the rule was removed
-                            if model.settings.windowRules.indices.contains(index) {
-                                WindowRuleEditor(
-                                    rule: $model.settings.windowRules.element(index, or: Settings.WindowRule()),
-                                    problems: model.problems(at: "Window rules › \(index + 1)"),
-                                    modes: model.settings.modes.map(\.name),
-                                    workspaces: model.settings.workspaces.persistent,
-                                    remove: {
-                                        editing = nil
-                                        model.removing("Delete Rule", "Rule deleted") {
-                                            if model.settings.windowRules.indices.contains(index) { model.settings.windowRules.remove(at: index) }
-                                        }
-                                    },
-                                )
-                            }
-                        }
-                }
-                .onMove { model.settings.windowRules.move(fromOffsets: $0, toOffset: $1) }
+                ForEach(model.settings.windowRules.ids, id: \.self) { row($0) }
+                    .onMove { source, destination in
+                        model.store.update("Move Rule") { $0.windowRules.move(fromOffsets: source, toOffset: destination) }
+                    }
             } header: {
                 Text("When a window opens, the first rule that matches it runs")
             } footer: {
@@ -533,8 +524,8 @@ struct WindowRulesPane: View {
             }
             Section {
                 Button {
-                    model.settings.windowRules.append(Settings.WindowRule()) // Inert until an action is chosen
-                    editing = model.settings.windowRules.count - 1
+                    model.store.update("Add Rule") { $0.windowRules.append(Settings.WindowRule()) } // Does nothing until it has an action
+                    editing = model.settings.windowRules.lastId
                 } label: {
                     Label("Add a rule", systemImage: "plus")
                 }
@@ -547,6 +538,33 @@ struct WindowRulesPane: View {
 }
 
 /// A rule in the list: the app (and the other conditions), then what happens
+extension WindowRulesPane {
+    @ViewBuilder
+    private func row(_ id: IdentifiedList<Settings.WindowRule>.ID) -> some View {
+        if let index = model.settings.windowRules.index(of: id) {
+            WindowRuleRow(rule: model.settings.windowRules[index], hasProblem: !model.problems(at: "Window rules › \(index + 1)").isEmpty)
+                .contentShape(Rectangle())
+                .onTapGesture { editing = id }
+                .popover(isPresented: Binding(get: { editing == id }, set: { if !$0 { editing = nil } }), arrowEdge: .trailing) {
+                    // Built again while it closes, after the rule may have been removed
+                    if model.settings.windowRules[id: id] != nil { editor(id) }
+                }
+        }
+    }
+
+    private func editor(_ id: IdentifiedList<Settings.WindowRule>.ID) -> some View {
+        WindowRuleEditor(
+            rule: $model.settings.windowRules.element(id, or: Settings.WindowRule()),
+            problems: model.problems(at: "Window rules › \((model.settings.windowRules.index(of: id) ?? 0) + 1)"),
+            modes: model.settings.modes.map(\.name),
+            workspaces: model.settings.workspaces.persistent,
+            remove: {
+                editing = nil
+                model.removing("Delete Rule", "Rule deleted") { $0.windowRules[id: id] = nil }
+            },
+        )
+    }
+}
 private struct WindowRuleRow: View {
     let rule: Settings.WindowRule
     let hasProblem: Bool
@@ -573,7 +591,7 @@ private struct WindowRuleRow: View {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             }
             HStack(spacing: 6) {
-                if rule.actions.isEmpty {
+                if !rule.isComplete {
                     Text("Does nothing").font(.callout).foregroundStyle(.tertiary)
                 }
                 ForEach(Array(rule.actions.enumerated()), id: \.offset) { _, action in
@@ -692,7 +710,7 @@ private struct OptionalTextRow: View {
 struct WorkspacesPane: View {
     @Binding var workspaces: Settings.Workspaces
     /// See ``SettingsModel/removing(_:_:)``
-    let removing: (String, String, () -> Void) -> Void
+    let removing: (String, String, (inout Settings) -> Void) -> Void
     @State private var newName = ""
 
     var body: some View {
@@ -700,7 +718,7 @@ struct WorkspacesPane: View {
             Section {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 52), spacing: 8)], alignment: .leading, spacing: 8) {
                     ForEach(workspaces.persistent, id: \.self) { name in
-                        WorkspaceChip(name: name) { removing("Remove Workspace", "Workspace \(name) removed") { workspaces.persistent.removeAll { $0 == name } } }
+                        WorkspaceChip(name: name) { removing("Remove Workspace", "Workspace \(name) removed") { $0.workspaces.persistent.removeAll { $0 == name } } }
                     }
                 }
                 .padding(.vertical, 4)
@@ -718,11 +736,9 @@ struct WorkspacesPane: View {
             }
 
             Section {
-                ForEach(workspaces.monitorAssignments.indices, id: \.self) { index in
-                    MonitorAssignmentRow(assignment: $workspaces.monitorAssignments.element(index, or: Settings.MonitorAssignment(workspace: "", monitors: []))) {
-                        removing("Remove Monitor Assignment", "Monitor assignment removed") {
-                            if workspaces.monitorAssignments.indices.contains(index) { workspaces.monitorAssignments.remove(at: index) }
-                        }
+                ForEach(workspaces.monitorAssignments.ids, id: \.self) { id in
+                    MonitorAssignmentRow(assignment: $workspaces.monitorAssignments.element(id, or: Settings.MonitorAssignment(workspace: "", monitors: []))) {
+                        removing("Remove Monitor Assignment", "Monitor assignment removed") { $0.workspaces.monitorAssignments[id: id] = nil }
                     }
                 }
                 Button {
@@ -840,7 +856,7 @@ struct AutomationPane: View {
         .formStyle(.grouped)
     }
 
-    private func automation(_ title: String, _ keyPath: WritableKeyPath<Settings.Automation, [Action]>, _ location: String) -> some View {
+    private func automation(_ title: String, _ keyPath: WritableKeyPath<Settings.Automation, IdentifiedList<Action>>, _ location: String) -> some View {
         Section(title) {
             ActionListEditor(
                 actions: Binding(get: { model.settings.automation[keyPath: keyPath] }, set: { model.settings.automation[keyPath: keyPath] = $0 }),

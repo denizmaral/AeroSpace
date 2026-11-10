@@ -13,20 +13,20 @@ enum ActionContext {
 
 /// Edits a list of actions that run one after the other
 struct ActionListEditor: View {
-    @Binding var actions: [Action]
+    @Binding var actions: IdentifiedList<Action>
     let modes: [String]
     let workspaces: [String]
     var context: ActionContext = .shortcut
 
     var body: some View {
-        ForEach(actions.indices, id: \.self) { index in
+        ForEach(actions.ids, id: \.self) { id in
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                if actions.count > 1 {
+                if actions.count > 1, let index = actions.index(of: id) {
                     Text("\(index + 1).").monospacedDigit().foregroundStyle(.secondary)
                 }
-                ActionEditor(action: $actions.element(index, or: .custom("")), modes: modes, workspaces: workspaces, context: context)
+                ActionEditor(action: $actions.element(id, or: .custom("")), modes: modes, workspaces: workspaces, context: context)
                 Button {
-                    if actions.indices.contains(index) { actions.remove(at: index) }
+                    actions[id: id] = nil
                 } label: {
                     Image(systemName: "minus.circle.fill").foregroundStyle(.secondary)
                 }
@@ -568,14 +568,16 @@ private struct FullscreenEditor: View {
 }
 
 extension Binding {
-    /// The element at the index, as long as it exists. A view of a row that was just removed (its popover closing, its text
-    /// field ending the editing) reads the last value and writes nothing, instead of reading past the end. SwiftUI may build
-    /// the view only after the row was removed (the content of a closing popover): then it reads the fallback
-    func element<Element: Sendable>(_ index: Int, or fallback: @autoclosure () -> Element) -> Binding<Element> where Value == [Element] {
-        let last = wrappedValue.indices.contains(index) ? wrappedValue[index] : fallback()
+    /// The element with the id, as long as it's in the list. A view of an element that was just removed (its popover
+    /// closing, its text field ending the editing) reads its last value and writes nothing. SwiftUI may build the view only
+    /// after the element was removed (the content of a closing popover): then it reads the fallback
+    func element<Element: Sendable>(_ id: IdentifiedList<Element>.ID, or fallback: @autoclosure () -> Element) -> Binding<Element>
+        where Value == IdentifiedList<Element>
+    {
+        let last = wrappedValue[id: id] ?? fallback()
         return Binding<Element>(
-            get: { wrappedValue.indices.contains(index) ? wrappedValue[index] : last },
-            set: { if wrappedValue.indices.contains(index) { wrappedValue[index] = $0 } },
+            get: { wrappedValue[id: id] ?? last },
+            set: { wrappedValue[id: id] = $0 },
         )
     }
 }

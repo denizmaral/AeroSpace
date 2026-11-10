@@ -11,14 +11,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var model: SettingsModel? = nil
 
     func show() {
-        if let model {
-            model.reload(loadSettings().settings) // E.g. restored from the backup meanwhile
-        } else {
-            let model = SettingsModel(
-                settings: loadSettings().settings,
-                apply: { await applySettings($0) },
-                onRecordingChange: { setHotkeysPaused($0) }, // They would take the keys of the shortcut that is recorded
-            )
+        if model == nil {
+            // The settings are those of the store: nothing to load, nothing that the window keeps on its own
+            let model = SettingsModel(store: .shared, onRecordingChange: { setHotkeysPaused($0) }) // They'd take the keys
             self.model = model
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))
             window.title = "\(aeroSpaceAppName) Settings"
@@ -29,7 +24,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             window.setContentSize(NSSize(width: 920, height: 660))
             window.center()
             window.setFrameAutosaveName("MarSpaceSettings")
-            model.undoManager = window.undoManager // ⌘Z and Edit › Undo undo the removals
+            model.store.undoManager = window.undoManager // ⌘Z, ⇧⌘Z and the Edit menu
             self.window = window
         }
         NSApp.setActivationPolicy(.regular)

@@ -17,7 +17,7 @@ struct Settings: Codable, Sendable, Equatable {
     var appearance = Appearance()
     var modes: [BindingMode] = [BindingMode(name: mainModeId)]
     var workspaceShortcuts = WorkspaceShortcuts()
-    var windowRules: [WindowRule] = []
+    var windowRules: IdentifiedList<WindowRule> = []
     var workspaces = Workspaces()
     var automation = Automation()
 
@@ -64,20 +64,20 @@ struct Settings: Codable, Sendable, Equatable {
 
     struct BindingMode: Codable, Sendable, Equatable, Identifiable {
         var name: String
-        var shortcuts: [Shortcut] = []
+        var shortcuts: IdentifiedList<Shortcut> = []
 
         var id: String { name }
     }
 
     struct Shortcut: Codable, Sendable, Equatable {
         var chord: KeyChord
-        var actions: [Action]
+        var actions: IdentifiedList<Action>
     }
 
     /// The window rule runs its actions when a matching window appears (on-window-detected)
     struct WindowRule: Codable, Sendable, Equatable {
         var condition = WindowCondition()
-        var actions: [Action] = []
+        var actions: IdentifiedList<Action> = []
         var checkFurtherRules = false
     }
 
@@ -95,7 +95,7 @@ struct Settings: Codable, Sendable, Equatable {
     struct Workspaces: Codable, Sendable, Equatable {
         /// Kept even when they are empty, in this order
         var persistent: [String] = []
-        var monitorAssignments: [MonitorAssignment] = []
+        var monitorAssignments: IdentifiedList<MonitorAssignment> = []
     }
 
     /// The workspace is shown on the first of the monitors that is connected
@@ -105,10 +105,10 @@ struct Settings: Codable, Sendable, Equatable {
     }
 
     struct Automation: Codable, Sendable, Equatable {
-        var afterStartup: [Action] = []
-        var onFocusChanged: [Action] = []
-        var onFocusedMonitorChanged: [Action] = []
-        var onModeChanged: [Action] = []
+        var afterStartup: IdentifiedList<Action> = []
+        var onFocusChanged: IdentifiedList<Action> = []
+        var onFocusedMonitorChanged: IdentifiedList<Action> = []
+        var onModeChanged: IdentifiedList<Action> = []
     }
 }
 
@@ -194,8 +194,18 @@ extension Settings {
         modes = try container.decodeIfPresent([BindingMode].self, forKey: .modes) ?? defaults.modes
         workspaceShortcuts = try container.decodeIfPresent(WorkspaceShortcuts.self, forKey: .workspaceShortcuts)
             ?? WorkspaceShortcuts(goTo: nil, moveWindowTo: nil)
-        windowRules = try container.decodeIfPresent([WindowRule].self, forKey: .windowRules) ?? defaults.windowRules
+        windowRules = try container.decodeIfPresent(IdentifiedList<WindowRule>.self, forKey: .windowRules) ?? defaults.windowRules
         workspaces = try container.decodeIfPresent(Workspaces.self, forKey: .workspaces) ?? defaults.workspaces
         automation = try container.decodeIfPresent(Automation.self, forKey: .automation) ?? defaults.automation
     }
+}
+
+extension Settings.Shortcut {
+    /// Just added, without an action yet: it's shown, and the engine skips it (it doesn't take its keys)
+    var isComplete: Bool { !actions.isEmpty }
+}
+
+extension Settings.WindowRule {
+    /// Just added, without an action yet: it's shown, and the engine skips it (it doesn't stop the next rules either)
+    var isComplete: Bool { !actions.isEmpty }
 }

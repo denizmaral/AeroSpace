@@ -25,20 +25,15 @@ struct ReloadConfigResult {
 
 /// Loads the settings and applies them
 @MainActor func reloadConfig_nonCancellable(args: ReloadConfigCmdArgs = ReloadConfigCmdArgs(rawArgs: [])) async -> ReloadConfigResult {
-    let loaded = loadSettings(dryRun: args.dryRun)
-    let (newConfig, problems) = loaded.settings.compile()
-    let errors = problems.map(\.description)
+    let loaded = await SettingsStore.shared.load(dryRun: args.dryRun)
+    let errors = loaded.problems.map(\.description)
     if !args.noGui {
         let lines = loaded.notices + errors
         MessageModel.shared.message = lines.isEmpty
             ? nil
             : Message(description: "\(aeroSpaceAppName) Settings", body: lines.joined(separator: "\n\n"))
     }
-    if !args.dryRun {
-        TrayMenuModel.shared.settingsHaveProblems = !problems.isEmpty
-        await applyConfig_nonCancellable(newConfig)
-        configUrl = SettingsRepository.applicationSupport.fileUrl
-    }
+    if !args.dryRun { configUrl = SettingsRepository.applicationSupport.fileUrl }
     return ReloadConfigResult(isOk: errors.isEmpty, stdout: errors.joined(separator: "\n\n"), stderr: loaded.notices.joined(separator: "\n\n"))
 }
 

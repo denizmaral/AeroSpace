@@ -1,6 +1,6 @@
 # Settings architecture
 
-Status: proposal, phase 1 in progress (2026-11-10).
+Status: phase 1 done (2026-11-10), phase 2 next.
 
 ## Why
 

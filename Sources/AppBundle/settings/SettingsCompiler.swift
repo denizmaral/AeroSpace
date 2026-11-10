@@ -66,7 +66,7 @@ extension Settings {
                 let notation = keyNames.notation(shortcut.chord)
                 let location = "Shortcuts › \(mode.name) › \(notation)"
                 // A shortcut that was just added does nothing yet: it doesn't take its keys
-                guard !shortcut.actions.isEmpty, let commands = compileActions(shortcut.actions, location, &problems) else { continue }
+                guard shortcut.isComplete, let commands = compileActions(shortcut.actions, location, &problems) else { continue }
                 let binding = HotkeyBinding(shortcut.chord.modifiers.eventFlags, shortcut.chord.key, commands, descriptionWithKeyNotation: notation)
                 if let existing = bindings[binding.descriptionWithKeyCode] {
                     let isWorkspaceShortcut = mode.name == mainModeId && workspaceBindings[binding.descriptionWithKeyCode] == existing
@@ -80,7 +80,7 @@ extension Settings {
         for (index, rule) in windowRules.enumerated() {
             let location = "Window rules › \(index + 1)"
             // A rule that was just added does nothing yet: it doesn't stop the next rules either
-            guard !rule.actions.isEmpty, let matcher = rule.condition.runtimeMatcher(location, &problems),
+            guard rule.isComplete, let matcher = rule.condition.runtimeMatcher(location, &problems),
                   let commands = compileActions(rule.actions, location, &problems)
             else { continue }
             config.onWindowDetected.append(WindowDetectedCallback(matcher: .legacy(matcher), checkFurtherCallbacks: rule.checkFurtherRules, rawRun: commands))
@@ -102,7 +102,7 @@ extension Settings {
 /// Actions run one after the other, like a list of command lines. Nil if one of them is invalid: the others alone might do
 /// something else than intended (e.g. close the window that should have been moved first)
 @MainActor
-private func compileActions(_ actions: [Action], _ location: String, _ problems: inout [SettingsProblem]) -> Shell<any Command>? {
+private func compileActions(_ actions: some Collection<Action>, _ location: String, _ problems: inout [SettingsProblem]) -> Shell<any Command>? {
     var shells: [Shell<any Command>] = []
     for action in actions {
         // E.g. a workspace named `next` would be a direction, `Mail Box` a quoted line that the parser refuses

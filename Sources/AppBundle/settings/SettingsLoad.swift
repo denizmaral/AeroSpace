@@ -61,21 +61,3 @@ func importSettings(from url: URL, store: SettingsRepository, dryRun: Bool, note
 func defaultSettings() -> Settings {
     SettingsImport.settings(fromToml: (try? String(contentsOf: defaultConfigUrl, encoding: .utf8)) ?? "").settings
 }
-
-/// Saves and applies the settings edited in the settings window. Invalid parts (reported as problems) are left out
-@MainActor
-func applySettings(_ settings: Settings) async {
-    do {
-        try SettingsRepository.applicationSupport.save(settings)
-    } catch {
-        MessageModel.shared.message = Message(
-            description: "\(aeroSpaceAppName) Settings",
-            body: "The settings can't be saved: \(error.localizedDescription)",
-        )
-        return
-    }
-    let (config, problems) = settings.compile()
-    TrayMenuModel.shared.settingsHaveProblems = !problems.isEmpty
-    await applyConfig_nonCancellable(config)
-    scheduleCancellableCompleteRefreshSession(.settingsChanged) // Gaps, border, layout
-}

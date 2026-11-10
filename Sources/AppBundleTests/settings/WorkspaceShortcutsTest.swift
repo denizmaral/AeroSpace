@@ -89,7 +89,7 @@ struct WorkspaceShortcutsTest {
 
     /// A fold that would change what a shortcut does, or leave a lasting problem, isn't made
     @Test func testFoldsThatChangeAShortcutAreNotMade() {
-        func migrated(_ persistent: [String], _ shortcuts: [Settings.Shortcut]) -> Settings {
+        func migrated(_ persistent: [String], _ shortcuts: IdentifiedList<Settings.Shortcut>) -> Settings {
             var settings = settings(persistent)
             settings.schemaVersion = 1
             settings.workspaceShortcuts = .init(goTo: nil, moveWindowTo: nil)

@@ -59,9 +59,9 @@ enum SettingsImport {
         )
 
         settings.workspaces.persistent = Array(config.persistentWorkspaces)
-        settings.workspaces.monitorAssignments = config.workspaceToMonitorForceAssignment
+        settings.workspaces.monitorAssignments = IdentifiedList(config.workspaceToMonitorForceAssignment
             .sorted { $0.key < $1.key }
-            .map { Settings.MonitorAssignment(workspace: $0.key, monitors: $0.value.map(MonitorSelector.init)) }
+            .map { Settings.MonitorAssignment(workspace: $0.key, monitors: $0.value.map(MonitorSelector.init)) })
 
         let keyNotations = config.keyMapping.resolve()
         settings.modes = (raw["mode"]?.asDictOrNil ?? [:]).map { name, rawMode in
@@ -70,11 +70,11 @@ enum SettingsImport {
                 guard case .success(let (modifiers, key)) = parseBinding(notation, .emptyRoot, keyNotations) else { return nil }
                 return Settings.Shortcut(chord: KeyChord(KeyChord.Modifiers(modifiers), key), actions: actions(rawCommands))
             }
-            return Settings.BindingMode(name: name, shortcuts: shortcuts)
+            return Settings.BindingMode(name: name, shortcuts: IdentifiedList(shortcuts))
         }
         if settings.modes.isEmpty { settings.modes = [Settings.BindingMode(name: mainModeId)] }
 
-        settings.windowRules = (raw["on-window-detected"]?.asArrayOrNil ?? []).enumerated().compactMap { index, rawRule in
+        settings.windowRules = IdentifiedList((raw["on-window-detected"]?.asArrayOrNil ?? []).enumerated().compactMap { index, rawRule -> Settings.WindowRule? in
             guard let rule = rawRule.asDictOrNil else { return nil }
             // A condition that isn't taken over completely would match more windows (a missing one: every window). The
             // rule is left out then. E.g. `if = 'test %{app-bundle-id} = …'`, a shell condition
@@ -95,7 +95,7 @@ enum SettingsImport {
                 actions: rule["run"].map(actions) ?? [],
                 checkFurtherRules: rule["check-further-callbacks"]?.asBoolOrNil ?? false,
             )
-        }
+        })
 
         settings.automation = Settings.Automation(
             afterStartup: raw["after-startup-command"].map(actions) ?? [],
@@ -114,9 +114,9 @@ enum SettingsImport {
     }
 
     /// A command line, or a list of command lines run one after the other
-    private static func actions(_ raw: OrderedJson) -> [Action] {
+    private static func actions(_ raw: OrderedJson) -> IdentifiedList<Action> {
         if let line = raw.asStringOrNil { return line.isEmpty ? [] : [Action(commandLine: line)] }
-        return (raw.asArrayOrNil ?? []).compactMap { $0.asStringOrNil.map(Action.init(commandLine:)) }
+        return IdentifiedList((raw.asArrayOrNil ?? []).compactMap { $0.asStringOrNil.map(Action.init(commandLine:)) })
     }
 
     /// The text is TOML (not necessarily a valid config)

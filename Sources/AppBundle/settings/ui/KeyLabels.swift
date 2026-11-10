@@ -105,7 +105,7 @@ func startObservingKeyboardLayout() {
         MainActor.assumeIsolated {
             KeyLabels.layoutChanged()
             SettingsWindowController.shared.keyboardLayoutChanged()
-            Task.startUnstructured { _ = await reloadConfig_nonCancellable(args: ReloadConfigCmdArgs(rawArgs: []).with(\.noGui, true)) }
+            Task.startUnstructured { await SettingsStore.shared.reapply() }
         }
     }
 }

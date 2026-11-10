@@ -26,7 +26,7 @@ struct SettingsTest {
         let main = try #require(settings.modes.first { $0.name == "main" })
         let service = try #require(settings.modes.first { $0.name == "service" })
 
-        func actions(_ mode: Settings.BindingMode, _ modifiers: KeyChord.Modifiers, _ key: Key) -> [Action]? {
+        func actions(_ mode: Settings.BindingMode, _ modifiers: KeyChord.Modifiers, _ key: Key) -> IdentifiedList<Action>? {
             mode.shortcuts.first { $0.chord == KeyChord(modifiers, key) }?.actions
         }
         assertEquals(actions(main, [.control, .option], .h), [.focus(.left)])
