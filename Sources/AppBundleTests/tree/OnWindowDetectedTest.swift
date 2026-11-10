@@ -7,20 +7,14 @@ import Testing
 struct OnWindowDetectedTest {
     init() { setUpWorkspacesForTests() }
 
-    @Test func testMatcherCommandReceivesDetectedWindowId() async {
-        let workspace = Workspace.get(byName: name)
-        let focused = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
-        let detected = TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
-        assertEquals(focused.focusWindow(), true)
-        assertEquals(globalFocus.windowOrNil?.windowId, 1)
+    /// Every condition that the rule sets must hold. Without conditions: every window
+    @Test func testTheMatcherChecksTheConditionsThatAreSet() async {
+        let window = TestWindow.new(id: 1, parent: Workspace.get(byName: name).rootTilingContainer)
 
-        let callback = WindowDetectedCallback(
-            matcher: .command(parseCommand("test %{window-id} = 2").cmdOrDie),
-            rawRun: .empty,
-        )
-
-        assertEquals(await callback.matches(detected), true)
-        assertEquals(await callback.matches(focused), false)
+        assertEquals(await WindowMatcher().matches(window), true)
+        assertEquals(await WindowMatcher(appId: "bobko.AeroSpace.test-app", workspace: name).matches(window), true)
+        assertEquals(await WindowMatcher(appId: "com.apple.mail").matches(window), false)
+        assertEquals(await WindowMatcher(appId: "bobko.AeroSpace.test-app", workspace: "other").matches(window), false)
     }
 
     @Test func testRunCommandReceivesDetectedWindowIdInEnv() async {
@@ -31,10 +25,7 @@ struct OnWindowDetectedTest {
         assertEquals(globalFocus.windowOrNil?.windowId, 1)
 
         config.onWindowDetected = [
-            WindowDetectedCallback(
-                matcher: .command(.empty), // true
-                rawRun: parseCommand("move-node-to-workspace b").cmdOrDie,
-            ),
+            WindowDetectedCallback(run: parseCommand("move-node-to-workspace b").cmdOrDie), // Every window
         ]
 
         await runOnWindowDetected(ifConventional: detected) // todo: tryOnWindowDetected must not be called manually in tests

@@ -135,10 +135,7 @@ struct LayoutCommandTest {
         }
 
         config.onWindowDetected = [
-            WindowDetectedCallback(
-                matcher: .command(.empty), // true
-                rawRun: parseCommand("layout floating tiling").cmdOrDie,
-            ),
+            WindowDetectedCallback(run: parseCommand("layout floating tiling").cmdOrDie), // Every window
         ]
 
         await parseCommand("layout floating --for-next-detected-window").cmdOrDie.run(.defaultEnv, .emptyStdin)

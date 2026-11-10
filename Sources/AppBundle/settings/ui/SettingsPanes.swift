@@ -129,7 +129,7 @@ struct ShortcutsPane: View {
     }
 
     private func row(_ id: IdentifiedList<Settings.Shortcut>.ID, _ shortcut: Settings.Shortcut) -> some View {
-        let keyNames = KeyNames.of(model.settings.general.keyboardLayout)
+        let keyNames = KeyNames.standard
         return ShortcutRow(
             shortcut: shortcut,
             problem: model.problems(at: "Shortcuts › \(state.modeName) › \(keyNames.notation(shortcut.chord))").first,
@@ -175,7 +175,7 @@ struct ShortcutsPane: View {
     /// The matching shortcuts in a readable order: by action, then by parameter (directions in reading order, workspaces
     /// naturally sorted). The stored order doesn't change
     private func displayed(_ shortcuts: IdentifiedList<Settings.Shortcut>) -> [(id: IdentifiedList<Settings.Shortcut>.ID, shortcut: Settings.Shortcut, index: Int)] {
-        let keyNames = KeyNames.of(model.settings.general.keyboardLayout)
+        let keyNames = KeyNames.standard
         let query = state.search.trimmingCharacters(in: .whitespaces).lowercased()
         return zip(shortcuts.ids, shortcuts).enumerated().map { (id: $1.0, shortcut: $1.1, index: $0) }
             .filter { entry in

@@ -20,13 +20,10 @@ struct Config: Withable {
     var accordionPadding: Int = 30
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
-    var keyMapping = KeyMapping()
-    var execConfig: ExecConfig = ExecConfig()
-    var focusFollowsMouse: FocusFollowsMouse = FocusFollowsMouse()
+    var focusFollowsMouse: Bool = false
     var focusBorder: FocusBorder = FocusBorder()
 
     var onFocusChanged: Shell<any Command> = .empty
-    // var onFocusedWorkspaceChanged: [any Command] = []
     var onFocusedMonitorChanged: Shell<any Command> = .empty
 
     var gaps: Gaps = .zero
@@ -34,10 +31,6 @@ struct Config: Withable {
     var modes: [String: Mode] = [:]
     var onWindowDetected: [WindowDetectedCallback] = []
     var onModeChanged: Shell<any Command> = .empty
-}
-
-struct FocusFollowsMouse: Withable {
-    var enabled: Bool = false
 }
 
 

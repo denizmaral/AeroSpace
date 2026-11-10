@@ -1,24 +1,13 @@
 import Common
 
+/// A window rule of the settings, for the engine: the windows that it matches, and the commands that run for them
 struct WindowDetectedCallback: Withable, Equatable {
-    var matcher: WindowDetectedCallbackMatcher = .command(.empty)
+    var matcher = WindowMatcher()
     var checkFurtherCallbacks: Bool = false
-    var rawRun: Shell<any Command>? = nil
-
-    var run: Shell<any Command> {
-        rawRun ?? dieT("ID-46D063B2 should have discarded nil")
-    }
+    var run: Shell<any Command>
 
     var debugJson: Json {
-        var result: [String: Json] = [:]
-        result["matcher"] = switch matcher {
-            case .command(let command): .string(command.shellOfCommandsDescription)
-            case .legacy(let legacy): legacy.debugJson
-        }
-        if let commands = rawRun {
-            result["commands"] = .string(commands.shellOfCommandsDescription)
-        }
-        return .dict(result)
+        .dict(["matcher": matcher.debugJson, "commands": .string(run.shellOfCommandsDescription)])
     }
 
     static func == (lhs: WindowDetectedCallback, rhs: WindowDetectedCallback) -> Bool {
@@ -26,12 +15,33 @@ struct WindowDetectedCallback: Withable, Equatable {
     }
 }
 
-struct LegacyWindowDetectedCallbackMatcher: Withable, Equatable {
+/// Every condition that is set must hold. Without conditions: every window
+struct WindowMatcher: Withable, Equatable {
     var appId: String?
     var appNameRegexSubstring: CaseInsensitiveRegex?
     var windowTitleRegexSubstring: CaseInsensitiveRegex?
     var workspace: String?
-    var duringAeroSpaceStartup: Bool?
+    var duringStartup: Bool?
+
+    @MainActor
+    func matches(_ window: Window) async -> Bool {
+        if let duringStartup, duringStartup != isStartup {
+            return false
+        }
+        if let windowTitleRegexSubstring, (try? await window.getTitle(.nonCancellable))?.contains(caseInsensitiveRegex: windowTitleRegexSubstring) != true {
+            return false
+        }
+        if let appId, appId != window.app.rawAppBundleId {
+            return false
+        }
+        if let appNameRegexSubstring, !(window.app.name ?? "").contains(caseInsensitiveRegex: appNameRegexSubstring) {
+            return false
+        }
+        if let workspace, workspace != window.nodeWorkspace?.name {
+            return false
+        }
+        return true
+    }
 
     var debugJson: Json {
         var resultParts: [String] = []
@@ -47,22 +57,9 @@ struct LegacyWindowDetectedCallbackMatcher: Withable, Equatable {
         if let workspace {
             resultParts.append("workspace=\"\(workspace)\"")
         }
-        if let duringAeroSpaceStartup {
-            resultParts.append("duringAeroSpaceStartup=\(duringAeroSpaceStartup)")
+        if let duringStartup {
+            resultParts.append("duringStartup=\(duringStartup)")
         }
         return .string(resultParts.joined(separator: ", "))
-    }
-}
-
-enum WindowDetectedCallbackMatcher: Equatable {
-    case command(Shell<any Command>)
-    case legacy(LegacyWindowDetectedCallbackMatcher)
-
-    static func == (lhs: WindowDetectedCallbackMatcher, rhs: WindowDetectedCallbackMatcher) -> Bool {
-        switch (lhs, rhs) {
-            case (.command(let command1), .command(let command2)): command1.strictEquals(command2)
-            case (.legacy(let matcher1), .legacy(let matcher2)): matcher1 == matcher2
-            default: false
-        }
     }
 }

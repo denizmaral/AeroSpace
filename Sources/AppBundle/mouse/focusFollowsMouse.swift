@@ -6,11 +6,11 @@ import Common
 @MainActor private var mouseTracker = FocusFollowsMouseTracker()
 
 @MainActor func syncFocusFollowsMouse(_ config: Config) {
-    if config.focusFollowsMouse.enabled == (focusFollowsMouseMonitor != nil) {
+    if config.focusFollowsMouse == (focusFollowsMouseMonitor != nil) {
         return
     }
 
-    if !config.focusFollowsMouse.enabled {
+    if !config.focusFollowsMouse {
         NSEvent.removeMonitor(focusFollowsMouseMonitor.orDie())
         focusFollowsMouseMonitor = nil
         focusFollowsTask?.cancel()

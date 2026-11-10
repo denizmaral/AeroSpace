@@ -23,7 +23,7 @@ struct KeyLabelsTest {
         }
     }
 
-    private let usKeys = getKeysPreset(.qwerty)
+    private let usKeys = keyNotationToKeyCode
 
     /// A layout as the labels of the keys, from the US labels: `changes` maps a US label to the label on this layout
     private func layout(_ changes: [String: String]) -> [(key: Key, label: String)] {

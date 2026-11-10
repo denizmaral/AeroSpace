@@ -26,22 +26,23 @@ layer with MarSpace's own: a typed domain, one owner, derived engine state appli
 migration of AeroSpace's configuration, no TOML, defaults written in Swift.
 
 ```
- Settings window ─┐                                    ┌─▶ HotkeyService        (diff by chord)
- reload-config ───┼─▶ SettingsStore ──▶ EngineSnapshot ─┼─▶ WindowRules         (typed match → typed actions)
- app moves ───────┘   (one owner)       (immutable)     ├─▶ layout / gaps / border / focus follows mouse
-                      │                                  └─▶ login item
+ Settings window ─┐                   Settings.compile()                       ┌─▶ hotkeys (diff by chord)
+ reload-config ───┼─▶ SettingsStore ─────────────────────▶ Config (snapshot) ──┼─▶ window rules (matcher → commands)
+ shortcut moves ──┘   (one owner)     typed actions build                      ├─▶ layout / gaps / border / focus follows mouse
+                      │               their commands                           └─▶ login item
                       └─▶ SettingsRepository (file: checksum, atomic, backup)
 ```
 
 ## Invariants
 
 1. **One owner.** `SettingsStore` (`@MainActor @Observable`) is the only holder and the only writer of the settings: the
-   settings window, `reload-config`, the migration, remembered app workspaces. Views read it and send it changes; they
-   never keep their own copy
+   settings window, `reload-config`, a window moved to a workspace with a shortcut. Views read it and send it changes;
+   they never keep their own copy
 2. **Stable identity.** Every element of a list (shortcut, rule, action, monitor assignment) has an id. Views bind, edit,
    delete, open popovers and undo by id, never by index
-3. **Valid by construction.** Workspace names and bundle ids are types that can only hold valid values. An item that isn't
-   complete yet (a rule without an action) is a state of the domain: it's shown as such and the engine skips it
+3. **Complete or not, valid or not, visibly.** An item that isn't complete yet (a rule without an action) is a state of
+   the domain: it's shown as such and the engine skips it. A value that the engine can't take (a reserved workspace
+   name, a broken regular expression) is a problem of the compiled settings, shown where it is; the rest still applies
 4. **Transactions.** `store.update("Delete Rule") { … }` is the only way to change the settings: it registers the undo,
    persists, and publishes the change, in one place
 5. **One-way derivation, applied by diff.** Settings → an immutable engine snapshot. Services apply what changed (a
@@ -50,13 +51,20 @@ migration of AeroSpace's configuration, no TOML, defaults written in Swift.
    cache (windows back to their workspaces after a restart of MarSpace) stays a cache without meaning for the user. Only
    moves made by the user (a shortcut, a menu) are remembered, not moves by window rules or scripts
 
-## Trade-offs
+## What stays AeroSpace's, and why
 
-- The engine still reads its configuration through AeroSpace's `Config` type during the migration: the seam changes
-  first (one snapshot, applied by diff), the TOML-only fields are removed after
-- `aerospace config --get …` (AeroSpace's CLI) keeps working from the snapshot, for scripts
-- Typed commands instead of command lines come late, behind a golden test: a typed command must equal the parsed one,
-  including its description (logs and `list-modes` print it)
+The line between MarSpace's settings and AeroSpace's engine is `Config`. Everything before it is MarSpace's; what is
+after it stays, on purpose:
+
+- **The window engine**: the tree, the normalizations, the layout, the commands and their CLI. It's solid, and the
+  commands are the one implementation of every action (the settings don't implement anything twice)
+- **`Config` as the snapshot that the engine reads**, with the engine's names (`onWindowDetected`, `persistentWorkspaces`):
+  it holds only what the settings can express (phase 6), nothing of the TOML format
+- **The CLI for scripts**: `aerospace config --get mode…`, `list-modes`, `reload-config` print and do what AeroSpace's do,
+  from the snapshot. The key names that they print are those of the CLI (`ctrl-alt-period`, a US keyboard); the settings
+  window shows the keys of the keyboard layout of macOS
+
+Renaming the engine's own concepts would be churn without a benefit: the cleanup stops at the seam.
 
 ## Phases
 
@@ -74,6 +82,10 @@ Every phase is one commit and one deploy, and must reproduce the compiled result
 5. **Typed commands**: a typed action builds its engine command from its values, without the parser; its words are
    kept as the arguments that the command prints. Only a custom action is a command line, parsed. A golden test requires
    every typed command to equal the parsed command of its command line, and to print the same
+6. **The snapshot is MarSpace's**: `Config` holds only what the settings express. Gaps are numbers (no per-monitor TOML
+   values); a window rule has one matcher (no "legacy" and command matchers) and its commands; the environment of
+   `exec-and-forget` is a constant; the hidden keyboard layout preset is gone (no control showed it, the key names are
+   the CLI's)
 
 ## Backlog (UX QA, after phase 1)
 

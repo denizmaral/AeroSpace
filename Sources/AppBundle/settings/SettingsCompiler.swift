@@ -24,7 +24,7 @@ extension Settings {
         var config = Config()
 
         config.startAtLogin = general.startAtLogin
-        config.focusFollowsMouse.enabled = general.focusFollowsMouse
+        config.focusFollowsMouse = general.focusFollowsMouse
         config.newWindowPlacement = general.newWindowPlacement
         config.defaultRootContainerLayout = general.defaultRootLayout
         config.defaultRootContainerOrientation = general.defaultRootOrientation
@@ -32,7 +32,6 @@ extension Settings {
         config.enableNormalizationOppositeOrientationForNestedContainers = general.oppositeOrientationForNestedContainers
         config.accordionPadding = general.accordionPadding
         config.automaticallyUnhideMacosHiddenApps = general.automaticallyUnhideMacosHiddenApps
-        config.keyMapping = KeyMapping(preset: general.keyboardLayout)
 
         let gaps = appearance.gaps
         config.gaps = Gaps(
@@ -57,7 +56,7 @@ extension Settings {
             }
         }
 
-        let keyNames = KeyNames.of(general.keyboardLayout)
+        let keyNames = KeyNames.standard
         let workspaceBindings = workspaceShortcutBindings(keyNames, keyForCharacter, &problems)
         for mode in modes {
             var bindings: [String: HotkeyBinding] = mode.name == mainModeId ? workspaceBindings : [:]
@@ -82,7 +81,7 @@ extension Settings {
             guard rule.isComplete, let matcher = rule.condition.runtimeMatcher(location, &problems),
                   let commands = compileActions(rule.actions, location, &problems)
             else { continue }
-            config.onWindowDetected.append(WindowDetectedCallback(matcher: .legacy(matcher), checkFurtherCallbacks: rule.checkFurtherRules, rawRun: commands))
+            config.onWindowDetected.append(WindowDetectedCallback(matcher: matcher, checkFurtherCallbacks: rule.checkFurtherRules, run: commands))
         }
 
         let empty = Shell<any Command>.newCompound([], Shell<any Command>.seq)
@@ -135,7 +134,7 @@ extension MonitorSelector {
 }
 
 extension Settings.WindowCondition {
-    fileprivate func runtimeMatcher(_ location: String, _ problems: inout [SettingsProblem]) -> LegacyWindowDetectedCallbackMatcher? {
+    fileprivate func runtimeMatcher(_ location: String, _ problems: inout [SettingsProblem]) -> WindowMatcher? {
         func regex(_ pattern: String?, _ name: String) -> CaseInsensitiveRegex?? {
             guard let pattern else { return .some(nil) }
             switch CaseInsensitiveRegex.new(pattern) {
@@ -146,12 +145,12 @@ extension Settings.WindowCondition {
             }
         }
         guard let appName = regex(appNamePattern, "App name"), let windowTitle = regex(windowTitlePattern, "Window title") else { return nil }
-        return LegacyWindowDetectedCallbackMatcher(
+        return WindowMatcher(
             appId: appBundleId,
             appNameRegexSubstring: appName,
             windowTitleRegexSubstring: windowTitle,
             workspace: workspace,
-            duringAeroSpaceStartup: duringStartup,
+            duringStartup: duringStartup,
         )
     }
 }
@@ -175,25 +174,17 @@ extension KeyChord.Modifiers {
     }
 }
 
-/// The names of the keys in a keyboard layout preset, e.g. `ctrl-alt-period`
+/// The names of the keys in the CLI and in what `aerospace config` prints, e.g. `ctrl-alt-period`: the keys of a US
+/// keyboard. The settings window shows the keys of the keyboard layout of macOS (``KeyLabels``)
 struct KeyNames {
     private let nameOfKey: [Key: String]
 
-    @MainActor private static var cache: [KeyMapping.Preset: KeyNames] = [:]
+    static let standard = KeyNames()
 
-    /// Built once per preset: it sorts the whole preset
-    @MainActor
-    static func of(_ preset: KeyMapping.Preset) -> KeyNames {
-        if let names = cache[preset] { return names }
-        let names = KeyNames(preset)
-        cache[preset] = names
-        return names
-    }
-
-    init(_ preset: KeyMapping.Preset) {
+    private init() {
         var nameOfKey: [Key: String] = [:]
         // Several names can stand for one key: the shortest, then alphabetically first
-        for (name, key) in getKeysPreset(preset).sorted(by: { ($0.key.count, $0.key) < ($1.key.count, $1.key) }) where nameOfKey[key] == nil {
+        for (name, key) in keyNotationToKeyCode.sorted(by: { ($0.key.count, $0.key) < ($1.key.count, $1.key) }) where nameOfKey[key] == nil {
             nameOfKey[key] = name
         }
         self.nameOfKey = nameOfKey

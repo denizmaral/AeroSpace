@@ -43,14 +43,6 @@ private let comma = "comma"
 private let period = "period"
 private let slash = "slash"
 
-func getKeysPreset(_ layout: KeyMapping.Preset) -> [String: Key] {
-    return switch layout {
-        case .qwerty: keyNotationToKeyCode
-        case .dvorak: dvorakMap
-        case .colemak: colemakMap
-    }
-}
-
 extension Key: @unchecked @retroactive Sendable {}
 
 let keyNotationToKeyCode: [String: Key] = [
@@ -162,87 +154,6 @@ let keyNotationToKeyCode: [String: Key] = [
     "down": .downArrow,
     "up": .upArrow,
     "right": .rightArrow,
-]
-
-private let dvorakMap: [String: Key] = keyNotationToKeyCode + [
-    leftSquareBracket: .minus,
-    rightSquareBracket: .equal,
-
-    quote: .q,
-    comma: .w,
-    period: .e,
-    p: .r,
-    y: .t,
-    f: .y,
-    g: .u,
-    c: .i,
-    r: .o,
-    l: .p,
-    slash: .leftBracket, // leftBracket -> leftSquareBracket
-    equal: .rightBracket, // rightBracket -> rightSquareBracket
-    backslash: .backslash,
-
-    a: .a,
-    o: .s,
-    e: .d,
-    u: .f,
-    i: .g,
-    d: .h,
-    h: .j,
-    t: .k,
-    n: .l,
-    s: .semicolon,
-    minus: .quote,
-
-    semicolon: .z,
-    q: .x,
-    j: .c,
-    k: .v,
-    x: .b,
-    b: .n,
-    m: .m,
-    w: .comma,
-    v: .period,
-    z: .slash,
-]
-
-private let colemakMap: [String: Key] = keyNotationToKeyCode + [
-    q: .q,
-    w: .w,
-    f: .e,
-    p: .r,
-    g: .t,
-    j: .y,
-    l: .u,
-    u: .i,
-    y: .o,
-    semicolon: .p,
-    leftSquareBracket: .leftBracket,
-    rightSquareBracket: .rightBracket,
-    backslash: .backslash,
-
-    a: .a,
-    r: .s,
-    s: .d,
-    t: .f,
-    d: .g,
-    h: .h,
-    n: .j,
-    e: .k,
-    i: .l,
-    o: .semicolon,
-    quote: .quote,
-
-    z: .z,
-    x: .x,
-    c: .c,
-    v: .v,
-    b: .b,
-    k: .n,
-    m: .m,
-    comma: .comma,
-    period: .period,
-    slash: .slash,
 ]
 
 extension NSEvent.ModifierFlags {

@@ -19,10 +19,7 @@ aerospace list-exec-env-vars [-h|--help]
 // tag::body[]
 {manpurpose}
 
-Examples of commands and callbacks:
-
-* `aerospace exec-and-forget` command
-* `exec-on-workspace-change-callback`
+The environment of the `aerospace exec-and-forget` command, e.g. in a custom action: MarSpace's, with Homebrew in the `PATH`.
 
 // end::body[]
 

@@ -335,7 +335,7 @@ func onWindowDetected(_ env: CmdEnv, _ io: CmdIo, _ window: Window) async -> Int
         appName: window.app.name,
     ))
     var lastExitCode = Int32ExitCode.succ
-    for callback in config.onWindowDetected where await callback.matches(window) {
+    for callback in config.onWindowDetected where await callback.matcher.matches(window) {
         // A move by a rule isn't a move by the user: the app isn't remembered on that workspace
         lastExitCode = await WindowRuleContext.$isRunning.withValue(true) { await callback.run.run(env.withWindowId(window.windowId), io) }
         if !callback.checkFurtherCallbacks {
@@ -343,31 +343,4 @@ func onWindowDetected(_ env: CmdEnv, _ io: CmdIo, _ window: Window) async -> Int
         }
     }
     return lastExitCode
-}
-
-extension WindowDetectedCallback {
-    @MainActor
-    func matches(_ window: Window) async -> Bool {
-        switch self.matcher {
-            case .legacy(let matcher):
-                if let startupMatcher = matcher.duringAeroSpaceStartup, startupMatcher != isStartup {
-                    return false
-                }
-                if let regex = matcher.windowTitleRegexSubstring, (try? await window.getTitle(.nonCancellable))?.contains(caseInsensitiveRegex: regex) != true {
-                    return false
-                }
-                if let appId = matcher.appId, appId != window.app.rawAppBundleId {
-                    return false
-                }
-                if let regex = matcher.appNameRegexSubstring, !(window.app.name ?? "").contains(caseInsensitiveRegex: regex) {
-                    return false
-                }
-                if let workspace = matcher.workspace, workspace != window.nodeWorkspace?.name {
-                    return false
-                }
-                return true
-            case .command(let command):
-                return await command.run(.defaultEnv.withWindowId(window.windowId), .emptyStdin).exitCode.rawValue == 0
-        }
-    }
 }

@@ -85,7 +85,7 @@ struct SettingsTest {
 
     /// The settings of the first launch: valid, everything a new user needs (⌃⌥ shortcuts, workspaces, a service mode)
     @Test func testTheDefaults() {
-        let (config, problems) = Settings.defaults.compile(keyForCharacter: { getKeysPreset(.qwerty)[$0.lowercased()] })
+        let (config, problems) = Settings.defaults.compile(keyForCharacter: { keyNotationToKeyCode[$0.lowercased()] })
         assertEquals(problems, [])
         assertEquals(config.modes[mainModeId]?.bindings.count, 15 + 31 + 31) // The shortcuts, going to and moving to 31 workspaces
         assertEquals(config.modes["service"]?.bindings.count, 8)

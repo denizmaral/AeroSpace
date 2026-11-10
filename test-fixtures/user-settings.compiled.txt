@@ -99,7 +99,7 @@ after startup:
 focus changed: 
 focused monitor changed: move-mouse monitor-lazy-center
 mode changed: 
-gaps: Gaps(inner: AppBundle.Gaps.Inner(vertical: AppBundle.DynamicConfigValue<Swift.Int>.constant(10), horizontal: AppBundle.DynamicConfigValue<Swift.Int>.constant(10)), outer: AppBundle.Gaps.Outer(left: AppBundle.DynamicConfigValue<Swift.Int>.constant(10), bottom: AppBundle.DynamicConfigValue<Swift.Int>.constant(10), top: AppBundle.DynamicConfigValue<Swift.Int>.constant(10), right: AppBundle.DynamicConfigValue<Swift.Int>.constant(10)))
+gaps: inner vertical 10 horizontal 10, outer left 10 bottom 10 top 10 right 10
 focus border: FocusBorder(enabled: true, color: AppBundle.FocusBorderColor.gradient(start: 3996372223, end: 3993042841, fromTopLeft: true), width: 4, radius: 12)
 persistent workspaces: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "A", "B", "C", "D", "E", "F", "G", "I", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
 monitors: []
@@ -110,4 +110,3 @@ root: tiles auto
 normalization: true true
 accordion padding: 30
 unhide hidden apps: false
-keyboard: qwerty

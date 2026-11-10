@@ -74,12 +74,12 @@ extension TreeNode {
 
 private struct LayoutContext {
     let workspace: Workspace
-    let resolvedGaps: ResolvedGaps
+    let gaps: Gaps
 
     @MainActor
     init(_ workspace: Workspace) {
         self.workspace = workspace
-        self.resolvedGaps = ResolvedGaps(gaps: config.gaps, monitor: workspace.workspaceMonitorInfo)
+        self.gaps = config.gaps
     }
 }
 
@@ -134,7 +134,7 @@ extension TilingContainer {
 
         for (i, child) in inhabitedChildren.enumerated() {
             let length = lengths[i]
-            let rawGap = context.resolvedGaps.inner.get(orientation).toDouble()
+            let rawGap = context.gaps.inner.get(orientation).toDouble()
             // Gaps. Consider 4 cases:
             // 1. Multiple children. Layout first child
             // 2. Multiple children. Layout last child

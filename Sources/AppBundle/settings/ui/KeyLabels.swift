@@ -52,7 +52,7 @@ enum KeyLabels {
         }
         let latin = Set("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".map(String.init))
         let labelOfKey = Dictionary(labels.map { ($0.key, $0.label) }, uniquingKeysWith: { first, _ in first })
-        let us = getKeysPreset(.qwerty)
+        let us = keyNotationToKeyCode
         for character in latin.sorted() where keys[character] == nil {
             guard let key = us[character.lowercased()], let label = labelOfKey[key], !latin.contains(label) else { continue }
             keys[character] = key

@@ -7,7 +7,7 @@ struct ListExecEnvVarsCommand: Command {
     /*conforms*/ let isReadOnly = true
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> BinaryExitCode {
-        for (key, value) in config.execConfig.envVariables {
+        for (key, value) in execEnvVariables {
             io.out("\(key)=\(value)")
         }
         return .succ

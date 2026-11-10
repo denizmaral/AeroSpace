@@ -10,7 +10,7 @@ import Testing
 struct WorkspaceShortcutsTest {
     init() { setUpWorkspacesForTests() }
 
-    private let qwerty: @MainActor (String) -> Key? = { getKeysPreset(.qwerty)[$0.lowercased()] }
+    private let qwerty: @MainActor (String) -> Key? = { keyNotationToKeyCode[$0.lowercased()] }
 
     private func settings(_ persistent: [String]) -> Settings {
         var settings = Settings()

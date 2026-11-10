@@ -31,7 +31,6 @@ struct Settings: Codable, Sendable, Equatable {
         var oppositeOrientationForNestedContainers = true
         var accordionPadding = 30
         var automaticallyUnhideMacosHiddenApps = false
-        var keyboardLayout: KeyMapping.Preset = .qwerty
     }
 
     struct Appearance: Codable, Sendable, Equatable {
@@ -181,11 +180,9 @@ struct KeyChord: Codable, Sendable, Equatable, Hashable {
 extension NewWindowPlacement: Codable {}
 extension Layout: Codable {}
 extension DefaultContainerOrientation: Codable {}
-extension KeyMapping.Preset: Codable {}
 
 extension Settings {
-    /// Settings of an older MarSpace miss newer fields: they get their defaults (a migration may fill them, see
-    /// ``SettingsMigration``)
+    /// Settings of an older MarSpace miss newer fields: they get their defaults. Fields that are gone are ignored
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = Settings()

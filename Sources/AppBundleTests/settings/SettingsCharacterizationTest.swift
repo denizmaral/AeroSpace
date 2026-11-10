@@ -34,7 +34,7 @@ struct SettingsCharacterizationTest {
 
     /// Everything the engine gets, in a stable order. The keys of the workspace shortcuts are those of a US keyboard
     static func snapshot(of settings: Settings) throws -> String {
-        let (config, problems) = settings.compile(keyForCharacter: { getKeysPreset(.qwerty)[$0.lowercased()] })
+        let (config, problems) = settings.compile(keyForCharacter: { keyNotationToKeyCode[$0.lowercased()] })
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         var lines = ["problems: \(problems.map(\.description))"]
@@ -52,18 +52,17 @@ struct SettingsCharacterizationTest {
             "focus changed: \(config.onFocusChanged.shellOfCommandsDescription)",
             "focused monitor changed: \(config.onFocusedMonitorChanged.shellOfCommandsDescription)",
             "mode changed: \(config.onModeChanged.shellOfCommandsDescription)",
-            "gaps: \(config.gaps)",
+            "gaps: inner vertical \(config.gaps.inner.vertical) horizontal \(config.gaps.inner.horizontal), outer left \(config.gaps.outer.left) bottom \(config.gaps.outer.bottom) top \(config.gaps.outer.top) right \(config.gaps.outer.right)",
             "focus border: \(config.focusBorder)",
             "persistent workspaces: \(Array(config.persistentWorkspaces))",
             "monitors: \(config.workspaceToMonitorForceAssignment.sorted(by: { $0.key < $1.key }))",
             "start at login: \(config.startAtLogin)",
-            "focus follows mouse: \(config.focusFollowsMouse.enabled)",
+            "focus follows mouse: \(config.focusFollowsMouse)",
             "new window placement: \(config.newWindowPlacement)",
             "root: \(config.defaultRootContainerLayout) \(config.defaultRootContainerOrientation)",
             "normalization: \(config.enableNormalizationFlattenContainers) \(config.enableNormalizationOppositeOrientationForNestedContainers)",
             "accordion padding: \(config.accordionPadding)",
             "unhide hidden apps: \(config.automaticallyUnhideMacosHiddenApps)",
-            "keyboard: \(config.keyMapping.preset)",
         ]
         return lines.joined(separator: "\n") + "\n"
     }
