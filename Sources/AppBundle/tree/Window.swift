@@ -11,8 +11,6 @@ open class Window: TreeNode, Hashable {
     var lifeStatus: WindowLifeStatus = .alive
     /// The sibling that gave half of its weight to this window (see `applyDwindleSplit`). It takes the weight back on close
     weak var dwindleSplitAnchor: TreeNode? = nil
-    /// The rect of the floating window as of the last layout. Allows hit testing without accessibility calls
-    var lastLayoutFloatingRect: Rect? = nil
     /// See ``setAxFrame(_:_:readBack:)``
     private var sentFrame: SentFrame? = nil
     /// Where the window is on the screen, as far as AeroSpace knows, without accessibility calls. Unlike the tile

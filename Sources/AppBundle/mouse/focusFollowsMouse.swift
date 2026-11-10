@@ -24,19 +24,14 @@ import Common
     focusFollowsMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { @MainActor event in
         guard let token: RunSessionGuard = .isServerEnabled, !MissionControl.isActive else { return }
         let location = event.locationInWindow.withYAxisFlipped
-        let window = location.monitorApproximation.visibleWorkspace.windowUnderMouse(location)
-        let isRecheck: Bool
-        switch mouseTracker.mouseMoved(over: window, focused: globalFocus.windowOrNil, now: .now) {
+        let windows = location.monitorApproximation.visibleWorkspace.windowsUnderMouse(location)
+        switch mouseTracker.mouseMoved(over: windows, focused: globalFocus.windowOrNil, now: .now) {
             case .stay: return
             case .leave:
                 focusFollowsTask?.cancel()
                 return
-            case .enter:
-                focusFollowsTask?.cancel()
-                isRecheck = false
-            case .recheck:
-                // No check is running (one at a time). The focus session of the previous one may still be: not canceled
-                isRecheck = true
+            case .enter: focusFollowsTask?.cancel()
+            case .recheck: break // No check is running (one at a time). The focus session of the previous one may still be: not canceled
         }
         focusFollowsTask = Task.startUnstructured { @MainActor in
             // Ignores macOS menubar dropdown, but, unfortunately, it doesn't ignore non-native menu-like fake windows.
@@ -45,11 +40,10 @@ import Common
                 case .notAWindow: nil // E.g. a menu or a popover is over the window
                 // Nothing if AeroSpace doesn't manage it
                 case .window(let nativeWindowId, let pid): Window.get(byNativeId: nativeWindowId, pid: pid)
-                case .unknown: window
+                case .unknown: windows.count == 1 ? windows.first : nil
             }
             try checkCancellation()
-            guard let target = mouseTracker.checked(real: real, isRecheck: isRecheck, focused: globalFocus.windowOrNil, now: .now)
-            else { return }
+            guard let target = mouseTracker.checked(real: real, focused: globalFocus.windowOrNil, now: .now) else { return }
             try await runLightSession(.focusFollowsMouse, token) {
                 _ = target.focusWindow()
                 target.nativeFocus()
@@ -63,122 +57,124 @@ import Common
 @MainActor func resetFocusFollowsMouse() {
     focusFollowsTask?.cancel()
     let location = NSEvent.mouseLocation.withYAxisFlipped
-    mouseTracker = FocusFollowsMouseTracker(hitWindow: location.monitorApproximation.visibleWorkspace.windowUnderMouse(location))
-}
-
-/// The focus changed: by the keyboard, cmd-tab, a click, or focus-follows-mouse itself
-@MainActor func focusFollowsMouseFocusChanged(_ focused: Window?) {
-    if focusFollowsMouseMonitor != nil {
-        mouseTracker.focusChanged(to: focused, now: .now)
-    }
+    let windows = location.monitorApproximation.visibleWorkspace.windowsUnderMouse(location)
+    mouseTracker = FocusFollowsMouseTracker(windowsUnderMouse: windows, focused: globalFocus.windowOrNil)
 }
 
 /// Decides when focus-follows-mouse checks which window is really under the mouse, and which window it focuses.
 ///
-/// The focus follows the mouse only when the mouse enters a different window (like Hyprland's `mouse_refocus = false`):
-/// - mouseMoved events arrive at the display refresh rate. An in-memory hit test against the rects of the last layout
-///   detects that the mouse entered another window: most events are handled without accessibility calls and without
-///   refresh sessions. Only then the accessibility API tells which window is really on top under the mouse
-/// - Small mouse moves don't steal the focus that was changed by other means (keyboard, Mission Control, cmd-tab)
-///
-/// The rects of the last layout are not what is on the screen everywhere: a window that refuses to shrink to its tile
-/// (e.g. App Store is at least 1000 wide) covers a part of the next tile, a floating window can be behind a tiling one, a
-/// menu or a popover can be over the window. The hit test can't tell when the mouse crosses such a real border. Only the
-/// focused window is known to be on top in its whole tile. Over any other window, the check runs again on mouse moves, at
-/// most once per `recheckInterval`, until the mouse enters another window or the window under it is focused
+/// The focus follows the mouse when the window really under the mouse changes (like Hyprland's `mouse_refocus = false`):
+/// - mouseMoved events arrive at the display refresh rate. An in-memory hit test against the observed frames of the
+///   windows (``Window/observedFrame``: what the user sees, a window can be bigger than its tile) tells which windows are
+///   under the mouse. Nothing happens while they stay the same: no accessibility calls and no refresh sessions
+/// - When they change, the window on top is known without accessibility calls if it's the focused one (it's in front of
+///   the others) or the only one. Otherwise, and before focusing another window, the accessibility API tells which window
+///   is really on top: the windows overlap, a floating window can be behind a tiling one, a menu, a popover or a window
+///   that AeroSpace doesn't manage can be over them
+/// - It's focused only if it's another window than the one that was really under the mouse before. Moving the mouse
+///   doesn't steal the focus that was changed by other means (keyboard, Mission Control, cmd-tab) while the mouse stays
+///   over the same window, also where it passes over the border of a window behind it
 @MainActor
 struct FocusFollowsMouseTracker {
     static let recheckInterval: Duration = .milliseconds(100)
 
     enum MouseMove: Equatable {
-        /// Over the same window. Nothing to do
+        /// Over the same windows. Nothing to do
         case stay
-        /// Over another window that needs no check: none (e.g. a gap) or the focused window. A check of the previous one
-        /// is obsolete
+        /// Over other windows, the window on top is known (none, the focused one, or the same as before): nothing to focus.
+        /// A check under way is obsolete
         case leave
-        /// Over another window: check which window is really under the mouse. A check of the previous one is obsolete
+        /// Over other windows: check which window is really on top. A check under way is obsolete
         case enter
-        /// Over the same window, which isn't focused (another window may cover a part of it): check again
+        /// Over the same windows, where the previous check found no window that AeroSpace manages on top (e.g. a menu):
+        /// check again
         case recheck
     }
 
-    /// The hit test result as of the previous mouseMoved event
-    private weak var hitWindow: Window?
-    /// The window that the last check found really under the mouse. nil: none that AeroSpace manages
+    /// The windows under the mouse as of the previous mouseMoved event
+    private var windowIds: Set<OpaqueWindowId>
+    /// The window really on top under the mouse. nil: none that AeroSpace manages
     private weak var realWindow: Window?
-    /// false: not checked since the mouse entered the window, or the focus was changed by other means since the last check
-    /// (the newly focused window may be on top under the mouse now)
-    private var isRealWindowKnown = false
-    /// The earliest next check. nil: no check is needed, or a check is running
+    /// false: which window is on top under the mouse is not known (overlapping windows, not checked yet)
+    private var isRealWindowKnown: Bool
+    /// The earliest next check while no window that AeroSpace manages is found on top. nil: no check is needed, or one is
+    /// running
     private var recheckAt: ContinuousClock.Instant? = nil
-    private var isChecking = false
 
-    init(hitWindow: Window? = nil) {
-        self.hitWindow = hitWindow
+    /// - Parameter windows: the windows under the mouse right now. The one on top is not focused until the mouse enters
+    ///   another window
+    init(windowsUnderMouse windows: [Window] = [], focused: Window? = nil) {
+        windowIds = Set(windows.map(\.windowId))
+        let top = Self.knownTop(windows, focused: focused)
+        realWindow = top
+        isRealWindowKnown = top != nil || windows.isEmpty
     }
 
-    mutating func mouseMoved(over window: Window?, focused: Window?, now: ContinuousClock.Instant) -> MouseMove {
-        if window === hitWindow {
+    /// - Parameter windows: the windows whose observed frames contain the mouse location
+    mutating func mouseMoved(over windows: [Window], focused: Window?, now: ContinuousClock.Instant) -> MouseMove {
+        if windows.count == windowIds.count, windows.allSatisfy({ windowIds.contains($0.windowId) }) {
             guard let recheckAt, now >= recheckAt else { return .stay }
             self.recheckAt = nil
-            isChecking = true
             return .recheck
         }
-        hitWindow = window
+        windowIds = Set(windows.map(\.windowId))
         recheckAt = nil
-        guard let window, window != focused else {
-            // The focused window is on top in its whole tile
-            realWindow = window
-            isRealWindowKnown = window != nil
-            isChecking = false
+        if windows.isEmpty {
+            realWindow = nil
+            isRealWindowKnown = true
             return .leave
         }
-        isRealWindowKnown = false
-        isChecking = true
+        if let top = Self.knownTop(windows, focused: focused), top == focused || isRealWindowKnown && top === realWindow {
+            realWindow = top
+            isRealWindowKnown = true
+            return .leave
+        }
         return .enter
     }
 
     /// - Parameter real: the window really on top under the mouse. nil: not managed by AeroSpace, a menu or a popover
     /// - Returns: the window to focus
-    mutating func checked(real: Window?, isRecheck: Bool, focused: Window?, now: ContinuousClock.Instant) -> Window? {
+    mutating func checked(real: Window?, focused: Window?, now: ContinuousClock.Instant) -> Window? {
         let previous: Window?? = isRealWindowKnown ? .some(realWindow) : .none
         realWindow = real
         isRealWindowKnown = true
-        isChecking = false
-        let target: Window? = if let real, real != focused {
-            // Inside the same window, the focus follows only into another window. Not on the first check after the focus
-            // was changed by other means: it only learns what is under the mouse, small mouse moves don't steal the focus
-            !isRecheck || previous.map { real !== $0 } == true ? real : nil
-        } else {
-            nil
-        }
-        recheckAt = real === hitWindow && hitWindow == (target ?? focused) ? nil : now + Self.recheckInterval
-        return target
+        // E.g. a menu over the window: the window is focused when the menu is closed and the mouse moves
+        recheckAt = real == nil ? now + Self.recheckInterval : nil
+        guard let real, real != focused, previous.map({ real !== $0 }) ?? true else { return nil }
+        return real
     }
 
-    mutating func focusChanged(to focused: Window?, now: ContinuousClock.Instant) {
-        guard let hitWindow else { return } // The next window that the mouse enters is checked anyway
-        if focused === hitWindow { // On top in its whole tile now
-            realWindow = hitWindow
-            isRealWindowKnown = true
-            if !isChecking { recheckAt = nil }
-        } else if !isRealWindowKnown || focused !== realWindow { // E.g. not focus-follows-mouse focusing the window under the mouse
-            isRealWindowKnown = false
-            if !isChecking { recheckAt = now }
-        }
+    /// The window on top without accessibility calls: the focused window is in front of the others
+    private static func knownTop(_ windows: [Window], focused: Window?) -> Window? {
+        windows.first { $0 == focused } ?? (windows.count == 1 ? windows.first : nil)
     }
 }
 
 extension Workspace {
-    /// In-memory hit testing against the rects of the last layout. No accessibility calls
+    /// In-memory hit testing against the observed frames. No accessibility calls
     @MainActor
-    fileprivate func windowUnderMouse(_ location: CGPoint) -> Window? {
-        for child in floatingWindowsContainer._mruChildren { // Approximation of the z-order
-            if let window = child as? Window, window.lastLayoutFloatingRect?.contains(location) == true {
-                return window
+    func windowsUnderMouse(_ location: CGPoint) -> [Window] {
+        var result: [Window] = []
+        floatingWindowsContainer.appendWindows(at: location, to: &result)
+        rootTilingContainer.appendWindows(at: location, to: &result)
+        return result
+    }
+}
+
+extension TreeNode {
+    @MainActor
+    fileprivate func appendWindows(at location: CGPoint, to result: inout [Window]) {
+        for child in children {
+            if let window = child as? Window {
+                if window.lifeStatus.isInhabited,
+                   (window.observedFrame ?? window.lastAppliedLayoutPhysicalRect)?.contains(location) == true
+                {
+                    result.append(window)
+                }
+            } else {
+                child.appendWindows(at: location, to: &result)
             }
         }
-        return location.findWindowRecursively(in: rootTilingContainer, virtual: false, fullscreenCoversAll: true)
     }
 }
 

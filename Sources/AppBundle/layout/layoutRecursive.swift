@@ -41,7 +41,6 @@ extension TreeNode {
                 for (window, windowRect) in zip(windows, rects) {
                     window.lastAppliedLayoutPhysicalRect = nil
                     window.lastAppliedLayoutVirtualRect = nil
-                    window.lastLayoutFloatingRect = windowRect
                     if let windowRect { window.observeFrame(windowRect) }
                     window.layoutFloatingWindow(context, windowRect)
                 }
