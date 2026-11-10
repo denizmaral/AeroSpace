@@ -4,25 +4,33 @@ import PrivateApi
 
 @MainActor
 func waitForAccessibilityPermission_nonCancellable() async {
-    let options = [axTrustedCheckOptionPrompt: true]
+    if !AXIsProcessTrusted() {
+        // An entry of an earlier signature of the app stays in the list, switched on but not valid: macOS doesn't remove
+        // it. It goes before the request, which adds the entry of this app (a reset after the request removed that one)
+        await resetAccessibility()
+    }
     while true {
-        let status = TrayMenuModel.shared.axPermissionStatus == .waitingWithPrompt
-            ? AXIsProcessTrustedWithOptions(options as CFDictionary)
+        // The request shows the prompt and lists the app in System Settings: at first, and again from "Grant Permission…"
+        let isTrusted = TrayMenuModel.shared.axPermissionStatus == .waitingWithPrompt
+            ? AXIsProcessTrustedWithOptions([axTrustedCheckOptionPrompt: true] as CFDictionary)
             : AXIsProcessTrusted()
-        if status {
+        if isTrusted {
             TrayMenuModel.shared.axPermissionStatus = .granted
-            break
-        }
-        if TrayMenuModel.shared.axPermissionStatus == .waitingWithPrompt {
-            resetAccessibility() // Because macOS doesn't reset it for us when the app signature changes...
+            return
         }
         TrayMenuModel.shared.axPermissionStatus = .waiting
         try? await Task.sleep(for: .seconds(1))
     }
 }
 
-private func resetAccessibility() {
-    _ = try? Process.run(URL(filePath: "/usr/bin/tccutil"), arguments: ["reset", "Accessibility", aeroSpaceAppId])
+private func resetAccessibility() async {
+    let process = Process()
+    process.executableURL = URL(filePath: "/usr/bin/tccutil")
+    process.arguments = ["reset", "Accessibility", aeroSpaceAppId]
+    await withCheckedContinuation { continuation in
+        process.terminationHandler = { _ in continuation.resume() }
+        if (try? process.run()) == nil { continuation.resume() }
+    }
 }
 
 protocol ReadableAttr: Sendable {
