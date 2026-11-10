@@ -64,7 +64,9 @@ func runHeavyCompleteRefreshSession(
 }
 
 /// - Parameter readOnly: The body doesn't change the model (e.g. list-* queries that status bars poll every second).
-///   The session skips layout, focus synchronization and the follow-up complete refresh session
+///   The session only refreshes the native focus (which may register a newly focused window), then runs the body. It
+///   skips refreshModel (normalization, garbage collection, callbacks), layout, focus synchronization and the
+///   follow-up complete refresh session, and it doesn't cancel a running complete refresh session
 @MainActor
 func runLightSession<T>(
     _ event: RefreshSessionEvent,
@@ -87,7 +89,7 @@ func runLightSession<T>(
         let focusBefore = globalFocus.windowOrNil
 
         // Read-only sessions don't cancel a running complete refresh session, they may interleave with it at await
-        // points. They must not mutate the tree (normalization, garbage collection) or run callbacks
+        // points. So they don't normalize the tree, garbage collect or run callbacks
         if readOnly { return try await body() }
         await refreshModel_nonCancellable()
         let result = try await body()
