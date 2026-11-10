@@ -262,10 +262,13 @@ extension Window {
         defer { dwindleSplitAnchor = nil }
         guard let anchor = dwindleSplitAnchor,
               let parent = parent as? TilingContainer,
-              anchor.parent === parent,
               parent.layout == .tiles
         else { return }
         let orientation = parent.orientation
-        anchor.setWeight(orientation, anchor.getWeight(orientation) + getWeight(orientation))
+        if anchor.parent === parent {
+            anchor.setWeight(orientation, anchor.getWeight(orientation) + getWeight(orientation))
+        } else if let anchor = anchor as? Window { // E.g. the anchor is in native fullscreen. It gets the weight when it comes back
+            anchor.addWeightToTilingSlot(getWeight(orientation), of: parent)
+        }
     }
 }

@@ -95,6 +95,93 @@ struct TilingSlotTest {
         assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3)])]))
     }
 
+    private func setFullscreen(_ windows: [TestWindow], _ isFullscreen: Bool, _ workspace: Workspace) async throws {
+        for window in windows { window.isMacosFullscreenForTest = isFullscreen }
+        try await normalizeLayoutReason()
+        workspace.normalizeContainers()
+    }
+
+    /// E.g. two windows of the app are hidden or minimized ("Minimize All"). They come back in their order whichever
+    /// comes back first
+    @Test(arguments: [false, true])
+    func testTwoSiblings(reversedExit: Bool) async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var windows: [TestWindow] = []
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0, adaptiveWeight: 500)
+            windows.append(TestWindow.new(id: 2, parent: $0, adaptiveWeight: 900))
+            windows.append(TestWindow.new(id: 3, parent: $0, adaptiveWeight: 520))
+        }
+        try await setFullscreen([windows[0]], true, workspace)
+        try await setFullscreen([windows[1]], true, workspace)
+        for window in reversedExit ? windows.reversed() : windows {
+            try await setFullscreen([window], false, workspace)
+        }
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2), .window(3)]))
+        assertEquals(root.children.map { $0.getWeight(.h) }, [500, 900, 520])
+    }
+
+    /// The root is flattened when window 1 leaves, window 2 leaves the root after that
+    @Test func testFlattenedRootAndAnotherWindow() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window2: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                window2 = TestWindow.new(id: 2, parent: $0)
+                TestWindow.new(id: 3, parent: $0)
+            }
+        }
+        try await setFullscreen([window1], true, workspace)
+        try await setFullscreen([window2], true, workspace)
+        try await setFullscreen([window1], false, workspace)
+        try await setFullscreen([window2], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3)])]))
+    }
+
+    /// The root takes the layout of the flattened container (the orientation is the same without the opposite
+    /// orientation normalization)
+    @Test func testFlattenedRootWithAnotherLayout() async throws {
+        config.enableNormalizationOppositeOrientationForNestedContainers = false
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0)
+            TilingContainer(parent: $0, adaptiveWeight: 1, .h, .accordion, index: INDEX_BIND_LAST).apply {
+                TestWindow.new(id: 2, parent: $0)
+                TestWindow.new(id: 3, parent: $0)
+            }
+        }
+        try await fullscreenRoundTrip(window1, workspace) {
+            assertEquals(root.layoutDescription, .h_accordion([.window(2), .window(3)]))
+        }
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .h_accordion([.window(2), .window(3)])]))
+    }
+
+    /// Dwindle: window 3 split window 2 in half. Window 3 is closed while window 2 is in native fullscreen, window 2
+    /// gets its weight back
+    @Test func testWeightOfClosedWindowGoesBackToTheSlot() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window2: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0, adaptiveWeight: 420)
+            window2 = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 1500) // 1500x1080 (wide)
+        }
+        let window3 = TestWindow.new(id: 3, parent: workspace.floatingWindowsContainer)
+        window3.bindAsNewTilingWindow(to: workspace)
+        assertEquals(root.children.map { $0.getWeight(.h) }, [420, 750, 750])
+        try await fullscreenRoundTrip(window2, workspace) {
+            window3.closeAxWindow()
+        }
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2)]))
+        assertEquals(root.children.map { $0.getWeight(.h) }, [420, 1500])
+    }
+
     /// The slot is gone: the window is placed as a new window
     @Test func testWindowOfAnotherWorkspaceIsPlacedAsNewWindow() async throws {
         let workspace = Workspace.get(byName: name)
