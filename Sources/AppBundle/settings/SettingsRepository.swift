@@ -21,10 +21,10 @@ import Foundation
 /// sha256:        32 bytes, of the payload
 /// payload:       binary property list of Settings
 /// ```
-struct SettingsStore: Sendable {
+struct SettingsRepository: Sendable {
     let directory: URL
 
-    static let applicationSupport = SettingsStore(
+    static let applicationSupport = SettingsRepository(
         directory: URL.applicationSupportDirectory.appending(path: "MarSpace", directoryHint: .isDirectory),
     )
 

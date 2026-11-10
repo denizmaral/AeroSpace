@@ -9,7 +9,7 @@ import Common
 /// `~/Library/Application Support/MarSpace/AppWorkspaces.plist` (bundle id → workspace name)
 @MainActor
 enum AppWorkspaceStore {
-    private static var url: URL { SettingsStore.applicationSupport.directory.appending(path: "AppWorkspaces.plist") }
+    private static var url: URL { SettingsRepository.applicationSupport.directory.appending(path: "AppWorkspaces.plist") }
     private static var workspaces: [String: String] = isUnitTest ? [:] : load()
 
     static func remember(_ bundleId: String?, _ workspace: String) {

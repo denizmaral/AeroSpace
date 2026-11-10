@@ -68,7 +68,7 @@ struct WorkspaceShortcutsTest {
 
     /// Settings of the first schema: the per-workspace shortcuts become the generated ones, the others stay
     @Test func testSettingsOfTheFirstSchemaAreMigrated() throws {
-        let store = SettingsStore(directory: FileManager.default.temporaryDirectory.appending(path: "WorkspaceShortcutsTest-\(UUID().uuidString)"))
+        let store = SettingsRepository(directory: FileManager.default.temporaryDirectory.appending(path: "WorkspaceShortcutsTest-\(UUID().uuidString)"))
         var old = settings(["1", "2"])
         old.schemaVersion = 1
         old.workspaceShortcuts = .init(goTo: nil, moveWindowTo: nil)

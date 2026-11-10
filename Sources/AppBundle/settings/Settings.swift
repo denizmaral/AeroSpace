@@ -2,7 +2,7 @@ import AppKit
 import Common
 import HotKey
 
-/// Everything the user can configure. It's edited in the settings window and stored by ``SettingsStore``: the user never
+/// Everything the user can configure. It's edited in the settings window and stored by ``SettingsRepository``: the user never
 /// edits a file. The runtime ``Config`` is compiled from it (``Settings/compile()``).
 ///
 /// Typed throughout: actions, keys, layouts and directions are enums. Strings are only user data: workspace and mode

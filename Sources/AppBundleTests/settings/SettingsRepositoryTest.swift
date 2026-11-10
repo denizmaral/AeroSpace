@@ -4,8 +4,8 @@ import Testing
 
 @MainActor
 @Suite(.serializedGlobally)
-struct SettingsStoreTest {
-    private let store = SettingsStore(directory: FileManager.default.temporaryDirectory.appending(path: "SettingsStoreTest-\(UUID().uuidString)"))
+struct SettingsRepositoryTest {
+    private let store = SettingsRepository(directory: FileManager.default.temporaryDirectory.appending(path: "SettingsRepositoryTest-\(UUID().uuidString)"))
 
     private func settings(focusFollowsMouse: Bool) -> Settings {
         var settings = Settings()

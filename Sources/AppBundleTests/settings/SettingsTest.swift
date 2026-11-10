@@ -242,7 +242,7 @@ struct SettingsImportTest {
 
     /// Not saved: the next launch tries again, e.g. after the config was fixed
     @Test func testAConfigThatIsNotTomlIsNotTakenOver() throws {
-        let store = SettingsStore(directory: directory)
+        let store = SettingsRepository(directory: directory)
         let url = directory.appending(path: "aerospace.toml")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for content in [Data("[mode.main.binding\nalt-h = 'focus left'".utf8), Data([0xFF, 0xFE, 0x00, 0x41])] {

@@ -7,7 +7,7 @@ import Common
 /// settings are the only source. A damaged settings file is replaced by the backup; settings that can't be read at all
 /// are not overwritten, the default settings are used meanwhile. `dryRun`: nothing is written
 @MainActor
-func loadSettings(store: SettingsStore = .applicationSupport, dryRun: Bool = false) -> (settings: Settings, notices: [String]) {
+func loadSettings(store: SettingsRepository = .applicationSupport, dryRun: Bool = false) -> (settings: Settings, notices: [String]) {
     switch store.load(repair: !dryRun) {
         case .loaded(var settings):
             if settings.schemaVersion < Settings.currentSchemaVersion {
@@ -38,7 +38,7 @@ func loadSettings(store: SettingsStore = .applicationSupport, dryRun: Bool = fal
 /// The first launch: the settings are taken over from an AeroSpace TOML config, once. A config that can't be read is not
 /// taken over and nothing is saved: the next launch tries again (e.g. after it was fixed)
 @MainActor
-func importSettings(from url: URL, store: SettingsStore, dryRun: Bool, notes: [String] = []) -> (settings: Settings, notices: [String]) {
+func importSettings(from url: URL, store: SettingsRepository, dryRun: Bool, notes: [String] = []) -> (settings: Settings, notices: [String]) {
     guard let toml = try? String(contentsOf: url, encoding: .utf8), SettingsImport.isToml(toml) else {
         return (defaultSettings(), notes + [
             "\(url.path) can't be read as a TOML config. The default settings are used meanwhile. MarSpace takes the config over " +
@@ -66,7 +66,7 @@ func defaultSettings() -> Settings {
 @MainActor
 func applySettings(_ settings: Settings) async {
     do {
-        try SettingsStore.applicationSupport.save(settings)
+        try SettingsRepository.applicationSupport.save(settings)
     } catch {
         MessageModel.shared.message = Message(
             description: "\(aeroSpaceAppName) Settings",

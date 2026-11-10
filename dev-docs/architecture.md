@@ -24,7 +24,7 @@
 `Sources/AppBundle/settings`. The settings are a typed, `Codable` model (`Settings`, with `Action` for everything a
 shortcut, a window rule or an automation does; `.custom` is the escape hatch for any command line).
 
-- `SettingsStore`: a checksummed binary property list in `~/Library/Application Support/MarSpace`, written atomically,
+- `SettingsRepository`: a checksummed binary property list in `~/Library/Application Support/MarSpace`, written atomically,
   with a backup. A file that can't be read is never overwritten
 - `SettingsCompiler`: settings → the runtime `Config`, through the command parser. Invalid parts are reported as
   problems and left out

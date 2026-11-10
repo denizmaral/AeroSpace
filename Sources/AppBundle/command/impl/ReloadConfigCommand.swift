@@ -37,7 +37,7 @@ struct ReloadConfigResult {
     if !args.dryRun {
         TrayMenuModel.shared.settingsHaveProblems = !problems.isEmpty
         await applyConfig_nonCancellable(newConfig)
-        configUrl = SettingsStore.applicationSupport.fileUrl
+        configUrl = SettingsRepository.applicationSupport.fileUrl
     }
     return ReloadConfigResult(isOk: errors.isEmpty, stdout: errors.joined(separator: "\n\n"), stderr: loaded.notices.joined(separator: "\n\n"))
 }

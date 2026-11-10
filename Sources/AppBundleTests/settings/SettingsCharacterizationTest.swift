@@ -18,7 +18,7 @@ struct SettingsCharacterizationTest {
             at: projectRoot.appending(path: "test-fixtures/user-settings.marspace"),
             to: directory.appending(path: "Settings.marspace"),
         )
-        guard case .loaded(let settings) = SettingsStore(directory: directory).load() else {
+        guard case .loaded(let settings) = SettingsRepository(directory: directory).load() else {
             Issue.record("The fixture can't be read")
             return
         }

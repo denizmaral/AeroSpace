@@ -100,7 +100,7 @@ A tiling window that leaves for a macOS native state (fullscreen, minimized, hid
 `layoutRecursive.swift` turns the tree and weights into rectangles, records `lastAppliedLayoutPhysicalRect`/`VirtualRect` on each node (also used by mouse resize and moves), and applies frames through the accessibility API.
 
 ### Settings (`AppBundle/settings/`) and the runtime config (`AppBundle/config/`)
-- The user edits typed `Settings` in the settings window (`settings/ui/`); there is no config file. `SettingsStore` keeps them in `~/Library/Application Support/MarSpace` (checksummed binary plist, atomic writes, backup; an unreadable file is never overwritten).
+- The user edits typed `Settings` in the settings window (`settings/ui/`); there is no config file. `SettingsRepository` keeps them in `~/Library/Application Support/MarSpace` (checksummed binary plist, atomic writes, backup; an unreadable file is never overwritten).
 - `Settings.compile()` (`SettingsCompiler.swift`) turns them into the runtime `Config` (`config/Config.swift`), through the command parser. Invalid parts are reported as `SettingsProblem`s and left out; edits are saved and applied even with problems.
 - Changing the stored format: bump `Settings.currentSchemaVersion` and add a step to `SettingsMigration`. Decoding is tolerant (missing fields get defaults).
 - The TOML parser (`parseConfig.swift`) is only used to take an AeroSpace config over at the first launch (`SettingsImport.swift`) and for the default settings: `docs/config-examples/default-config.toml` is bundled and must parse without errors or warnings (`ConfigTest.testParseDefaultConfig`).
