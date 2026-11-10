@@ -12,9 +12,9 @@ struct OnWindowDetectedTest {
         let window = TestWindow.new(id: 1, parent: Workspace.get(byName: name).rootTilingContainer)
 
         assertEquals(await WindowMatcher().matches(window), true)
-        assertEquals(await WindowMatcher(appId: "bobko.AeroSpace.test-app", workspace: name).matches(window), true)
+        assertEquals(await WindowMatcher(appId: "com.denizmaral.MarSpace.test-app", workspace: name).matches(window), true)
         assertEquals(await WindowMatcher(appId: "com.apple.mail").matches(window), false)
-        assertEquals(await WindowMatcher(appId: "bobko.AeroSpace.test-app", workspace: "other").matches(window), false)
+        assertEquals(await WindowMatcher(appId: "com.denizmaral.MarSpace.test-app", workspace: "other").matches(window), false)
     }
 
     @Test func testRunCommandReceivesDetectedWindowIdInEnv() async {

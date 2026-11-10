@@ -4,7 +4,7 @@
   "AXCancelButton" : null,
   "AXCloseButton" : null,
   "AXDefaultButton" : null,
-  "AXDocument" : "file:///Users/bobko/",
+  "AXDocument" : "file:///Users/user/",
   "AXFocused" : 0,
   "AXFrame" : "<AXValue 0x600000d957c0> {value = x:900.000000 y:44.000000 w:900.000000 h:1124.000000 type = kAXValueCGRectType}",
   "AXFullScreen" : 0,

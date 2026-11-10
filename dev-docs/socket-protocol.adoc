@@ -10,8 +10,8 @@ MarSpace listens on a Unix-domain stream socket:
 
 [source]
 ----
-/tmp/bobko.aerospace-${USER}.sock        # MarSpace.app (release builds)
-/tmp/bobko.aerospace.debug-${USER}.sock  # the debug build
+/tmp/com.denizmaral.MarSpace-${USER}.sock        # MarSpace.app (release builds)
+/tmp/com.denizmaral.MarSpace.debug-${USER}.sock  # the debug build
 ----
 
 `${USER}` is the result of `NSUserName()` in Swift (typically equivalent to `$USER` / `id -un` / `whoami` in shell).
@@ -148,7 +148,7 @@ A minimal Python client that runs `aerospace list-workspaces --focused`:
 import getpass, json, socket, struct
 
 SOCKET_PROTOCOL_VERSION = 1
-sock_path = f"/tmp/bobko.aerospace-{getpass.getuser()}.sock"
+sock_path = f"/tmp/com.denizmaral.MarSpace-{getpass.getuser()}.sock"
 
 def send_frame(s, payload):
     s.sendall(struct.pack("<I", len(payload)) + payload)

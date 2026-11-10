@@ -1,8 +1,8 @@
-public let stableAeroSpaceAppId: String = "bobko.aerospace"
+public let stableAeroSpaceAppId: String = "com.denizmaral.MarSpace"
 #if DEBUG
-    public let aeroSpaceAppId: String = "bobko.aerospace.debug"
+    public let aeroSpaceAppId: String = "com.denizmaral.MarSpace.debug"
     public let aeroSpaceAppName: String = "MarSpace-Debug"
 #else
     public let aeroSpaceAppId: String = stableAeroSpaceAppId
-    public let aeroSpaceAppName: String = "MarSpace" // A fork of AeroSpace (MIT). The bundle id and the CLI name are kept for compatibility
+    public let aeroSpaceAppName: String = "MarSpace" // Based on AeroSpace (MIT). The CLI keeps AeroSpace's name and commands
 #endif

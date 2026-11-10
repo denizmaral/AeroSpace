@@ -61,9 +61,10 @@ can't move windows without it. See [dev-docs/development.md](./dev-docs/developm
 
 ## Compatibility
 
-The bundle id (`bobko.aerospace`) and the CLI (`aerospace`) are the same as AeroSpace's, so scripts keep working. The
-CLI commands are documented in the [AeroSpace command reference](https://nikitabobko.github.io/AeroSpace/commands), and
-every command has `--help`. Don't run MarSpace and AeroSpace at the same time.
+MarSpace has its own bundle id (`com.denizmaral.MarSpace`). Its CLI keeps AeroSpace's name and commands (`aerospace`),
+so scripts keep working with MarSpace's CLI (`bin/aerospace` in the release zip); AeroSpace's own CLI doesn't reach
+MarSpace. Every command is documented in [docs](./docs) (`aerospace-<command>.adoc`) and has `--help`. Don't run
+MarSpace and AeroSpace at the same time.
 
 ## Contributing
 

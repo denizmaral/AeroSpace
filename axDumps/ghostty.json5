@@ -13,7 +13,7 @@
     "Aero.AxIgnored" : "AXFrame, AXSize, AXFocused, AXHelp, AXPosition, AXRoleDescription, AXEdited"
   },
   "AXDefaultButton" : null,
-  "AXDocument" : "file:///Users/bobko/",
+  "AXDocument" : "file:///Users/user/",
   "AXFocused" : 0,
   "AXFrame" : "<AXValue 0x600000d40340> {value = x:30.000000 y:44.000000 w:1770.000000 h:1124.000000 type = kAXValueCGRectType}",
   "AXFullScreen" : 0,
@@ -44,7 +44,7 @@
   "AXModal" : 0,
   "AXParent" : "<AXUIElement Application 0x6000018da5e0> {pid=41303}",
   "AXPosition" : "<AXValue 0x6000019aa3a0> {value = x:30.000000 y:44.000000 type = kAXValueCGPointType}",
-  "AXProxy" : "AXUIElement(windowId_native=14591, title=\"bobko\", role=\"AXImage\", subrole=nil)",
+  "AXProxy" : "AXUIElement(windowId_native=14591, title=\"user\", role=\"AXImage\", subrole=nil)",
   "AXRole" : "AXWindow",
   "AXSections" : [
     "{\n    SectionDescription = Content;\n    SectionObject = \"<AXUIElement 0x6000018ccf90> {pid=41303}\";\n    SectionUniqueID = AXContent;\n}",

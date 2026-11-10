@@ -30,13 +30,13 @@
   "Aero.AXApp" : {
     "AXExtrasMenuBar" : null,
     "AXFocusedUIElement" : "AXUIElement(windowId_native=15127, title=nil, role=\"AXGroup\", subrole=nil)",
-    "AXFocusedWindow" : "AXUIElement(windowId_native=15127, title=\"jvm-gradle-sandbox [~/a/jvm-gradle-sandbox] – /Users/bobko/a/jvm-gradle-sandbox/src/_052.kt\", role=\"AXWindow\", subrole=\"AXStandardWindow\")",
+    "AXFocusedWindow" : "AXUIElement(windowId_native=15127, title=\"jvm-gradle-sandbox [~/a/jvm-gradle-sandbox] – /Users/user/a/jvm-gradle-sandbox/src/_052.kt\", role=\"AXWindow\", subrole=\"AXStandardWindow\")",
     "AXFrame" : null,
     "AXFrontmost" : 1,
     "AXFunctionRowTopLevelElements" : [
 
     ],
-    "AXMainWindow" : "AXUIElement(windowId_native=15127, title=\"jvm-gradle-sandbox [~/a/jvm-gradle-sandbox] – /Users/bobko/a/jvm-gradle-sandbox/src/_052.kt\", role=\"AXWindow\", subrole=\"AXStandardWindow\")",
+    "AXMainWindow" : "AXUIElement(windowId_native=15127, title=\"jvm-gradle-sandbox [~/a/jvm-gradle-sandbox] – /Users/user/a/jvm-gradle-sandbox/src/_052.kt\", role=\"AXWindow\", subrole=\"AXStandardWindow\")",
     "AXMenuBar" : "<AXUIElement 0xca6d31620> {pid=61359}",
     "AXPosition" : null,
     "AXRole" : "AXApplication",
@@ -44,7 +44,7 @@
     "AXTitle" : "IntelliJ IDEA",
     "AXWindows" : [
       "AXUIElement(windowId_native=18680, title=\"\", role=\"AXWindow\", subrole=\"AXUnknown\")",
-      "AXUIElement(windowId_native=15127, title=\"jvm-gradle-sandbox [~/a/jvm-gradle-sandbox] – /Users/bobko/a/jvm-gradle-sandbox/src/_052.kt\", role=\"AXWindow\", subrole=\"AXStandardWindow\")"
+      "AXUIElement(windowId_native=15127, title=\"jvm-gradle-sandbox [~/a/jvm-gradle-sandbox] – /Users/user/a/jvm-gradle-sandbox/src/_052.kt\", role=\"AXWindow\", subrole=\"AXStandardWindow\")"
     ],
     "Aero.AxFailed" : "isWritable.AXFunctionRowTopLevelElements(failure), get.AXFrame(attributeUnsupported), isWritable.AXFrame(failure), get.AXExtrasMenuBar(noValue), isWritable.AXExtrasMenuBar(failure), get.AXSize(attributeUnsupported), isWritable.AXSize(attributeUnsupported), get.AXPosition(attributeUnsupported), isWritable.AXPosition(attributeUnsupported)",
     "Aero.AxIgnored" : "AXChildren, AXChildrenInNavigationOrder, AXEnhancedUserInterface, AXPreferredLanguage, AXRoleDescription, AXHidden",
@@ -52,8 +52,8 @@
   },
   "Aero.App.appBundleId" : "com.jetbrains.intellij",
   "Aero.App.nsApp.activationPolicy" : "regular",
-  "Aero.App.nsApp.appBundlePath" : "file:///Users/bobko/Applications/ij-253.app/",
-  "Aero.App.nsApp.execPath" : "file:///Users/bobko/Applications/ij-253.app/Contents/MacOS/idea",
+  "Aero.App.nsApp.appBundlePath" : "file:///Users/user/Applications/ij-253.app/",
+  "Aero.App.nsApp.execPath" : "file:///Users/user/Applications/ij-253.app/Contents/MacOS/idea",
   "Aero.App.pid" : 61359,
   "Aero.App.version" : "IU-253.32098.37",
   "Aero.App.versionShort" : "2025.3.4",

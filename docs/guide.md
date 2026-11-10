@@ -124,6 +124,6 @@ Raycast.
 
 ## The command line
 
-`aerospace` controls MarSpace from scripts, with the same commands as AeroSpace's
-[command reference](https://nikitabobko.github.io/AeroSpace/commands). Every command has `--help`. Scripts and other
+`aerospace` controls MarSpace from scripts, with AeroSpace's commands: each one is documented in this folder
+(`aerospace-<command>.adoc`) and has `--help`. Scripts and other
 clients can also talk to MarSpace directly: see the [socket protocol](../dev-docs/socket-protocol.adoc).

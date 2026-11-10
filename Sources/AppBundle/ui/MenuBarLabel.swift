@@ -24,7 +24,7 @@ struct MenuBarLabel: View {
     }
 
     var body: some View {
-        // https://github.com/nikitabobko/AeroSpace/issues/1122
+        // AeroSpace issue #1122
         let renderer = ImageRenderer(content: menuBarContent)
         switch renderer.cgImage {
             // Using scale: 1 results in a blurry image for unknown reasons

@@ -1,4 +1,4 @@
-// Share purple "pill" indicator in the window's top left corner - https://github.com/nikitabobko/AeroSpace/issues/1101
+// Share purple "pill" indicator in the window's top left corner - AeroSpace issue #1101
 {
   "AXActivationPoint" : "<AXValue 0xca507f9c0> {value = x:-1.000000 y:1297.000000 type = kAXValueCGPointType}",
   "AXCancelButton" : null,

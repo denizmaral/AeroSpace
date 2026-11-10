@@ -123,7 +123,7 @@ struct TestCommandTest {
         }
 
         assertEquals(
-            await parseCommand("test %{app-bundle-id} = bobko.AeroSpace.test-app").cmdOrDie.run(.defaultEnv, .emptyStdin),
+            await parseCommand("test %{app-bundle-id} = com.denizmaral.MarSpace.test-app").cmdOrDie.run(.defaultEnv, .emptyStdin),
             CmdResult(stdout: [], stderr: [], exitCode: Int32ExitCode(rawValue: 0)),
         )
 
@@ -139,7 +139,7 @@ struct TestCommandTest {
         }
 
         assertEquals(
-            await parseCommand("test %{app-bundle-id} ~= AERO").cmdOrDie.run(.defaultEnv, .emptyStdin),
+            await parseCommand("test %{app-bundle-id} ~= MARSPACE").cmdOrDie.run(.defaultEnv, .emptyStdin),
             CmdResult(stdout: [], stderr: [], exitCode: Int32ExitCode(rawValue: 0)),
         )
 

@@ -181,7 +181,7 @@ struct DwindleTest {
 
     @Test func testPopupPromotedToWindow_splitIsAppliedAfterCallbacks() async throws {
         var settings = Settings()
-        settings.windowRules = [Settings.WindowRule(condition: .init(appBundleId: "bobko.AeroSpace.test-app"), actions: [.moveWindowToWorkspace("B")])]
+        settings.windowRules = [Settings.WindowRule(condition: .init(appBundleId: "com.denizmaral.MarSpace.test-app"), actions: [.moveWindowToWorkspace("B")])]
         config.onWindowDetected = settings.compile().config.onWindowDetected
         let workspace = Workspace.get(byName: name)
         let root = workspace.rootTilingContainer.apply {

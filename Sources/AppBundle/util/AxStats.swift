@@ -7,7 +7,7 @@ import Synchronization
 ///
 /// The counts are logged per refresh session at the debug level (zero cost unless the log is streamed):
 ///
-///     log stream --level debug --predicate 'subsystem == "bobko.aerospace" && category == "perf"'
+///     log stream --level debug --predicate 'subsystem == "com.denizmaral.MarSpace" && category == "perf"'
 enum AxStats {
     struct Counters: Sendable, Equatable {
         var reads: Int = 0

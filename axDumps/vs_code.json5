@@ -13,7 +13,7 @@
     "Aero.AxIgnored" : "AXFrame, AXSize, AXFocused, AXHelp, AXPosition, AXRoleDescription, AXEdited"
   },
   "AXDefaultButton" : null,
-  "AXDocument" : "file:///Users/bobko/a/AeroSpace/CONTRIBUTING.md",
+  "AXDocument" : "file:///Users/user/a/AeroSpace/CONTRIBUTING.md",
   "AXFocused" : 0,
   "AXFrame" : "<AXValue 0xca5635300> {value = x:0.000000 y:31.000000 w:2304.000000 h:1264.000000 type = kAXValueCGRectType}",
   "AXFullScreen" : 0,

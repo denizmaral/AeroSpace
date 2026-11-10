@@ -41,10 +41,10 @@ targets:
       configs:
         Debug:
           PRODUCT_NAME: MarSpace-Debug
-          PRODUCT_BUNDLE_IDENTIFIER: bobko.aerospace.debug
+          PRODUCT_BUNDLE_IDENTIFIER: com.denizmaral.MarSpace.debug
         Release:
           PRODUCT_NAME: MarSpace
-          PRODUCT_BUNDLE_IDENTIFIER: bobko.aerospace
+          PRODUCT_BUNDLE_IDENTIFIER: com.denizmaral.MarSpace
           SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
           GCC_TREAT_WARNINGS_AS_ERRORS: YES
           OTHER_LDFLAGS: $(inherited) $(AEROSPACE_BUILD_INFO_LDFLAGS)

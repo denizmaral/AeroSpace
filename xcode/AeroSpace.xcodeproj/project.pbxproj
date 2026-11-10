@@ -236,7 +236,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				PRODUCT_BUNDLE_IDENTIFIER = bobko.aerospace.debug;
+				PRODUCT_BUNDLE_IDENTIFIER = com.denizmaral.MarSpace.debug;
 				PRODUCT_NAME = "MarSpace-Debug";
 				SDKROOT = macosx;
 			};
@@ -317,7 +317,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				OTHER_LDFLAGS = "$(inherited) $(AEROSPACE_BUILD_INFO_LDFLAGS)";
-				PRODUCT_BUNDLE_IDENTIFIER = bobko.aerospace;
+				PRODUCT_BUNDLE_IDENTIFIER = com.denizmaral.MarSpace;
 				PRODUCT_NAME = MarSpace;
 				SDKROOT = macosx;
 				SWIFT_TREAT_WARNINGS_AS_ERRORS = YES;

@@ -92,7 +92,7 @@ struct Main {
                         ERROR: Implicit stdin is detected (stdin is not TTY). Implicit stdin was forbidden in AeroSpace v0.20.0.
                         1. Please supply '--stdin' flag to make stdin explicit and preserve old AeroSpace behavior
                         2. You can also use '--no-stdin' flag to behave as if no stdin was supplied
-                        Breaking change issue: https://github.com/nikitabobko/AeroSpace/issues/1683
+                        Breaking change: AeroSpace issue #1683
                         """,
                 )
             }

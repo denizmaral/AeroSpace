@@ -9,7 +9,7 @@ import Testing
 struct AppWorkspacesTest {
     init() { setUpWorkspacesForTests() }
 
-    private let app = "bobko.AeroSpace.test-app" // The bundle id of TestApp
+    private let app = "com.denizmaral.MarSpace.test-app" // The bundle id of TestApp
 
     @Test func testAMoveMakesOrChangesTheRuleOfTheApp() {
         var settings = Settings()
