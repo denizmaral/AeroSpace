@@ -21,8 +21,9 @@ open class Window: TreeNode, Hashable {
     /// Floating windows are read by every layout (``observeFrame(_:)``). Code that deals with the screen (the focus
     /// border, focus-follows-mouse) uses it, the layout and the tree commands use the tile
     private(set) var observedFrame: Rect? = nil
-    /// The sent frame that ``observedFrame`` was read back for: sending it again gives the same frame
-    private var observedFrameRequest: SentFrame? = nil
+    /// The last frame that was read back, and what was sent for it: sending the same again gives the same frame (e.g.
+    /// App Store refuses the tile again after a workspace switch hid it in a corner of the screen)
+    private var lastReadBack: (request: SentFrame, frame: Rect)? = nil
     /// Identifies the latest knowledge about the frame: a read back of an older send is stale
     private var frameGeneration: UInt = 0
     /// The native state (minimized, fullscreen) may have changed. See normalizeLayoutReason
@@ -107,11 +108,10 @@ open class Window: TreeNode, Hashable {
         sentFrame = frame
         frameGeneration &+= 1
         // Until it's read back: what the same request gave the previous time, otherwise what is sent (most windows accept it)
-        if frame != observedFrameRequest,
-           let origin = topLeft ?? observedFrame?.topLeftCorner,
-           let size = size ?? observedFrame?.size
-        {
-            setObservedFrame(Rect(topLeftX: origin.x, topLeftY: origin.y, width: size.width, height: size.height), request: nil)
+        if let lastReadBack, lastReadBack.request == frame {
+            setObservedFrame(lastReadBack.frame)
+        } else if let origin = topLeft ?? observedFrame?.topLeftCorner, let size = size ?? observedFrame?.size {
+            setObservedFrame(Rect(topLeftX: origin.x, topLeftY: origin.y, width: size.width, height: size.height))
         }
         sendAxFrame(topLeft, size, readBack: readBack ? frameGeneration : nil)
     }
@@ -127,19 +127,19 @@ open class Window: TreeNode, Hashable {
     @MainActor
     final func frameWasReadBack(_ frame: Rect, generation: UInt) {
         guard generation == frameGeneration else { return } // Sent again or moved meanwhile: a newer read back follows
-        setObservedFrame(frame, request: sentFrame)
+        if let sentFrame { lastReadBack = (sentFrame, frame) }
+        setObservedFrame(frame)
     }
 
     /// - Parameter frame: read from the window just now
     @MainActor
     final func observeFrame(_ frame: Rect) {
         frameGeneration &+= 1 // Newer than a read back that is under way
-        setObservedFrame(frame, request: nil)
+        setObservedFrame(frame)
     }
 
     @MainActor
-    private func setObservedFrame(_ frame: Rect, request: SentFrame?) {
-        observedFrameRequest = request
+    private func setObservedFrame(_ frame: Rect) {
         if frame == observedFrame { return }
         observedFrame = frame
         FocusBorderController.shared.windowFrameDidChange(self)

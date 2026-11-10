@@ -140,6 +140,23 @@ struct LayoutFrameCacheTest {
         assertEquals(appStore.observedFrame?.width, 1000)
     }
 
+    /// A workspace switch hides the window in a corner of the screen and shows it again: until it's read back, the
+    /// observed frame is what the window made of the same frame the previous time (no border at the tile for a moment)
+    @Test func testObservedFrameAfterTheWindowWasHiddenInACorner() async throws {
+        let workspace = Workspace.get(byName: name)
+        let appStore = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        appStore.minimumSizeForTest = CGSize(width: 1000, height: 0)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        try await workspace.layoutWorkspace()
+        let readBack = try #require(appStore.observedFrame)
+        assertEquals(readBack.width, 1000)
+
+        appStore.setAxFrame(CGPoint(x: 1919, y: 1079), nil, readBack: false) // MacWindow.hideInCorner
+        appStore.heldReadBacksForTest = []
+        try await workspace.layoutWorkspace()
+        assertEquals(appStore.observedFrame, readBack)
+    }
+
     /// Floating windows are read by every layout
     @Test func testObservedFrameOfFloatingWindow() async throws {
         let workspace = Workspace.get(byName: name)
