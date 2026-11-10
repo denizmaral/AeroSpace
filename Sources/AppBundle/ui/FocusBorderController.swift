@@ -13,6 +13,9 @@ final class FocusBorderController {
     private var panel: FocusBorderPanel? = nil
     private var drawnAppearance: Appearance? = nil
     private var orderedAboveNativeWindowId: UInt32? = nil
+    /// A window is moved or resized with the mouse. The border is updated at the end of refresh sessions, it can't follow
+    /// the window frame by frame: it's hidden until the mouse button is released
+    private var isHiddenForMouseDrag = false
 
     // periphery:ignore - the properties are only compared (Equatable)
     private struct Appearance: Equatable {
@@ -24,8 +27,12 @@ final class FocusBorderController {
 
     func update() async {
         if isUnitTest { return }
+        if isHiddenForMouseDrag && !isLeftMouseButtonDown {
+            isHiddenForMouseDrag = false // The mouse up event was missed
+        }
         let border = config.focusBorder
         guard border.enabled,
+              !isHiddenForMouseDrag,
               TrayMenuModel.shared.isEnabled,
               !MissionControl.isActive,
               let window = globalFocus.windowOrNil as? MacWindow,
@@ -56,6 +63,17 @@ final class FocusBorderController {
             panel.order(.above, relativeTo: Int(nativeWindowId))
             orderedAboveNativeWindowId = nativeWindowId
         }
+    }
+
+    /// See ``isHiddenForMouseDrag``
+    func hideForMouseDrag() {
+        isHiddenForMouseDrag = true
+        hide()
+    }
+
+    /// The refresh session after the mouse up event draws the border again
+    func showAfterMouseDrag() {
+        isHiddenForMouseDrag = false
     }
 
     func hide() {

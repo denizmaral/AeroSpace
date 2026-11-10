@@ -22,6 +22,7 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
             scheduleCancellableCompleteRefreshSession(.ax(notif))
             return
         }
+        FocusBorderController.shared.hideForMouseDrag()
         moveWithMouseTask?.cancel()
         moveWithMouseTask = Task.startUnstructured {
             try checkCancellation()
