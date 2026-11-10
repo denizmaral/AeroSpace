@@ -15,13 +15,6 @@ open class Window: TreeNode, Hashable {
     var lastLayoutFloatingRect: Rect? = nil
     /// See ``setAxFrame(_:_:)``
     private var sentFrame: SentFrame? = nil
-    /// The size that the window refused to shrink below. Zero if unknown. Use `effectiveMinimumSize`. See minimumSize.swift
-    var learnedMinimumSize: CGSize = .zero
-    /// The workspace where the minimum size was learned (nil: any)
-    var learnedMinimumSizeWorkspace: String? = nil
-    var minimumSizeCheckTask: Task<(), any Error>? = nil
-    var isMinimumSizeRecheckRequested: Bool = false
-    var isMinimumSizeRecheckAfterLayoutRequested: Bool = false
     /// The native state (minimized, fullscreen) may have changed. See normalizeLayoutReason
     var isNativeStateCheckRequested: Bool = false
     /// The place in the tiling tree before a macOS native state. See ``enterMacosNativeState(_:prevParentKind:adaptiveWeight:)``
@@ -57,12 +50,7 @@ open class Window: TreeNode, Hashable {
         {
             tilingSlot = nil
         }
-        let result = super.bind(to: newParent, adaptiveWeight: adaptiveWeight, index: index)
-        // Another workspace. Global containers (e.g. minimized windows) don't count, the window comes back
-        if let learned = learnedMinimumSizeWorkspace, let workspace = nodeWorkspace?.name, workspace != learned {
-            forgetMinimumSize() // See forgetMinimumSize
-        }
-        return result
+        return super.bind(to: newParent, adaptiveWeight: adaptiveWeight, index: index)
     }
 
     /// Unbinds the window that was closed

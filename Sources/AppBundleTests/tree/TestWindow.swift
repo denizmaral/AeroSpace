@@ -22,8 +22,6 @@ final class TestWindow: Window, CustomStringConvertible {
 
     nonisolated var description: String { "TestWindow(\(windowId))" }
 
-    /// Emulates the actual frame of the window, e.g. an app that refuses to shrink its window
-    func setActualRectForTest(_ rect: Rect?) { _rect = rect }
 
     @MainActor
     override func nativeFocus() {
@@ -34,20 +32,8 @@ final class TestWindow: Window, CustomStringConvertible {
     /// Frames that actually reached the window (unchanged frames are filtered by ``Window/setAxFrame(_:_:)``)
     private(set) var sentFrames: [(topLeft: CGPoint?, size: CGSize?)] = []
 
-    /// Emulates an app: the sent frames are applied to the window, but the window doesn't shrink below `minimumSizeForTest`
-    var appliesSentFramesForTest = false
-    var minimumSizeForTest: CGSize = .zero
-
     override func sendAxFrame(_ topLeft: CGPoint?, _ size: CGSize?) {
         sentFrames.append((topLeft, size))
-        guard appliesSentFramesForTest else { return }
-        let current = _rect ?? Rect(topLeftX: 0, topLeftY: 0, width: 0, height: 0)
-        _rect = Rect(
-            topLeftX: topLeft?.x ?? current.topLeftX,
-            topLeftY: topLeft?.y ?? current.topLeftY,
-            width: max(size?.width ?? current.width, minimumSizeForTest.width),
-            height: max(size?.height ?? current.height, minimumSizeForTest.height),
-        )
     }
 
     override func closeAxWindow() {
@@ -60,15 +46,8 @@ final class TestWindow: Window, CustomStringConvertible {
         _rect
     }
 
-    /// Runs at the await point of the next getAxSize (e.g. emulates a session that runs meanwhile)
-    var onGetAxSizeForTest: (@MainActor () async throws -> Void)? = nil
-
     @MainActor override func getAxSize(_ cm: CancellationMode) async throws -> CGSize? {
-        if let hook = onGetAxSizeForTest {
-            onGetAxSizeForTest = nil
-            try await hook()
-        }
-        return _rect.map { CGSize(width: $0.width, height: $0.height) }
+        _rect.map { CGSize(width: $0.width, height: $0.height) }
     }
 
     /// Runs at the await point of the next native state read (e.g. a notification arrives, or the session is canceled)

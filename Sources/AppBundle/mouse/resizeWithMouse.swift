@@ -15,8 +15,6 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
         window?.invalidateSentFrame()
         guard let window, try await isManipulatedWithMouse(window) else {
             scheduleCancellableCompleteRefreshSession(.ax(notif))
-            // E.g. the window refused the size that the layout asked for. See minimumSize.swift
-            window?.scheduleMinimumSizeCheck()
             return
         }
         resizeWithMouseTask?.cancel()
@@ -31,9 +29,7 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
 
 @MainActor
 func resetManipulatedWithMouseIfPossible() async throws {
-    if let windowId = currentlyManipulatedWithMouseWindowId {
-        // The drag forgot the learned minimum size (see resizeWithMouse). Check the window again after the layout
-        Window.get(byId: windowId)?.isMinimumSizeRecheckAfterLayoutRequested = true
+    if currentlyManipulatedWithMouseWindowId != nil {
         currentlyManipulatedWithMouseWindowId = nil
         for workspace in Workspace.all {
             workspace.resetResizeWeightBeforeResizeRecursive()
@@ -47,7 +43,6 @@ private let adaptiveWeightBeforeResizeWithMouseKey = TreeNodeUserDataKey<CGFloat
 @MainActor
 private func resizeWithMouse(_ window: Window) async throws { // todo cover with tests
     resetClosedWindowsCache()
-    window.forgetMinimumSize() // The user sizes the window explicitly. Checked again after the drag
     switch window.windowParentCases {
         case nil: return
         case .floatingWindowsContainer, .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,

@@ -470,37 +470,3 @@ private func tileNewWindow(_ id: OpaqueWindowId, _ workspace: Workspace) async -
     workspace.normalizeContainers()
     return window
 }
-
-@MainActor
-@Suite(.serializedGlobally)
-struct DwindleMinimumSizeTest {
-    init() {
-        setUpWorkspacesForTests()
-        config.newWindowPlacement = .dwindle
-        config.enableNormalizationFlattenContainers = true
-        config.enableNormalizationOppositeOrientationForNestedContainers = true
-    }
-
-    @Test func testSplitDirectionThatFitsTheMinimumSize() async {
-        let workspace = Workspace.get(byName: name)
-        let root = workspace.rootTilingContainer.apply {
-            // 1000pt minimum width doesn't fit into a half of the 1920pt wide monitor
-            TestWindow.new(id: 1, parent: $0).learnedMinimumSize = CGSize(width: 1000, height: 0)
-        }
-        assertEquals(TestWindow.new(id: 2, parent: workspace.floatingWindowsContainer).focusWindow(), true)
-        await parseCommand("layout tiling").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        workspace.normalizeContainers()
-        assertEquals(root.layoutDescription, .v_tiles([.window(1), .window(2)]))
-    }
-
-    @Test func testPreferredDirectionWhenNothingFits() async {
-        let workspace = Workspace.get(byName: name)
-        let root = workspace.rootTilingContainer.apply {
-            TestWindow.new(id: 1, parent: $0).learnedMinimumSize = CGSize(width: 1000, height: 600)
-        }
-        assertEquals(TestWindow.new(id: 2, parent: workspace.floatingWindowsContainer).focusWindow(), true)
-        await parseCommand("layout tiling").cmdOrDie.run(.defaultEnv, .emptyStdin)
-        workspace.normalizeContainers()
-        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2)]))
-    }
-}

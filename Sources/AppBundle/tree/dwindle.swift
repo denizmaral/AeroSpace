@@ -58,7 +58,7 @@ extension TreeNode {
             return workspace.workspaceMonitorInfo.visibleRectPaddedByOuterGaps
         }
         guard let parent = parent as? TilingContainer, let parentRect = parent.estimatedTilingRect(ignoring: ignored) else { return nil }
-        switch parent.renderedLayout {
+        switch parent.layout {
             case .accordion:
                 return parentRect
             case .tiles:
@@ -212,18 +212,7 @@ extension Window {
 
         // The anchor's rect before the window was put next to it
         let anchorRect = anchor.estimatedTilingRect(ignoring: ignored)
-        // Split in the other direction if the known minimum sizes (see minimumSize.swift) only fit that way
-        func fits(_ orientation: Orientation, _ rect: Rect) -> Bool {
-            let half = rect.getDimension(orientation) / 2
-            return anchor.minimumLength(orientation) <= half && minimumLength(orientation) <= half
-        }
-        let anchorOrientation: Orientation?
-        if let anchorRect {
-            let preferred: Orientation = anchorRect.width >= anchorRect.height ? .h : .v
-            anchorOrientation = !fits(preferred, anchorRect) && fits(preferred.opposite, anchorRect) ? preferred.opposite : preferred
-        } else {
-            anchorOrientation = nil
-        }
+        let anchorOrientation: Orientation? = anchorRect.map { $0.width >= $0.height ? .h : .v }
         let isOnlyAnchorAndSelf = parent.inhabitedChildren.count { child in !ignored.contains { $0 === child } } == 1
         if isOnlyAnchorAndSelf {
             // The window and the anchor split the whole container equally. Only the orientation needs to be decided
