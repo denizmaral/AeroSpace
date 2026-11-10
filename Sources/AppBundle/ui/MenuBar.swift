@@ -186,9 +186,9 @@ private struct WorkspaceTile: View {
                             .foregroundStyle(.tertiary)
                     }
                     ForEach(workspace.appBundleUrls, id: \.self) { url in
-                        Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                        Image(nsImage: AppIconCache.icon(url))
                             .resizable()
-                            .frame(width: 14, height: 14)
+                            .frame(width: AppIconCache.size, height: AppIconCache.size)
                     }
                 }
                 .frame(height: 14)
@@ -220,6 +220,24 @@ private struct WorkspaceTile: View {
             case workspace.isVisible: Color.primary.opacity(0.08)
             default: Color.primary.opacity(0.04)
         }
+    }
+}
+
+/// The icons of the apps in the workspace tiles. The body of the tiles is evaluated on every update of the tray model,
+/// the icon lookup (file system, IconServices) runs once per app. The system icon is lazy and multi resolution: with its
+/// size set to the tile size, only the small representation is ever rendered
+@MainActor
+private enum AppIconCache {
+    static let size: CGFloat = 14
+    private static var icons: [URL: NSImage] = [:]
+
+    static func icon(_ url: URL) -> NSImage {
+        if let icon = icons[url] { return icon }
+        if icons.count >= 64 { icons.removeAll() } // Apps that were used once. Rebuilding is cheap
+        let icon = NSWorkspace.shared.icon(forFile: url.path)
+        icon.size = NSSize(width: size, height: size)
+        icons[url] = icon
+        return icon
     }
 }
 
