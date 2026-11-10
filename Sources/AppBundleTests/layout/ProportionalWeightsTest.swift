@@ -567,4 +567,61 @@ struct ProportionalWeightsTest {
         try await setFullscreen([window4], false, workspace)
         assertEquals(root.layoutDescription, .h_tiles([.window(2), .window(1), .window(4)]))
     }
+
+    /// 1 leaves (the root takes the orientation of v), the user changes the layout of the root back and forth, 2 leaves:
+    /// 2 left after 1, it comes back into the root as it is, then 1 wraps the children again
+    @Test func testRootLayoutChangedWhileAway() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window1: TestWindow!
+        var window2: TestWindow!
+        var window3: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            window1 = TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                window2 = TestWindow.new(id: 2, parent: $0)
+                window3 = TestWindow.new(id: 3, parent: $0)
+            }
+        }
+        try await workspace.layoutWorkspace()
+        let before = rects(workspace)
+        try await setFullscreen([window1], true, workspace)
+        #expect(window3.focusWindow())
+        await parseCommand("layout accordion").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await setFullscreen([window2], true, workspace)
+        await parseCommand("layout tiles").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await setFullscreen([window2], false, workspace)
+        assertEquals(root.layoutDescription, .v_tiles([.window(2), .window(3)]))
+        try await setFullscreen([window1], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(3)])]))
+        assertEquals(rects(workspace), before)
+    }
+
+    /// The user moves a window of the container on the left of an away window past its right sibling: the window comes
+    /// back after what is left of the container, still before its right sibling
+    @Test func testReplacedLeftSiblingStaysBeforeTheRightSibling() async throws {
+        let workspace = Workspace.get(byName: name)
+        #expect(workspace.focusWorkspace())
+        var window2: TestWindow!
+        var window4: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                window2 = TestWindow.new(id: 2, parent: $0)
+                TestWindow.new(id: 3, parent: $0)
+            }
+            window4 = TestWindow.new(id: 4, parent: $0)
+            TestWindow.new(id: 5, parent: $0)
+        }
+        try await workspace.layoutWorkspace()
+        try await setFullscreen([window4], true, workspace)
+        #expect(window2.focusWindow())
+        for _ in 0 ..< 2 {
+            await parseCommand("move right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+            workspace.normalizeContainers()
+        }
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(3), .window(5), .window(2)]))
+        try await setFullscreen([window4], false, workspace)
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(3), .window(4), .window(5), .window(2)]))
+    }
 }

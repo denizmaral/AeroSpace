@@ -138,13 +138,15 @@ extension Window {
             bind(to: parent, adaptiveWeight: slot.adaptiveWeight, index: slot.isAfterNeighbor ? INDEX_BIND_LAST : 0)
             return true
         }
-        if parent.isRootContainer, parent.orientation != slot.orientation || parent.layout != slot.layout,
-           let away = allAwayWindows(of: workspace).first(where: { $0.tilingSlot?.needsRootRewrap(parent) == true }),
+        if parent.isRootContainer,
+           let away = allAwayWindows(of: workspace).first(where: { away in
+               // The window left the root before the window that flattened it: that one was a sibling then, not away. A
+               // window that left after it comes back into the root as it is (the user may have changed its layout)
+               away.tilingSlot?.needsRootRewrap(parent) == true && slot.siblings.contains { $0.node === away && !$0.isAway }
+           }),
            let awaySlot = away.tilingSlot
         {
-            // The window left the root before the window that flattened it (a window that left after it left the root
-            // with the orientation of the flattened container, it comes back into it). Wrap the children of the root
-            // again on behalf of the window that is still away
+            // Wrap the children of the root again on behalf of the window that is still away
             let wrapper = rewrapRoot(parent, as: awaySlot)
             away.tilingSlot?.neighbor = wrapper
         }
@@ -416,18 +418,20 @@ private func insertionIndex(in nodes: [TreeNode], siblings: [WeightedSibling], i
     for i in (0 ..< index).reversed() {
         let sibling = siblings[i]
         if let position = position(sibling.node) { return position + 1 }
-        // The child that holds the sibling now (e.g. its neighbor came back and wrapped it in a new container), or that
-        // holds its windows now (the normalization replaced the container). Not another sibling (the user moved it there),
-        // and not on the left of a sibling that was on its left (the user moved them)
+        // The children that hold the sibling now (e.g. its neighbor came back and wrapped it in a new container), or that
+        // hold its windows now (the normalization replaced the container): right after the last of them. Not another
+        // sibling (the user moved it there), and not out of order with the siblings around (the user moved them)
         let candidates = [sibling.node].compactMap { $0 } + sibling.windows.compactMap(\.window)
-        for candidate in candidates {
-            guard let child = candidate.parentsWithSelf.first(where: { ancestor in nodes.contains { $0 === ancestor } }),
-                  !siblings.contains(where: { $0.node === child }),
-                  let replacement = position(child),
-                  siblings[..<i].allSatisfy({ (position($0.node) ?? -1) < replacement })
-            else { continue }
-            return replacement + 1
-        }
+        let replacement = candidates.lazy
+            .compactMap { candidate in candidate.parentsWithSelf.first(where: { ancestor in nodes.contains { $0 === ancestor } }) }
+            .filter { child in !siblings.contains { $0.node === child } }
+            .compactMap(position)
+            .filter { replacement in
+                siblings[..<i].allSatisfy { (position($0.node) ?? -1) < replacement } &&
+                    siblings[index...].allSatisfy { (position($0.node) ?? Int.max) > replacement }
+            }
+            .max()
+        if let replacement { return replacement + 1 }
     }
     return 0
 }
