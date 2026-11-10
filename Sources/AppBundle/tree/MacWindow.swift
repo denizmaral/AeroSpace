@@ -44,6 +44,8 @@ final class MacWindow: Window {
         allWindowsMap[windowId] = window
         if case .macosPopupWindowsContainer = window.windowParentCases { schedulePopupRecheck() }
         let dwindleSplit = window.captureDwindleSplit()
+        // E.g. the session is canceled, or the closed windows cache is restored. Later splits must not wait for it
+        defer { dwindleSplit?.discard() }
 
         try await debugWindowsIfRecording(window, .cancellable)
         if try await !restoreClosedWindowsCacheIfNeeded(newlyDetectedWindow: window) {
@@ -244,7 +246,7 @@ extension Window {
         applyDwindleSplit(try await relayoutWindowDeferringDwindleSplit(on: workspace, cm, forceTile: forceTile))
     }
 
-    /// The caller is responsible for applying the returned split (see ``DwindleSplit``)
+    /// The caller is responsible for applying or discarding the returned split (see ``DwindleSplit``)
     @MainActor
     func relayoutWindowDeferringDwindleSplit(on workspace: Workspace, _ cm: CancellationMode, forceTile: Bool = false) async throws -> DwindleSplit? {
         let data = forceTile

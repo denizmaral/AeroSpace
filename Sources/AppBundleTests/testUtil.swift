@@ -79,6 +79,7 @@ func setUpWorkspacesForTests() {
     global_layoutForNextDetectedWindow = nil
     lastInvisibleWindowsNativeStateCheck = nil
     currentlyManipulatedWithMouseWindowId = nil
+    dwindleSplitQueue = []
 }
 
 extension ParsedCmd {

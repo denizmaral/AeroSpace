@@ -289,6 +289,99 @@ struct DwindleTest {
     }
 }
 
+/// Windows detected at the same time: the callbacks of a detected window suspend (e.g. on-window-detected reads the
+/// window title), and another session detects the next window meanwhile
+@MainActor
+@Suite(.serializedGlobally)
+struct DwindleConcurrentDetectionTest {
+    init() {
+        setUpWorkspacesForTests()
+        config.newWindowPlacement = .dwindle
+        config.enableNormalizationFlattenContainers = true
+        config.enableNormalizationOppositeOrientationForNestedContainers = true
+    }
+
+    /// Binds the windows the same way as newly detected windows, the callbacks didn't finish yet
+    private func detect(_ ids: [OpaqueWindowId], _ workspace: Workspace) async throws -> [(TestWindow, DwindleSplit?)] {
+        var result: [(TestWindow, DwindleSplit?)] = []
+        for id in ids {
+            let window = TestWindow.new(id: id, parent: workspace.floatingWindowsContainer)
+            result.append((window, try await window.relayoutWindowDeferringDwindleSplit(on: workspace, .nonCancellable, forceTile: true)))
+        }
+        return result
+    }
+
+    /// The same result as if the windows were detected one after another, whichever callbacks finish first
+    @Test(arguments: [false, true])
+    func testSameResultAsDetectedOneAfterAnother(callbacksOfTheLaterWindowFinishFirst: Bool) async throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TestWindow.new(id: 2, parent: $0)
+        }
+        let detected = try await detect([3, 4], workspace)
+        if callbacksOfTheLaterWindowFinishFirst {
+            detected[1].0.applyDwindleSplit(detected[1].1)
+            // Waits for window 3: window 4 is put next to window 3, window 3 must split window 2 first
+            assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2), .window(3), .window(4)]))
+            detected[0].0.applyDwindleSplit(detected[0].1)
+        } else {
+            for (window, split) in detected { window.applyDwindleSplit(split) }
+        }
+        workspace.normalizeContainers()
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .h_tiles([.window(3), .window(4)])])]))
+        assertEquals(root.children.map { $0.getWeight(.h) }, [1, 1])
+        #expect(dwindleSplitQueue.isEmpty)
+
+        // The same as one after another
+        setUpWorkspacesForTests()
+        config.newWindowPlacement = .dwindle
+        config.enableNormalizationFlattenContainers = true
+        config.enableNormalizationOppositeOrientationForNestedContainers = true
+        let workspace2 = Workspace.get(byName: name)
+        let root2 = workspace2.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TestWindow.new(id: 2, parent: $0)
+        }
+        for id: OpaqueWindowId in [3, 4] {
+            for (window, split) in try await detect([id], workspace2) { window.applyDwindleSplit(split) }
+        }
+        workspace2.normalizeContainers()
+        assertEquals(root2.layoutDescription, root.layoutDescription)
+    }
+
+    /// E.g. the session of window 3 is canceled before its callbacks
+    @Test func testDiscardedSplitDoesntBlockLaterSplits() async throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TestWindow.new(id: 2, parent: $0)
+        }
+        let detected = try await detect([3, 4], workspace)
+        detected[0].1?.discard()
+        detected[1].0.applyDwindleSplit(detected[1].1)
+        workspace.normalizeContainers()
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2), .v_tiles([.window(3), .window(4)])]))
+        #expect(dwindleSplitQueue.isEmpty)
+    }
+
+    /// E.g. on-window-detected of window 3 moves it to another workspace. Its split is never applied, nothing waits for it
+    @Test func testStaleSplitDoesntBlockLaterSplits() async throws {
+        let workspace = Workspace.get(byName: name)
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TestWindow.new(id: 2, parent: $0)
+        }
+        let detected = try await detect([3, 4], workspace)
+        detected[0].0.bind(to: Workspace.get(byName: "other").rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
+        detected[1].0.applyDwindleSplit(detected[1].1)
+        workspace.normalizeContainers()
+        // Window 4 was put next to window 3, window 3 is gone. Window 4 splits nothing
+        assertEquals(root.layoutDescription, .h_tiles([.window(1), .window(2), .window(4)]))
+        #expect(dwindleSplitQueue.isEmpty)
+    }
+}
+
 /// Emulates a new tiling window: the window appears as a focused floating window and becomes tiling
 @discardableResult
 @MainActor

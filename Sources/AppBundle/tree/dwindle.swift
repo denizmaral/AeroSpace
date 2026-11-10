@@ -50,19 +50,19 @@ extension Workspace {
 extension TreeNode {
     /// The rect that the tiling node would get if the workspace was laid out right now.
     /// Unlike `lastAppliedLayoutPhysicalRect`, it's up to date right after the tree is changed.
-    /// Gaps and accordion paddings are ignored
+    /// Gaps and accordion paddings are ignored. `ignored` nodes are treated as if they weren't in the tree
     @MainActor
-    func estimatedTilingRect(excluding excluded: TreeNode? = nil) -> Rect? {
+    func estimatedTilingRect(ignoring ignored: [TreeNode] = []) -> Rect? {
         guard let parent else { return nil }
         if let root = self as? TilingContainer, root.isRootContainer, let workspace = parent as? Workspace {
             return workspace.workspaceMonitorInfo.visibleRectPaddedByOuterGaps
         }
-        guard let parent = parent as? TilingContainer, let parentRect = parent.estimatedTilingRect(excluding: excluded) else { return nil }
+        guard let parent = parent as? TilingContainer, let parentRect = parent.estimatedTilingRect(ignoring: ignored) else { return nil }
         switch parent.renderedLayout {
             case .accordion:
                 return parentRect
             case .tiles:
-                let siblings = parent.inhabitedChildren.filter { $0 != excluded }
+                let siblings = parent.inhabitedChildren.filter { child in !ignored.contains { $0 === child } }
                 guard let index = siblings.firstIndex(of: self) else { return nil }
                 let orientation = parent.orientation
                 let weights = siblings.map { $0.getWeight(orientation) }
@@ -83,13 +83,67 @@ extension TreeNode {
 /// It's captured right after the window is bound next to the anchor, and applied later (e.g. after on-window-detected
 /// callbacks that may move the window to another workspace). If the window is bound again in the meantime (moved,
 /// floated, re-tiled), the captured split is stale and it's not applied.
-struct DwindleSplit {
+///
+/// Several windows may be detected at the same time: the callbacks of one window suspend, and another session detects
+/// the next window meanwhile. The splits are applied in the order of capturing, and every split ignores the windows
+/// that were detected after it. The result is the same as if the windows were detected one after another
+@MainActor
+final class DwindleSplit {
+    fileprivate let window: Window
     fileprivate let anchor: TreeNode
-    fileprivate let windowBindingGeneration: UInt64
+    private let windowBindingGeneration: UInt64
+    fileprivate var state: State = .captured
+
+    fileprivate enum State {
+        /// The owner applies or discards it later
+        case captured
+        /// Applied as soon as the splits that were captured before it are applied
+        case ready
+        case done
+    }
+
+    fileprivate init(window: Window, anchor: TreeNode) {
+        self.window = window
+        self.anchor = anchor
+        self.windowBindingGeneration = window.bindingGeneration
+    }
+
+    /// The window was bound again since the split was captured
+    fileprivate var isStale: Bool { window.bindingGeneration != windowBindingGeneration }
+
+    /// The split won't be applied (e.g. the session is canceled). Later splits don't wait for it. No-op once applied
+    func discard() {
+        guard state == .captured else { return }
+        state = .done
+        applyReadyDwindleSplits()
+    }
+}
+
+/// The splits that aren't applied yet, in the order of capturing. See ``DwindleSplit``
+@MainActor var dwindleSplitQueue: [DwindleSplit] = []
+
+@MainActor
+private func applyReadyDwindleSplits() {
+    while let split = dwindleSplitQueue.first {
+        switch split.state {
+            case .captured where !split.isStale: return // Wait for the owner. A stale split is never applied
+            case .captured, .done:
+                split.state = .done
+                dwindleSplitQueue.removeFirst()
+            case .ready:
+                split.state = .done
+                dwindleSplitQueue.removeFirst()
+                if split.isStale { continue }
+                // The windows that were detected after this one don't exist yet from the point of view of the split
+                let later = dwindleSplitQueue.filter { $0.state != .done && !$0.isStale }.map(\.window)
+                split.window.split(split.anchor, ignoring: later)
+        }
+    }
 }
 
 extension Window {
-    /// Captures the split for the window that was just bound right after its anchor. nil if the split doesn't apply
+    /// Captures the split for the window that was just bound right after its anchor. nil if the split doesn't apply.
+    /// The caller must apply (``applyDwindleSplit(_:)``) or discard it, later splits wait for it
     @MainActor
     func captureDwindleSplit() -> DwindleSplit? {
         guard config.newWindowPlacement.splitsAnchorWindow,
@@ -97,30 +151,43 @@ extension Window {
               let index = ownIndex(in: .all),
               index > 0
         else { return nil }
-        return DwindleSplit(anchor: parent.children[index - 1], windowBindingGeneration: bindingGeneration)
+        let split = DwindleSplit(window: self, anchor: parent.children[index - 1])
+        dwindleSplitQueue.append(split)
+        return split
     }
 
-    /// Splits the anchor to make room for the window. It's a noop if the window was bound again since the split was
-    /// captured, if the window is invisible (e.g. it's on another macOS Space), or if the anchor was moved
+    /// Splits the anchor to make room for the window, once the splits that were captured before are applied. It's a
+    /// noop if the window was bound again since the split was captured, if the window is invisible (e.g. it's on another
+    /// macOS Space), or if the anchor is gone
     @MainActor
     func applyDwindleSplit(_ split: DwindleSplit?) {
-        guard let split,
-              bindingGeneration == split.windowBindingGeneration,
-              lifeStatus.isInhabited,
+        guard let split, split.state == .captured else { return }
+        check(split.window === self)
+        split.state = .ready
+        applyReadyDwindleSplits()
+    }
+
+    @MainActor
+    fileprivate func split(_ anchor: TreeNode, ignoring later: [Window]) {
+        guard lifeStatus.isInhabited,
               config.newWindowPlacement.splitsAnchorWindow,
-              let parent = parent as? TilingContainer,
-              case let anchor = split.anchor,
-              anchor.parent === parent,
+              parent is TilingContainer,
+              let parent = anchor.parent as? TilingContainer,
               parent.lifeStatus == .alive,
               parent.layout == .tiles,
               anchor.tilingTreeNodeCasesOrDie().isInhabited,
-              let index = ownIndex(in: .all),
-              let anchorIndex = anchor.ownIndex(in: .all),
-              anchorIndex + 1 == index
+              anchor.nodeWorkspace === nodeWorkspace
         else { return }
+        // An earlier split may have moved the anchor (e.g. into a new container). Follow it, the same as a window that
+        // is detected after the earlier one
+        if self.parent !== parent || ownIndex(in: .all) != anchor.ownIndex(in: .all).map({ $0 + 1 }) {
+            unbindFromParent()
+            bind(to: parent, adaptiveWeight: WEIGHT_AUTO, index: anchor.ownIndex(in: .all).orDie() + 1)
+        }
+        let ignored: [TreeNode] = [self] + later
 
         // The anchor's rect before the window was put next to it
-        let anchorRect = anchor.estimatedTilingRect(excluding: self)
+        let anchorRect = anchor.estimatedTilingRect(ignoring: ignored)
         // Split in the other direction if the known minimum sizes (see minimumSize.swift) only fit that way
         func fits(_ orientation: Orientation, _ rect: Rect) -> Bool {
             let half = rect.getDimension(orientation) / 2
@@ -133,7 +200,7 @@ extension Window {
         } else {
             anchorOrientation = nil
         }
-        let isOnlyAnchorAndSelf = parent.inhabitedChildren.count { $0 != self } == 1
+        let isOnlyAnchorAndSelf = parent.inhabitedChildren.count { child in !ignored.contains { $0 === child } } == 1
         if isOnlyAnchorAndSelf {
             // The window and the anchor split the whole container equally. Only the orientation needs to be decided
             if parent.isRootContainer, let anchorOrientation {
