@@ -24,6 +24,8 @@ open class Window: TreeNode, Hashable {
     var isMinimumSizeRecheckAfterLayoutRequested: Bool = false
     /// The native state (minimized, fullscreen) may have changed. See normalizeLayoutReason
     var isNativeStateCheckRequested: Bool = false
+    /// The place in the tiling tree before a macOS native state. See ``enterMacosNativeState(_:prevParentKind:adaptiveWeight:)``
+    var tilingSlot: TilingSlot? = nil
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {

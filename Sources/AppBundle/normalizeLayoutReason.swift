@@ -72,14 +72,11 @@
                 guard let parent = window.windowParentCases else { continue }
                 switch true {
                     case isMacosFullscreen:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
-                        window.bind(to: workspace.macOsNativeFullscreenWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+                        window.enterMacosNativeState(workspace.macOsNativeFullscreenWindowsContainer, prevParentKind: parent.kind, adaptiveWeight: WEIGHT_DOESNT_MATTER)
                     case isMacosMinimized:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
-                        window.bind(to: macosMinimizedWindowsContainer, adaptiveWeight: 1, index: INDEX_BIND_LAST)
+                        window.enterMacosNativeState(macosMinimizedWindowsContainer, prevParentKind: parent.kind, adaptiveWeight: 1)
                     case isMacosWindowOfHiddenApp:
-                        window.layoutReason = .macos(prevParentKind: parent.kind)
-                        window.bind(to: workspace.macOsNativeHiddenAppsWindowsContainer, adaptiveWeight: WEIGHT_DOESNT_MATTER, index: INDEX_BIND_LAST)
+                        window.enterMacosNativeState(workspace.macOsNativeHiddenAppsWindowsContainer, prevParentKind: parent.kind, adaptiveWeight: WEIGHT_DOESNT_MATTER)
                     default: break
                 }
             case .macos(let prevParentKind):
@@ -101,7 +98,10 @@
         case .floatingWindowsContainer:
             window.bindAsFloatingWindow(to: workspace)
         case .tilingContainer:
-            try await window.relayoutWindow(on: workspace, cm, forceTile: true)
+            // The same place as before the native state. A new place only if it's gone
+            if !window.bindBackToTilingSlot(on: workspace) {
+                try await window.relayoutWindow(on: workspace, cm, forceTile: true)
+            }
         case .macosPopupWindowsContainer: // Since the window was minimized/fullscreened it was mistakenly detected as popup. Relayout the window
             try await window.relayoutWindow(on: workspace, cm)
         case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer: // wtf case, should never be possible. But If encounter it, let's just re-layout window

@@ -92,7 +92,9 @@ Async functions take a `CancellationMode` (`.cancellable` / `.nonCancellable`). 
 2. A tiling window is bound right after the workspace's most recent window.
 3. The `on-window-detected` callbacks run (`runOnWindowDetected`).
 
-`relayoutWindow`, `layout tiling` and `move-node-to-workspace` reuse this placement. `new-window-placement = 'dwindle'` (`tree/dwindle.swift`) then splits the most recent window Hyprland-style, after the callbacks run.
+`relayoutWindow`, `layout tiling` and `move-node-to-workspace` reuse this placement. `new-window-placement = 'dwindle'` (`tree/dwindle.swift`) then splits the most recent window Hyprland-style, after the callbacks run. Deferred splits are applied in capture order, so windows detected concurrently end up as if detected one by one.
+
+A tiling window that leaves for a macOS native state (fullscreen, minimized, hidden app) records its `TilingSlot` (`tree/TilingSlot.swift`) and returns to it. Only if the slot is gone is it placed as a new window.
 
 ### Layout (`AppBundle/layout/`)
 `layoutRecursive.swift` turns the tree and weights into rectangles, records `lastAppliedLayoutPhysicalRect`/`VirtualRect` on each node (also used by mouse resize and moves), and applies frames through the accessibility API.
