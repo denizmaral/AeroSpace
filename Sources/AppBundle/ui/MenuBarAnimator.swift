@@ -12,6 +12,8 @@ struct MenuBarState: Equatable {
     var settingsHaveProblems: Bool
     /// See ``ExperimentalUISettings/favoriteWorkspaces``
     var favorites: [String] = []
+    /// See ``ExperimentalUISettings/groupsWorkspacesByMonitor``
+    var groupsByMonitor: Bool = false
 
     var focusedWorkspace: WorkspaceViewModel? { workspaces.first(where: \.isFocused) }
     var mode: TrayItem? { trayItems.first { $0.type == .mode } }
@@ -19,10 +21,13 @@ struct MenuBarState: Equatable {
     /// The workspaces that the strips (pills, dots, i3, …) show: the favorite ones in the order of the user, also when
     /// they are empty, then the other ones that the monitors show. The favorites stay where they are, under the mouse.
     /// Without favorites, all workspaces with windows, in the order of the workspaces
+    /// Grouped by monitor, if asked for
     var strip: [WorkspaceViewModel] {
-        favorites.isEmpty
+        let strip = favorites.isEmpty
             ? workspaces.filter(\.isListed)
             : favorites.compactMap { name in workspaces.first { $0.name == name } } + workspaces.filter { $0.isVisible && !favorites.contains($0.name) }
+        guard groupsByMonitor else { return strip }
+        return strip.enumerated().sorted { ($0.element.monitorIndex, $0.offset) < ($1.element.monitorIndex, $1.offset) }.map(\.element)
     }
 
     func isInStrip(_ workspace: WorkspaceViewModel) -> Bool {
@@ -34,10 +39,12 @@ struct MenuBarState: Equatable {
     /// allocations
     func looksAnimatedTheSame(as other: MenuBarState) -> Bool {
         style == other.style && trayText == other.trayText && mode == other.mode && favorites == other.favorites &&
+            groupsByMonitor == other.groupsByMonitor &&
             workspaces.elementsEqual(other.workspaces) {
                 $0.name == $1.name && $0.isFocused == $1.isFocused && $0.isVisible == $1.isVisible &&
                     $0.isEffectivelyEmpty == $1.isEffectivelyEmpty &&
-                    (!style.showsWindowCount || min($0.windowCount, 4) == min($1.windowCount, 4))
+                    style.windowCountBucket($0.windowCount) == style.windowCountBucket($1.windowCount) &&
+                    $0.monitorIndex == $1.monitorIndex
             }
     }
 }

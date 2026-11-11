@@ -379,3 +379,230 @@ struct WorkspaceShelf: View {
         }
     }
 }
+
+// MARK: - Heft
+
+/// The names of the workspaces, as heavy as their workspaces are full: light when empty, regular with one or two
+/// windows, black with three and more. The focused one is underlined, one shown on another monitor has a dot under it.
+/// A name gains weight when a window comes, the line moves to the next focused one like a drop
+struct WorkspaceHeft: View {
+    let state: MenuBarState
+    let from: MenuBarState?
+    /// Not eased: the line eases its edges on its own (see ``dropRect(from:to:_:)``)
+    let progress: Double
+    let color: Color
+
+    private static let fontSize: CGFloat = 22
+    private static let pitch: CGFloat = 22
+    private static let textY: CGFloat = 17
+    private static let markY: CGFloat = 34
+
+    private struct Look {
+        var weight: CGFloat = NSFont.Weight.light.rawValue
+        var opacity: CGFloat = 0
+        var dot: CGFloat = 0
+        var presence: CGFloat = 0
+
+        func mixed(with other: Look, _ t: CGFloat) -> Look {
+            Look(weight: lerp(weight, other.weight, t), opacity: lerp(opacity, other.opacity, t), dot: lerp(dot, other.dot, t), presence: lerp(presence, other.presence, t))
+        }
+    }
+
+    private static func look(_ workspace: WorkspaceViewModel?) -> Look {
+        guard let workspace else { return Look() }
+        let weight: NSFont.Weight = workspace.windowCount == 0 ? .light : workspace.windowCount < 3 ? .regular : .black
+        let opacity: CGFloat = workspace.isFocused || workspace.isVisible ? 1 : workspace.windowCount == 0 ? 0.3 : 0.6
+        return Look(weight: weight.rawValue, opacity: opacity, dot: workspace.isVisible && !workspace.isFocused ? 1 : 0, presence: 1)
+    }
+
+    private static func width(_ name: String) -> CGFloat {
+        max(pitch, textWidth(name, size: fontSize, weight: .black) + 4)
+    }
+
+    /// Each name (see ``MenuBarItemContent/workspaceSlots(_:_:)``)
+    static func slots(_ strip: [WorkspaceViewModel]) -> [WorkspaceSlot] {
+        var x: CGFloat = 0
+        return strip.map { workspace in
+            let width = width(workspace.name)
+            defer { x += width }
+            return WorkspaceSlot(name: workspace.name, minX: x, maxX: x + width)
+        }
+    }
+
+    /// The rounded system font at any weight between light and black: its weight axis is continuous
+    private static func font(_ weight: CGFloat) -> Font {
+        let key = (weight * 50).rounded() / 50
+        if let font = fonts[key] { return font }
+        let system = NSFont.systemFont(ofSize: fontSize, weight: NSFont.Weight(rawValue: key))
+        let font = Font(system.fontDescriptor.withDesign(.rounded).flatMap { NSFont(descriptor: $0, size: fontSize) } ?? system)
+        fonts[key] = font
+        return font
+    }
+
+    @MainActor private static var fonts: [CGFloat: Font] = [:]
+
+    var body: some View {
+        let entries = stripEntries(from: (from ?? state).strip, to: state.strip)
+        let t = CGFloat(progress.easedInOut)
+        var x: CGFloat = 0
+        var names: [(name: String, midX: CGFloat, look: Look, font: Font)] = []
+        var fromLine: CGRect? = nil
+        var toLine: CGRect? = nil
+        for entry in entries {
+            let look = Self.look(entry.from).mixed(with: Self.look(entry.to), t)
+            let width = Self.width(entry.name) * look.presence
+            let midX = x + width / 2
+            let line = CGRect(x: midX - 8, y: Self.markY, width: 16, height: 4)
+            if entry.from?.isFocused == true { fromLine = line }
+            if entry.to?.isFocused == true { toLine = line }
+            names.append((entry.name, midX, look, Self.font(look.weight)))
+            x += width
+        }
+        let line: (rect: CGRect, opacity: CGFloat)? = switch (fromLine, toLine) {
+            case let (from?, to?): (dropRect(from: from, to: to, CGFloat(progress)), 1)
+            case let (nil, to?): (to, t)
+            case let (from?, nil): (from, 1 - t)
+            case (nil, nil): nil
+        }
+        return Canvas { context, _ in
+            for name in names where name.look.presence > 0 {
+                var letter = context
+                letter.opacity = name.look.opacity * name.look.presence
+                letter.draw(Text(name.name).font(name.font).foregroundStyle(color), at: CGPoint(x: name.midX, y: Self.textY), anchor: .center)
+                if name.look.dot > 0 {
+                    var dot = context
+                    dot.opacity = name.look.dot * name.look.presence
+                    dot.fill(Path(ellipseIn: CGRect(x: name.midX - 2, y: Self.markY, width: 4, height: 4)), with: .color(color))
+                }
+            }
+            if let line {
+                var mark = context
+                mark.opacity = line.opacity
+                mark.fill(Path(roundedRect: line.rect, cornerRadius: 2), with: .color(color))
+            }
+        }
+        .frame(width: max(x, 1), height: MenuBarItemContent.height)
+    }
+}
+
+// MARK: - Matrix
+
+/// The workspaces in two rows of small cells, in the order of the strip, like a keypad: ten of them in 35 points. A mark
+/// as big as its workspace has windows (a dot when empty), a ring for one shown on another monitor, the focused one solid
+/// with its name on a tile after the grid. The focus moves from cell to cell, the new name pushes the old one up
+struct WorkspaceMatrix: View {
+    let state: MenuBarState
+    let from: MenuBarState?
+    let progress: Double
+    let color: Color
+
+    private static let cell: CGFloat = 20
+    private static let tileGap: CGFloat = 8
+    private static let tileHeight: CGFloat = 32
+    private static let fontSize: CGFloat = 21
+    private static let pushDistance: CGFloat = 20
+
+    private static func columns(_ count: Int) -> Int { max(1, (count + 1) / 2) }
+
+    private static func cellRect(_ index: Int, columns: Int) -> CGRect {
+        CGRect(x: CGFloat(index % columns) * cell, y: CGFloat(index / columns) * cell, width: cell, height: cell)
+    }
+
+    private static func tileWidth(_ name: String) -> CGFloat {
+        name.isEmpty ? 0 : max(tileHeight, textWidth(name, size: fontSize, weight: .bold) + 14)
+    }
+
+    /// The cells, in two rows (see ``MenuBarItemContent/workspaceSlots(_:_:)``). The tile after them is the focused
+    /// workspace: not a slot, a click there opens the panel
+    static func slots(_ strip: [WorkspaceViewModel]) -> [WorkspaceSlot] {
+        let columns = columns(strip.count)
+        return strip.enumerated().map { index, workspace in
+            let rect = cellRect(index, columns: columns)
+            return WorkspaceSlot(name: workspace.name, minX: rect.minX, maxX: rect.maxX, minY: rect.minY, maxY: rect.maxY)
+        }
+    }
+
+    private struct Mark {
+        var side: CGFloat = 0
+        var opacity: CGFloat = 0
+        var ring: CGFloat = 0
+
+        func mixed(with other: Mark, _ t: CGFloat) -> Mark {
+            Mark(side: lerp(side, other.side, t), opacity: lerp(opacity, other.opacity, t), ring: lerp(ring, other.ring, t))
+        }
+    }
+
+    /// The mark of a workspace that isn't focused (the focused one has the moving square)
+    private static func mark(_ workspace: WorkspaceViewModel?) -> Mark {
+        guard let workspace, !workspace.isFocused else { return Mark() }
+        if workspace.isVisible { return Mark(side: 6, opacity: 1, ring: 1) } // On another monitor
+        return switch workspace.windowCount {
+            case 0: Mark(side: 5, opacity: 0.3)
+            case 1: Mark(side: 8, opacity: 0.6)
+            case 2, 3: Mark(side: 12, opacity: 0.6)
+            default: Mark(side: 16, opacity: 0.6)
+        }
+    }
+
+    var body: some View {
+        let fromStrip = (from ?? state).strip, toStrip = state.strip
+        let t = CGFloat(progress.easedInOut)
+        let fromColumns = Self.columns(fromStrip.count), toColumns = Self.columns(toStrip.count)
+        var marks: [(center: CGPoint, mark: Mark)] = []
+        for entry in stripEntries(from: fromStrip, to: toStrip) {
+            let fromCenter = fromStrip.firstIndex { $0.name == entry.name }.map { Self.cellRect($0, columns: fromColumns) }
+            let toCenter = toStrip.firstIndex { $0.name == entry.name }.map { Self.cellRect($0, columns: toColumns) }
+            let center = lerp(fromCenter ?? toCenter ?? .zero, toCenter ?? fromCenter ?? .zero, t)
+            marks.append((CGPoint(x: center.midX, y: center.midY), Self.mark(entry.from).mixed(with: Self.mark(entry.to), t)))
+        }
+        let fromFocus = fromStrip.firstIndex(where: \.isFocused).map { Self.cellRect($0, columns: fromColumns) }
+        let toFocus = toStrip.firstIndex(where: \.isFocused).map { Self.cellRect($0, columns: toColumns) }
+        let focus: CGRect? = switch (fromFocus, toFocus) {
+            case let (from?, to?):
+                // Across the grid, a little smaller halfway
+                lerp(from, to, t).insetBy(dx: 1 + 1.5 * sin(.pi * t), dy: 1 + 1.5 * sin(.pi * t))
+            case let (nil, to?): to.insetBy(dx: 1, dy: 1)
+            case let (from?, nil): from.insetBy(dx: 1, dy: 1)
+            case (nil, nil): nil
+        }
+        let gridWidth = lerp(CGFloat(fromColumns), CGFloat(toColumns), t) * Self.cell
+        let oldName = (from ?? state).focusedWorkspace?.name ?? "", newName = state.focusedWorkspace?.name ?? ""
+        let tileWidth = lerp(Self.tileWidth(oldName), Self.tileWidth(newName), t)
+        let tile = CGRect(x: gridWidth + Self.tileGap, y: (MenuBarItemContent.height - Self.tileHeight) / 2, width: tileWidth, height: Self.tileHeight)
+        return Canvas { context, _ in
+            for (center, mark) in marks where mark.opacity > 0 && mark.side > 0 {
+                var markContext = context
+                markContext.opacity = mark.opacity
+                let rect = CGRect(x: center.x - mark.side / 2, y: center.y - mark.side / 2, width: mark.side, height: mark.side)
+                if mark.ring > 0 { // A ring around the dot
+                    var ring = markContext
+                    ring.opacity = mark.opacity * mark.ring
+                    ring.stroke(Path(roundedRect: CGRect(x: center.x - 8, y: center.y - 8, width: 16, height: 16), cornerRadius: 5, style: .continuous), with: .color(color), lineWidth: 2.5)
+                }
+                markContext.fill(Path(roundedRect: rect, cornerRadius: mark.side * 0.3, style: .continuous), with: .color(color))
+            }
+            if let focus {
+                context.fill(Path(roundedRect: focus, cornerRadius: focus.width * 0.3, style: .continuous), with: .color(color))
+            }
+            if tileWidth > 0 {
+                context.drawLayer { layer in
+                    let path = Path(roundedRect: tile, cornerRadius: 9, style: .continuous)
+                    layer.fill(path, with: .color(color))
+                    layer.clip(to: path)
+                    layer.blendMode = .destinationOut
+                    let font = Font.system(size: Self.fontSize, weight: .bold, design: .rounded)
+                    if oldName != newName {
+                        var old = layer
+                        old.opacity = 1 - t
+                        old.draw(Text(oldName).font(font).foregroundStyle(.black), at: CGPoint(x: tile.midX, y: tile.midY - Self.pushDistance * t), anchor: .center)
+                        layer.opacity = t
+                        layer.draw(Text(newName).font(font).foregroundStyle(.black), at: CGPoint(x: tile.midX, y: tile.midY + Self.pushDistance * (1 - t)), anchor: .center)
+                    } else {
+                        layer.draw(Text(newName).font(font).foregroundStyle(.black), at: CGPoint(x: tile.midX, y: tile.midY), anchor: .center)
+                    }
+                }
+            }
+        }
+        .frame(width: max(tile.maxX, 1), height: MenuBarItemContent.height)
+    }
+}

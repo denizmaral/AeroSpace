@@ -7,21 +7,22 @@ import Testing
 struct MenuBarItemTest {
     init() { setUpWorkspacesForTests() }
 
-    private func workspace(_ name: String, focused: Bool = false, visible: Bool = false, empty: Bool = false, apps: [URL] = []) -> WorkspaceViewModel {
+    private func workspace(_ name: String, focused: Bool = false, visible: Bool = false, empty: Bool = false, apps: [URL] = [], windows: Int? = nil, monitor: Int = 0) -> WorkspaceViewModel {
         WorkspaceViewModel(
             name: name,
             suffix: "",
             appBundleUrls: apps,
-            windowCount: empty ? 0 : max(1, apps.count),
+            windowCount: windows ?? (empty ? 0 : max(1, apps.count)),
             monitorName: nil,
             isFocused: focused,
             isEffectivelyEmpty: empty,
             isVisible: visible || focused,
             hasFullscreenWindows: false,
+            monitorIndex: monitor,
         )
     }
 
-    private func state(_ workspaces: [WorkspaceViewModel], style: MenuBarStyle = .pills, favorites: [String] = []) -> MenuBarState {
+    private func state(_ workspaces: [WorkspaceViewModel], style: MenuBarStyle = .pills, favorites: [String] = [], groupsByMonitor: Bool = false) -> MenuBarState {
         let focused = workspaces.first(where: \.isFocused)?.name ?? ""
         return MenuBarState(
             style: style,
@@ -30,6 +31,7 @@ struct MenuBarItemTest {
             workspaces: workspaces,
             settingsHaveProblems: false,
             favorites: favorites,
+            groupsByMonitor: groupsByMonitor,
         )
     }
 
@@ -113,16 +115,69 @@ struct MenuBarItemTest {
 
     /// A click in the middle of a workspace focuses it, a click on the focused one opens the panel. The workspaces end
     /// where the drawing ends
-    @Test(arguments: [MenuBarStyle.pills, .dots, .panes, .skyline, .shelf, .i3, .i3Ordered])
+    @Test(arguments: [MenuBarStyle.pills, .dots, .panes, .skyline, .shelf, .matrix, .heft, .i3, .i3Ordered])
     func testAClickOnAWorkspaceFindsIt(style: MenuBarStyle) throws {
         let item = state([workspace("1"), workspace("C"), workspace("T", focused: true), workspace("X")], style: style)
         let slots = MenuBarItemContent.workspaceSlots(item, .white)
-        let width = try #require(MenuBarItemContent(state: item, transition: nil, color: .white).cgImage).width
+        let image = try #require(MenuBarItemContent(state: item, transition: nil, color: .white).cgImage)
+        let (width, height) = (CGFloat(image.width), CGFloat(image.height))
         #expect(slots.map(\.name) == (style == .i3 ? ["T", "1", "C", "X"] : ["1", "C", "T", "X"]))
-        #expect(abs((slots.last?.maxX ?? 0) - CGFloat(width)) <= 1)
+        if style == .matrix { // The name tile of the focused workspace comes after the grid: not a slot
+            #expect(slots.map(\.maxX).max() ?? 0 < width - 8)
+        } else {
+            #expect(abs((slots.last?.maxX ?? 0) - width) <= 1)
+        }
         for slot in slots {
-            let clicked = MenuBarClicks.clickedWorkspace(item, atFraction: (slot.minX + slot.maxX) / 2 / CGFloat(width))
+            let fromTop = min((slot.minY + min(slot.maxY, height)) / 2 / height, 0.999)
+            let clicked = MenuBarClicks.clickedWorkspace(item, atFraction: (slot.minX + slot.maxX) / 2 / width, fromTop: fromTop)
             #expect(clicked == (slot.name == "T" ? nil : slot.name))
         }
+    }
+
+    /// Matrix: two rows, like a keypad. A click on the top edge of the screen is a click on the top row
+    @Test func testMatrixHasTwoRows() throws {
+        let item = state([workspace("1"), workspace("C"), workspace("T", focused: true), workspace("X")], style: .matrix)
+        let width = try CGFloat(#require(MenuBarItemContent(state: item, transition: nil, color: .white).cgImage).width)
+        let secondColumn = 30 / width // The cells are 20 wide
+        #expect(MenuBarClicks.clickedWorkspace(item, atFraction: secondColumn, fromTop: 0) == "C")
+        #expect(MenuBarClicks.clickedWorkspace(item, atFraction: secondColumn, fromTop: 0.9) == "X")
+        #expect(MenuBarClicks.clickedWorkspace(item, atFraction: 10 / width, fromTop: 0.9) == nil) // T, focused
+    }
+
+    /// A window that comes or goes is animated only where it changes the look of the style
+    @Test func testEveryStyleAnimatesItsOwnWindowCounts() {
+        func animates(_ style: MenuBarStyle, _ from: Int, _ to: Int) -> Bool {
+            !state([workspace("T", focused: true, windows: from)], style: style).looksAnimatedTheSame(as: state([workspace("T", focused: true, windows: to)], style: style))
+        }
+        #expect(!animates(.heft, 1, 2))
+        #expect(animates(.heft, 2, 3))
+        #expect(!animates(.matrix, 2, 3))
+        #expect(animates(.matrix, 3, 4))
+        #expect(!animates(.panes, 4, 5))
+        #expect(!animates(.dots, 1, 2))
+    }
+
+    /// Grouped by monitor, the workspaces of a monitor are together, and the pills put a bay around them. Can't be seen
+    /// with one monitor: the monitors are made up here
+    @Test func testBaysGroupTheWorkspacesByMonitor() throws {
+        let workspaces = [workspace("1"), workspace("C", monitor: 1), workspace("T", focused: true), workspace("X", visible: true, monitor: 1)]
+        let item = state(workspaces, groupsByMonitor: true)
+        #expect(item.strip.map(\.name) == ["1", "T", "C", "X"])
+        let slots = MenuBarItemContent.workspaceSlots(item, .white)
+        #expect(slots[2].minX - slots[1].maxX == 12) // The gap between the bays
+        let width = try CGFloat(#require(MenuBarItemContent(state: item, transition: nil, color: .white).cgImage).width)
+        #expect(abs((slots.last?.maxX ?? 0) - width) <= 1)
+        #expect(MenuBarClicks.clickedWorkspace(item, atFraction: (slots[2].minX + slots[2].maxX) / 2 / width) == "C")
+        #expect(state(workspaces).strip.map(\.name) == ["1", "C", "T", "X"]) // Not grouped
+    }
+
+    /// The focus mark stretches on its way like a drop, and is a little flatter halfway
+    @Test func testTheDropStretches() {
+        let from = CGRect(x: 0, y: 5, width: 20, height: 30), to = CGRect(x: 100, y: 5, width: 20, height: 30)
+        #expect(dropRect(from: from, to: to, 0) == from)
+        #expect(dropRect(from: from, to: to, 1) == to)
+        let halfway = dropRect(from: from, to: to, 0.5)
+        #expect(halfway.width > 20 && halfway.height < 30)
+        #expect(dropRect(from: to, to: from, 0.5).width > 20) // Leftwards too
     }
 }

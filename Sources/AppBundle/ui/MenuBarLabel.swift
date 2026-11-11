@@ -47,11 +47,13 @@ struct MenuBarItemContent: View {
             case .monospacedText: PushedText(text: state.trayText, from: from?.trayText, progress: progress.easedOut, design: .monospaced, color: color)
             case .systemText: PushedText(text: state.trayText, from: from?.trayText, progress: progress.easedOut, design: .default, color: color)
             case .squares, .i3, .i3Ordered: ClassicMenuBarItem(state: state, color: color)
-            case .pills: withMode(state) { WorkspacePills(state: state, from: from, progress: progress.easedInOut, color: color) }
+            case .pills: withMode(state) { WorkspacePills(state: state, from: from, progress: progress, color: color) }
             case .dots: withMode(state) { WorkspaceDots(state: state, from: from, progress: progress.easedInOut, color: color) }
             case .panes: withMode(state) { WorkspacePanes(state: state, from: from, progress: progress.easedInOut, color: color) }
             case .skyline: withMode(state) { WorkspaceSkyline(state: state, from: from, progress: progress.easedInOut, color: color) }
             case .shelf: withMode(state) { WorkspaceShelf(state: state, from: from, progress: progress.easedOut, color: color) }
+            case .matrix: withMode(state) { WorkspaceMatrix(state: state, from: from, progress: progress, color: color) }
+            case .heft: withMode(state) { WorkspaceHeft(state: state, from: from, progress: progress, color: color) }
             case .workspaceApps: withMode(state) { WorkspaceWithApps(state: state, from: from, progress: progress.easedOut, color: color) }
         }
     }
@@ -87,14 +89,16 @@ struct MenuBarItemContent: View {
         var x: CGFloat = state.settingsHaveProblems ? height + spacing : 0
         let slots: [WorkspaceSlot]
         switch state.style {
-            case .pills, .dots, .panes, .skyline, .shelf:
+            case .pills, .dots, .panes, .skyline, .shelf, .matrix, .heft:
                 if let mode = state.mode { x += width(of: modeView(mode, color)) + spacing }
                 slots = switch state.style {
                     case .dots: WorkspaceDots.slots(state.strip)
                     case .panes: WorkspacePanes.slots(state.strip)
                     case .skyline: WorkspaceSkyline.slots(state.strip)
                     case .shelf: WorkspaceShelf.slots(state.strip)
-                    default: WorkspacePills.slots(state.strip)
+                    case .matrix: WorkspaceMatrix.slots(state.strip)
+                    case .heft: WorkspaceHeft.slots(state.strip)
+                    default: WorkspacePills.slots(state)
                 }
             case .squares, .i3, .i3Ordered:
                 var elementX: CGFloat = 0
@@ -106,7 +110,7 @@ struct MenuBarItemContent: View {
             case .monospacedText, .systemText, .workspaceApps:
                 slots = []
         }
-        return slots.map { WorkspaceSlot(name: $0.name, minX: $0.minX + x, maxX: $0.maxX + x) }
+        return slots.map { WorkspaceSlot(name: $0.name, minX: $0.minX + x, maxX: $0.maxX + x, minY: $0.minY, maxY: $0.maxY) }
     }
 
     private static func width(of view: some View) -> CGFloat {
@@ -114,18 +118,20 @@ struct MenuBarItemContent: View {
     }
 }
 
-/// Where a workspace is in the menu bar item, along its width
+/// Where a workspace is in the menu bar item: along its width, and in the height of the drawing (only Matrix has rows)
 struct WorkspaceSlot: Equatable {
     let name: String
     let minX: CGFloat
     let maxX: CGFloat
+    var minY: CGFloat = 0
+    var maxY: CGFloat = .infinity
 }
 
 extension MenuBarStyle {
     /// The styles that move from the old state to the new one. The others fade
     fileprivate var movesOnChange: Bool {
         switch self {
-            case .monospacedText, .systemText, .pills, .dots, .panes, .skyline, .shelf, .workspaceApps: true
+            case .monospacedText, .systemText, .pills, .dots, .panes, .skyline, .shelf, .matrix, .heft, .workspaceApps: true
             case .squares, .i3, .i3Ordered: false
         }
     }
@@ -161,13 +167,19 @@ private struct PushedText: View {
 
 // MARK: - Pills
 
-/// All listed workspaces in a row, the focused one filled. The fill slides from the old workspace to the new one, and
-/// the letters that it passes are cut out of it
+/// All listed workspaces in a row, the focused one filled. The fill moves from the old workspace to the new one like a
+/// drop (see ``dropRect(from:to:_:)``), and the letters that it passes are cut out of it. Grouped by monitor (with more
+/// than one monitor), the workspaces of a monitor are in a bay
 private struct WorkspacePills: View {
     let state: MenuBarState
     let from: MenuBarState?
+    /// Not eased: the drop eases its edges on its own
     let progress: Double
     let color: Color
+
+    /// Between two bays
+    private static let bayGap: CGFloat = 12
+    private static let bayHeight: CGFloat = 36
 
     private static let pillHeight: CGFloat = 30
     private static let gap: CGFloat = 3
@@ -187,10 +199,14 @@ private struct WorkspacePills: View {
         max(pillHeight - 6, textWidth(name, size: fontSize, weight: .semibold) + 12)
     }
 
-    /// Each pill and half of the gaps next to it (see ``MenuBarItemContent/workspaceSlots(_:_:)``)
-    static func slots(_ strip: [WorkspaceViewModel]) -> [WorkspaceSlot] {
+    /// Each pill and half of the gaps next to it (see ``MenuBarItemContent/workspaceSlots(_:_:)``). A bay begins before a
+    /// workspace of another monitor than the one before it
+    static func slots(_ state: MenuBarState) -> [WorkspaceSlot] {
         var x: CGFloat = 0
-        return strip.map { workspace in
+        var previous: WorkspaceViewModel? = nil
+        return state.strip.map { workspace in
+            if state.groupsByMonitor, let previous, previous.monitorIndex != workspace.monitorIndex { x += bayGap }
+            previous = workspace
             let width = width(workspace.name) + gap
             defer { x += width }
             return WorkspaceSlot(name: workspace.name, minX: x, maxX: x + width)
@@ -199,14 +215,22 @@ private struct WorkspacePills: View {
 
     var body: some View {
         let entries = stripEntries(from: (from ?? state).strip, to: state.strip)
-        let t = CGFloat(progress)
+        let t = CGFloat(progress.easedInOut)
         let midY = MenuBarItemContent.height / 2
         var x: CGFloat = 0
         var cells: [Cell] = []
         var fromFocused: CGRect? = nil
         var toFocused: CGRect? = nil
+        // The bays: from the first pill of a monitor to its last one, and whether the focused workspace is in it
+        var bays: [(minX: CGFloat, maxX: CGFloat, isFocused: CGFloat)] = []
+        var bayMonitor: Int? = nil
         for entry in entries {
             let width = Self.width(entry.name)
+            if state.groupsByMonitor, let workspace = entry.to ?? entry.from {
+                if let bayMonitor, bayMonitor != workspace.monitorIndex { x += Self.bayGap }
+                if bayMonitor != workspace.monitorIndex { bays.append((x, x, 0)) }
+                bayMonitor = workspace.monitorIndex
+            }
             // A workspace that comes or goes grows or shrinks from its middle
             let presence = lerp(entry.from == nil ? 0 : 1, entry.to == nil ? 0 : 1, t)
             let midX = x + (width + Self.gap) * presence / 2
@@ -221,15 +245,27 @@ private struct WorkspacePills: View {
                 outlineOpacity: lerp(entry.from.map(Self.outlineOpacity) ?? 0, entry.to.map(Self.outlineOpacity) ?? 0, t),
             ))
             x += (width + Self.gap) * presence
+            if !bays.isEmpty {
+                bays[bays.count - 1].maxX = x
+                let isFocused = lerp(entry.from?.isFocused == true ? 1 : 0, entry.to?.isFocused == true ? 1 : 0, t)
+                bays[bays.count - 1].isFocused = max(bays[bays.count - 1].isFocused, isFocused)
+            }
         }
+        if bays.count < 2 { bays = [] } // One monitor: nothing to group
         let highlight: (rect: CGRect, opacity: CGFloat)? = switch (fromFocused, toFocused) {
-            case let (from?, to?): (lerp(from, to, t), 1)
+            case let (from?, to?): (dropRect(from: from, to: to, CGFloat(progress)), 1)
             case let (nil, to?): (to, t)
             case let (from?, nil): (from, 1 - t)
             case (nil, nil): nil
         }
         return Canvas { context, _ in
             let font = Self.font
+            for bay in bays {
+                var outline = context
+                outline.opacity = lerp(0.3, 0.6, bay.isFocused)
+                let rect = CGRect(x: bay.minX - 2, y: midY - Self.bayHeight / 2, width: bay.maxX - bay.minX + 4, height: Self.bayHeight)
+                outline.stroke(Path(roundedRect: rect.insetBy(dx: 1, dy: 1), cornerRadius: 11, style: .continuous), with: .color(color), lineWidth: 2)
+            }
             let highlightPath = highlight.map { Path(roundedRect: $0.rect, cornerRadius: Self.cornerRadius, style: .continuous) }
             context.drawLayer { layer in
                 // The letters under the fill are cut out of it, they aren't drawn on it
@@ -651,6 +687,22 @@ private struct TextWidthKey: Hashable {
 @MainActor private var textWidths: [TextWidthKey: CGFloat] = [:]
 
 func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat { a + (b - a) * t }
+
+/// A focus mark on its way from one place to the next, like a drop: the edge in front goes first (eased out), the one
+/// behind follows (eased in), so it stretches, and it's a little flatter halfway
+///
+/// - Parameter progress: not eased, from 0 to 1
+func dropRect(from: CGRect, to: CGRect, _ progress: CGFloat) -> CGRect {
+    let p = min(max(progress, 0), 1)
+    let (front, back) = (1 - (1 - p) * (1 - p), p * p) // Quadratic: a long way stretches it over half of it, not more
+    let rightward = to.midX >= from.midX
+    let minX = lerp(from.minX, to.minX, rightward ? back : front)
+    let maxX = lerp(from.maxX, to.maxX, rightward ? front : back)
+    let eased = CGFloat(Double(p).easedInOut)
+    let height = lerp(from.height, to.height, eased) * (1 - 0.15 * sin(.pi * p))
+    let midY = lerp(from.midY, to.midY, eased)
+    return CGRect(x: minX, y: midY - height / 2, width: maxX - minX, height: height)
+}
 
 func lerp(_ a: CGRect, _ b: CGRect, _ t: CGFloat) -> CGRect {
     CGRect(x: lerp(a.minX, b.minX, t), y: lerp(a.minY, b.minY, t), width: lerp(a.width, b.width, t), height: lerp(a.height, b.height, t))

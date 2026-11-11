@@ -26,6 +26,7 @@ public final class TrayMenuModel: ObservableObject {
             workspaces: workspaces,
             settingsHaveProblems: settingsHaveProblems,
             favorites: experimentalUISettings.favoriteWorkspaces,
+            groupsByMonitor: experimentalUISettings.groupsWorkspacesByMonitor,
         )
     }
 
@@ -73,6 +74,13 @@ public final class TrayMenuModel: ObservableObject {
     }
 
     /// All workspaces with windows are shown in the strips of the menu bar item again
+    /// The workspaces are grouped by monitor in the strips of the menu bar item, or not any more: they move to their places
+    @MainActor func setGroupsWorkspacesByMonitor(_ value: Bool) {
+        let before = menuBarState
+        experimentalUISettings.groupsWorkspacesByMonitor = value
+        MenuBarAnimator.shared.stateDidChange(from: before, to: menuBarState)
+    }
+
     @MainActor func clearFavorites() {
         setFavorites([])
     }

@@ -22,18 +22,23 @@ enum MenuBarClicks {
         // (pressed with VoiceOver, the menu bar of another display): the panel
         let inWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
         guard content.frame.contains(inWindow) else { return nil }
-        let x = button.convert(inWindow, from: nil).x
-        guard x >= imageRect.minX, x < imageRect.maxX else { return nil }
-        return clickedWorkspace(model.menuBarState, atFraction: (x - imageRect.minX) / imageRect.width)
+        let point = button.convert(inWindow, from: nil)
+        guard point.x >= imageRect.minX, point.x < imageRect.maxX else { return nil }
+        // The button is flipped (verified on macOS 27). Above or below the image (the top edge of the screen): its row
+        let y = (point.y - imageRect.minY) / imageRect.height
+        let fromTop = min(max(button.isFlipped ? y : 1 - y, 0), 0.999)
+        return clickedWorkspace(model.menuBarState, atFraction: (point.x - imageRect.minX) / imageRect.width, fromTop: fromTop)
     }
 
-    /// - Parameter fraction: where the item is clicked, from its left edge (0) to its right edge (1)
+    /// - Parameters:
+    ///   - fraction: where the item is clicked, from its left edge (0) to its right edge (1)
+    ///   - fromTop: from its top edge (0) to its bottom edge (1)
     /// - Returns: nil for a click next to the workspaces, and for the focused workspace (the panel opens)
-    static func clickedWorkspace(_ state: MenuBarState, atFraction fraction: CGFloat) -> String? {
+    static func clickedWorkspace(_ state: MenuBarState, atFraction fraction: CGFloat, fromTop: CGFloat = 0.5) -> String? {
         let color = Color.white // The geometry doesn't depend on it
-        guard let width = MenuBarItemContent(state: state, transition: nil, color: color).cgImage.map({ CGFloat($0.width) }) else { return nil }
-        let x = fraction * width
-        guard let slot = MenuBarItemContent.workspaceSlots(state, color).first(where: { $0.minX <= x && x < $0.maxX }),
+        guard let image = MenuBarItemContent(state: state, transition: nil, color: color).cgImage else { return nil }
+        let (x, y) = (fraction * CGFloat(image.width), fromTop * CGFloat(image.height))
+        guard let slot = MenuBarItemContent.workspaceSlots(state, color).first(where: { $0.minX <= x && x < $0.maxX && $0.minY <= y && y < $0.maxY }),
               state.workspaces.first(where: { $0.name == slot.name })?.isFocused == false
         else { return nil }
         return slot.name
