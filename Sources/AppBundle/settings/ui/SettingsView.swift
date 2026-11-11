@@ -4,9 +4,10 @@ import SwiftUI
 /// The settings window: everything the user can configure, nothing to type into a file
 struct SettingsView: View {
     @Bindable var model: SettingsModel
-    @State private var pane: SettingsPane? = .general
+    /// Remembered: the window isn't kept while it's closed (see ``SettingsWindowController``), it opens where it was left
+    @AppStorage("settingsPane") private var pane: SettingsPane = .general
     /// A pane is built when it's shown the first time and kept: switching back is instant. The others are never built
-    @State private var visited: Set<SettingsPane> = [.general]
+    @State private var visited: Set<SettingsPane> = []
     @State private var shortcutsState = ShortcutsPaneState()
 
     var body: some View {
@@ -18,10 +19,10 @@ struct SettingsView: View {
             }
             .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
         } detail: {
-            let current = pane ?? .general
+            let current = pane
             ZStack {
                 ForEach(SettingsPane.allCases) { item in
-                    if visited.contains(item) {
+                    if item == current || visited.contains(item) {
                         SettingsPaneView(model: model, pane: item, shortcutsState: shortcutsState)
                             .opacity(item == current ? 1 : 0)
                             .allowsHitTesting(item == current)
@@ -34,7 +35,7 @@ struct SettingsView: View {
                 if current == .shortcuts { ShortcutsToolbar(state: shortcutsState, model: model) }
             }
         }
-        .onChange(of: pane) { visited.insert(pane ?? .general) }
+        .onChange(of: pane, initial: true) { visited.insert(pane) }
         .overlay(alignment: .bottom) {
             if let removal = model.removal {
                 UndoBanner(message: removal.message, undo: model.undoRemoval)
