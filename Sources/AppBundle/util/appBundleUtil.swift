@@ -47,18 +47,19 @@ private struct AppServerTerminationHandler: TerminationHandler {
     @MainActor
     func beforeTermination() {
         // Make all windows fullscreen before Quit
+        // It may be invoked when something went wrong (e.g. some windows are unbound), that's why it's not allowed to
+        // use `.parent` call in here
+        let monitors = globalUnsortedMonitorInfos.map { MonitorRects(rect: $0.rect, visibleRect: $0.visibleRect, isMain: $0.isMain) }
+        let done = DispatchGroup()
         for window in MacWindow.allWindowsMap.values {
-            // makeAllWindowsVisibleAndRestoreSize may be invoked when something went wrong (e.g. some windows are unbound)
-            // that's why it's not allowed to use `.parent` call in here
-            let monitor = window.macApp.getAxRectForTermination(window.windowId)?.center.monitorApproximation ?? mainMonitorInfo
-            let monitorVisibleRect = monitor.visibleRect
-            let windowSize = window.lastFloatingSize ?? CGSize(width: monitorVisibleRect.width, height: monitorVisibleRect.height)
-            let point = CGPoint(
-                x: (monitorVisibleRect.width - windowSize.width) / 2,
-                y: (monitorVisibleRect.height - windowSize.height) / 2,
-            )
-            window.macApp.setAxFrameForTermination(window.windowId, point, windowSize)
+            let floatingSize = window.lastFloatingSize
+            window.macApp.setAxFrameForTermination(window.windowId, done) { rect in
+                frameForTermination(window: rect, floatingSize: floatingSize, monitors)
+            }
         }
+        // The apps are asked at the same time, each one on its thread, the windows of an app one by one. An app that
+        // doesn't answer doesn't hold up the quit (logging out, a restart of MarSpace): its windows stay where they are
+        _ = done.wait(timeout: .now() + terminationTimeout)
         if isDebug {
             let semaphore = DispatchSemaphore(value: 0)
             // Use Task.detached to avoid inheriting @MainActor.
@@ -70,6 +71,32 @@ private struct AppServerTerminationHandler: TerminationHandler {
             semaphore.wait()
         }
     }
+}
+
+private let terminationTimeout: DispatchTimeInterval = .seconds(2)
+
+struct MonitorRects: Sendable {
+    let rect: Rect
+    let visibleRect: Rect
+    let isMain: Bool
+}
+
+/// The frame of a window when MarSpace quits: in the middle of the monitor that it's on (the nearest one for a window in
+/// the corner of a workspace that isn't shown), with the size that it had as a floating window, or filling the monitor.
+///
+/// - Parameter window: where the window is now. nil if it's unknown: the main monitor
+/// - Returns: nil if there is no monitor
+func frameForTermination(window: Rect?, floatingSize: CGSize?, _ monitors: [MonitorRects]) -> (topLeft: CGPoint, size: CGSize)? {
+    let nearest = window.flatMap { window in
+        monitors.min { window.center.distance(toOuterFrame: $0.rect) < window.center.distance(toOuterFrame: $1.rect) }
+    }
+    guard let visible = (nearest ?? monitors.first(where: \.isMain) ?? monitors.first)?.visibleRect else { return nil }
+    let size = floatingSize ?? CGSize(width: visible.width, height: visible.height)
+    let topLeft = CGPoint(
+        x: visible.topLeftX + max(0, (visible.width - size.width) / 2),
+        y: visible.topLeftY + max(0, (visible.height - size.height) / 2),
+    )
+    return (topLeft, size)
 }
 
 @MainActor

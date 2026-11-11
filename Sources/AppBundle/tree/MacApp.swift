@@ -197,18 +197,26 @@ final class MacApp: AbstractApp {
         }
     }
 
-    func setAxFrameForTermination(_ windowId: OpaqueWindowId, _ topLeft: CGPoint?, _ size: CGSize?) {
+    /// The frame of the window before MarSpace quits. Nobody waits for the app here: `done` is left when the frame is
+    /// set, or when it can't be (the window is gone)
+    ///
+    /// - Parameter frame: the frame for the window, by where it is now. Called on the thread of the app
+    func setAxFrameForTermination(
+        _ windowId: OpaqueWindowId,
+        _ done: DispatchGroup,
+        _ frame: @escaping @Sendable (Rect?) -> (topLeft: CGPoint, size: CGSize)?,
+    ) {
         setFrameJobs.removeValue(forKey: windowId)?.cancel()
-        let semaphore = DispatchSemaphore(value: 0)
-        let job = withWindowAsync(windowId, .nonCancellable) { [axApp] window, job in
+        guard let thread, let nativeWindowId = windowIdMapping.forward[windowId] else { return }
+        done.enter()
+        thread.runInLoopAsync(job: RunLoopJob(.nonCancellable)) { [axApp, windows] job in
+            defer { done.leave() }
+            guard let window = windows.threadGuarded[nativeWindowId]?.ax,
+                  let (topLeft, size) = frame(try? AppBundle::getAxRect(window: window, job: job))
+            else { return }
             _ = try? disableAnimations(app: axApp.threadGuarded, job) {
                 try setFrame(window, topLeft, size, job)
             }
-            semaphore.signal()
-        }
-        switch job.isCancelled {
-            case true: return
-            case false: semaphore.wait()
         }
     }
 
@@ -221,17 +229,6 @@ final class MacApp: AbstractApp {
     func getAxRect(_ windowId: OpaqueWindowId, _ cm: CancellationMode) async throws -> Rect? {
         try await withWindow(windowId, cm) { window, job in
             try AppBundle::getAxRect(window: window, job: job)
-        }
-    }
-
-    func getAxRectForTermination(_ windowId: OpaqueWindowId) -> Rect? {
-        let future = CompletableFuture<Rect?>()
-        let job = withWindowAsync(windowId, .nonCancellable) { window, job in
-            future.complete(try AppBundle::getAxRect(window: window, job: job))
-        }
-        return switch job.isCancelled {
-            case true: nil
-            case false: future.blockingGet()
         }
     }
 
