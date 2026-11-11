@@ -18,7 +18,6 @@ import Foundation
         startObservingKeyboardLayout()
 
         startUnixSocketServer()
-        MenuBarClicks.start()
         GlobalObserver.initObserver()
         MissionControl.observe()
         Workspace.garbageCollectUnusedWorkspaces() // init workspaces

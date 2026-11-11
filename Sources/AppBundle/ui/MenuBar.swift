@@ -2,30 +2,11 @@ import Common
 import Foundation
 import SwiftUI
 
+/// The panel of the menu bar item (see ``MenuBarItem``)
 @MainActor
-public func menuBar(viewModel: TrayMenuModel) -> some Scene {
-    MenuBarExtra {
-        // The window style panel is built only while it's open. The menu bar label is the only always-live view
-        MenuBarPanel().environmentObject(viewModel)
-    } label: {
-        switch (viewModel.axPermissionStatus, viewModel.isEnabled) {
-            case (.granted, true):
-                MenuBarLabel().environmentObject(viewModel)
-            case (.granted, false):
-                Image(systemName: "pause.circle.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            case (_, _):
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-        }
-    }
-    .menuBarExtraStyle(.window)
-}
+struct MenuBarPanel: View {
+    static let width: CGFloat = 312
 
-@MainActor
-private struct MenuBarPanel: View {
     @EnvironmentObject var viewModel: TrayMenuModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion: Bool
     @Namespace private var focusNamespace
@@ -49,7 +30,7 @@ private struct MenuBarPanel: View {
             footer
         }
         .padding(14)
-        .frame(width: 312)
+        .frame(width: Self.width)
     }
 
     private var header: some View {

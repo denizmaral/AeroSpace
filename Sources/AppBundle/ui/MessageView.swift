@@ -20,6 +20,8 @@ public func getMessageWindow(messageModel: MessageModel) -> some Scene {
         // Available only since #macos15
     }
     .windowResizability(.contentMinSize)
+    // The menu bar item is an NSStatusItem (see MenuBarItem): this is the only scene, it isn't opened at launch
+    .defaultLaunchBehavior(.suppressed)
     //.windowLevel(.floating) //This might be the SwiftUI way of doing window level instead of the onAppear block above, but it's only available from #macos15
 }
 

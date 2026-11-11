@@ -3,40 +3,8 @@ import Common
 import Foundation
 import SwiftUI
 
-/// The menu bar item. SwiftUI puts only an image or a text into the menu bar (AeroSpace issue #1122): the item is drawn
-/// into an image, once per change, and once per frame while a change is animated (``MenuBarAnimator``)
-@MainActor
-struct MenuBarLabel: View {
-    @Environment(\.colorScheme) private var menuColorScheme: ColorScheme
-    @EnvironmentObject private var viewModel: TrayMenuModel
-    @ObservedObject private var animator = MenuBarAnimator.shared
-
-    var body: some View {
-        let state = viewModel.menuBarState
-        MenuBarItemImage(
-            content: MenuBarItemContent(state: state, transition: animator.transition, color: menuColorScheme == .dark ? .white : .black),
-            label: state.trayText,
-        )
-    }
-}
-
-/// The menu bar item as an image, as in the menu bar
-@MainActor
-struct MenuBarItemImage: View {
-    let content: MenuBarItemContent
-    let label: String
-
-    var body: some View {
-        switch content.cgImage {
-            // Using scale: 1 results in a blurry image for unknown reasons
-            case let cgImage?: Image(cgImage, scale: 2, label: Text(label))
-            // In case image can't be rendered fallback to plain text
-            case nil: Text(label)
-        }
-    }
-}
-
-/// The menu bar item, drawn at twice its size in points (the image has a scale of 2)
+/// The menu bar item, drawn at twice its size in points into the image of the item (see ``MenuBarItem``), once per
+/// change and once per frame while a change is animated (``MenuBarAnimator``)
 @MainActor
 struct MenuBarItemContent: View {
     let state: MenuBarState

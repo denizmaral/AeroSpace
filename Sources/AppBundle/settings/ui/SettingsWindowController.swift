@@ -66,6 +66,17 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 /// Opening MarSpace again while it runs (Finder, Spotlight, `open -a MarSpace`) shows the settings window, like other menu
 /// bar apps do
 public final class MarSpaceAppDelegate: NSObject, NSApplicationDelegate {
+    /// Before the accessibility permission is granted: the panel of the item tells how to grant it
+    public func applicationDidFinishLaunching(_ notification: Notification) {
+        // MarSpace has no window most of the time: the menu bar item is an NSStatusItem, and the only SwiftUI scene (the
+        // message window) isn't open. macOS would end an app without windows a few seconds after it started
+        ProcessInfo.processInfo.disableAutomaticTermination("MarSpace manages the windows")
+        MenuBarItem.shared.start()
+    }
+
+    /// SwiftUI ends an app whose only scene is a window when no window is open, also right after the launch
+    public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
     public func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         SettingsWindowController.shared.show()
         return false

@@ -6,7 +6,6 @@ import SwiftUI
 @main
 struct AeroSpaceApp: App {
     @NSApplicationDelegateAdaptor(MarSpaceAppDelegate.self) var appDelegate
-    @StateObject var viewModel = TrayMenuModel.shared
     @StateObject var messageModel = MessageModel.shared
     @Environment(\.openWindow) var openWindow: OpenWindowAction
 
@@ -15,7 +14,6 @@ struct AeroSpaceApp: App {
     }
 
     var body: some Scene {
-        menuBar(viewModel: viewModel)
         getMessageWindow(messageModel: messageModel)
             .onChange(of: messageModel.message) { _, message in
                 if message != nil {
