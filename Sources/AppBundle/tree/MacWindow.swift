@@ -37,6 +37,7 @@ final class MacWindow: Window {
 
         // atomic synchronous section
         if let existing = allWindowsMap[windowId] { return existing }
+        macApp.refreshName() // The window rules and the events of the new window tell the name of the app
         let window = MacWindow(windowId, macApp, lastFloatingSize: rect?.size, parent: data.parent, adaptiveWeight: data.adaptiveWeight, index: data.index)
         if let previousPlacement {
             WindowPlacementStore.markRestored(windowId, macApp)
@@ -108,7 +109,7 @@ final class MacWindow: Window {
 
     /// See ``Window/setAxFrame(_:_:)``
     @MainActor static func invalidateSentFrames(pid: pid_t) {
-        for window in allWindowsMap.values where window.macApp.nsApp.processIdentifier == pid {
+        for window in allWindowsMap.values where window.macApp.pid == pid {
             window.invalidateSentFrame()
         }
     }

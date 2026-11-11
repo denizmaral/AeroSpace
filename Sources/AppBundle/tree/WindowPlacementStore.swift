@@ -206,7 +206,7 @@ enum WindowPlacementStore {
               let nativeWindowId = macApp.nativeWindowId(of: windowId),
               !restoredWindowIds.contains(nativeWindowId)
         else { return nil }
-        return previousRun.placement(nativeWindowId: nativeWindowId, pid: macApp.nsApp.processIdentifier)
+        return previousRun.placement(nativeWindowId: nativeWindowId, pid: macApp.pid)
     }
 
     /// Call it after the window with the previous placement is registered (the registration may be canceled before)
@@ -225,7 +225,7 @@ enum WindowPlacementStore {
             else { continue }
             placements.append(WindowPlacement(
                 nativeWindowId: nativeWindowId,
-                pid: window.macApp.nsApp.processIdentifier,
+                pid: window.macApp.pid,
                 workspace: workspace,
                 isFloating: window.isFloating,
                 isPinned: window.isPinned,
@@ -239,7 +239,7 @@ enum WindowPlacementStore {
             for placement in previousRun.all
                 where !liveIds.contains(placement.nativeWindowId) &&
                 !restoredWindowIds.contains(placement.nativeWindowId) &&
-                NSRunningApplication(processIdentifier: placement.pid) != nil
+                RunningApps.isRunning(pid: placement.pid)
             {
                 placements.append(placement)
             }

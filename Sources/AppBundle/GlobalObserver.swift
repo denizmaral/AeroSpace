@@ -13,6 +13,8 @@ enum GlobalObserver {
         let pid = app?.processIdentifier
         let bundleId = app?.bundleIdentifier
         Task.startUnstructured { @MainActor in
+            // Normally known already: the list of the running apps changes before the notification is posted
+            if notifName == NSWorkspace.didLaunchApplicationNotification.rawValue, let app { RunningApps.get(app) }
             if !TrayMenuModel.shared.isEnabled { return }
             switch notifName {
                 case NSWorkspace.activeSpaceDidChangeNotification.rawValue:
@@ -26,7 +28,10 @@ enum GlobalObserver {
                     MacWindow.invalidateAllSentFrames() // macOS may move windows around
                 case NSWorkspace.didActivateApplicationNotification.rawValue:
                     // Self-healing: the user interacts with the app. Make sure that its windows are where they must be
-                    if let pid { MacWindow.invalidateSentFrames(pid: pid) }
+                    if let pid {
+                        MacWindow.invalidateSentFrames(pid: pid)
+                        MacApp.allAppsMap[pid]?.refreshName()
+                    }
                     MissionControl.exitIfStale()
                 default:
                     break
@@ -63,8 +68,20 @@ enum GlobalObserver {
         }
     }
 
+    /// An app got or lost its Dock icon, was hidden or shown, or quit (see ``RunningApps``): a refresh session if it
+    /// would see the change. NSWorkspace has no notification for the Dock icon, and the others may not be posted for
+    /// an app without one (its utility window can be managed all the same)
+    @MainActor
+    private static func onAppChange(_ app: RunningApp, _ property: String) {
+        // An app that is being launched is registered when it finished launching (didLaunchApplicationNotification)
+        if MacApp.allAppsMap[app.pid] != nil || app.nsApp.activationPolicy == .regular && app.nsApp.isFinishedLaunching {
+            scheduleCancellableCompleteRefreshSession(.globalObserver("NSRunningApplication.\(property)"))
+        }
+    }
+
     @MainActor
     static func initObserver() {
+        RunningApps.onChange = onAppChange
         let nc = NSWorkspace.shared.notificationCenter
         nc.addObserver(forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main, using: onNotif)
         nc.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main, using: onNotif)

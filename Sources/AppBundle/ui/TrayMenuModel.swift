@@ -46,7 +46,7 @@ enum AxPermissionStatus: Equatable {
         let hasFullscreenWindows = $0.allLeafWindowsRecursive.contains { $0.isFullscreen }
         var appBundleUrls: [URL] = []
         for window in $0.allLeafWindowsRecursive {
-            guard appBundleUrls.count < 4, let url = (window.app as? MacApp)?.nsApp.bundleURL, !appBundleUrls.contains(url) else { continue }
+            guard appBundleUrls.count < 4, let url = (window.app as? MacApp)?.bundleUrl, !appBundleUrls.contains(url) else { continue }
             appBundleUrls.append(url)
         }
         return WorkspaceViewModel(

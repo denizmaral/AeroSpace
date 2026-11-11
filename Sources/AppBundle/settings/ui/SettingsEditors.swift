@@ -579,11 +579,10 @@ enum AppCatalog {
 
     static var runningApps: [App] {
         if let running, running.date.timeIntervalSinceNow > -2 { return running.apps }
-        let apps = NSWorkspace.shared.runningApplications
-            .filter { $0.activationPolicy == .regular }
+        let apps = RunningApps.regular
             .compactMap { app -> App? in
-                guard let bundleId = app.bundleIdentifier else { return nil }
-                return App(bundleId: bundleId, name: app.localizedName ?? name(of: bundleId), icon: icon(of: bundleId))
+                guard let bundleId = app.bundleId else { return nil }
+                return App(bundleId: bundleId, name: app.nsApp.localizedName ?? name(of: bundleId), icon: icon(of: bundleId))
             }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
         running = (Date(), apps)

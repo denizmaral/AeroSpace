@@ -11,8 +11,8 @@ private var focusedApp: (any AbstractApp)? {
             return appForTests
         } else {
             check(appForTests == nil)
-            return switch NSWorkspace.shared.frontmostApplication {
-                case let frontmostApplication?: try await MacApp.getOrRegister(frontmostApplication)
+            return switch RunningApps.frontmost {
+                case let frontmost?: try await MacApp.getOrRegister(frontmost)
                 case nil: nil
             }
         }
