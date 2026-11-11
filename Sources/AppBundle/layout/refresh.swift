@@ -148,6 +148,10 @@ func refreshModel_nonCancellable() async {
     if refreshSessionEvent?.isFocusFollowsMouse == true {
         await checkOnFocusChangedCallbacks_nonCancellable()
     } else {
+        // The mouse up after a drag can be missed: the global monitor doesn't see it in MarSpace's own windows, and the
+        // last session of the drag may be still under way and mark the window again. A window that stayed marked wasn't
+        // laid out, and the layout changes weren't persisted until the next click: a restart brought an old layout back
+        if currentlyManipulatedWithMouseWindowId != nil && !isLeftMouseButtonDown { endManipulationWithMouse() }
         Workspace.garbageCollectUnusedWorkspaces()
         Workspace.forceAssignWorkspaces()
         Workspace.movePinnedWindowsToVisibleWorkspaces()

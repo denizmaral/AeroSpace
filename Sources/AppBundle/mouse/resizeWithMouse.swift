@@ -29,15 +29,27 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
     }
 }
 
+/// The mouse button was released
 @MainActor
 func resetManipulatedWithMouseIfPossible() async throws {
-    if currentlyManipulatedWithMouseWindowId != nil {
-        currentlyManipulatedWithMouseWindowId = nil
-        for workspace in Workspace.all {
-            workspace.resetResizeWeightBeforeResizeRecursive()
-        }
+    if endManipulationWithMouse() {
         scheduleCancellableCompleteRefreshSession(.resetManipulatedWithMouse, optimisticallyPreLayoutWorkspaces: true)
     }
+}
+
+/// The window that was moved or resized with the mouse is laid out again, and the tiling trees are persisted again
+/// (see `WindowPlacementStore.persistIfChanged`)
+///
+/// - Returns: false if no window was manipulated with the mouse
+@MainActor
+@discardableResult
+func endManipulationWithMouse() -> Bool {
+    guard currentlyManipulatedWithMouseWindowId != nil else { return false }
+    currentlyManipulatedWithMouseWindowId = nil
+    for workspace in Workspace.all {
+        workspace.resetResizeWeightBeforeResizeRecursive()
+    }
+    return true
 }
 
 private let adaptiveWeightBeforeResizeWithMouseKey = TreeNodeUserDataKey<CGFloat>(key: "adaptiveWeightBeforeResizeWithMouseKey")
