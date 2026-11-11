@@ -4,12 +4,21 @@ import Common
 @MainActor
 private var activeRefreshTask: Task<(), any Error>? = nil
 
+/// The startup session (see initAppBundle) registers the windows that are there and puts them back into the layout of
+/// the previous run. No other complete refresh session is started before it's over: the two would take turns (the
+/// settings are applied right before, which asks for a session), and the other one registered windows as new ones,
+/// laid them out before they were back at their places and persisted that layout. The session that follows the
+/// startup session sees whatever happened meanwhile
+@MainActor
+private var isStartupSessionOver = false
+
 @MainActor
 func scheduleCancellableCompleteRefreshSession(
     _ event: RefreshSessionEvent,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
     if isUnitTest { return } // Complete refresh sessions talk to the real apps via accessibility
+    if !isStartupSessionOver { return }
     activeRefreshTask?.cancel()
     activeRefreshTask = Task.startUnstructured { @MainActor in
         // Coalesce bursts of events (e.g. AX moved/resized notifications during window animations). A newer event
@@ -33,6 +42,7 @@ func runHeavyCompleteRefreshSession(
 ) async {
     let state = signposter.beginInterval(#function, "event: \(event) axTaskLocalAppThreadToken: \(axTaskLocalAppThreadToken?.idForDebug)")
     defer { signposter.endInterval(#function, state) }
+    defer { if event.isStartup { isStartupSessionOver = true } }
     if !TrayMenuModel.shared.isEnabled { return }
     let perf = SessionPerfLog("heavy \(event)")
     defer { perf.finish() }

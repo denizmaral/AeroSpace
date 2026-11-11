@@ -498,7 +498,10 @@ extension [UInt32: AxWindow] {
         // Delay new window detection if mouse is down
         // It helps with apps that allow dragging their tabs out to create new windows
         // AeroSpace issue #1001
-        if isLeftMouseButtonDown { return nil }
+        // Not when MarSpace starts: the windows that are there aren't new, and only the startup session puts them back
+        // into the layout of the previous run (with the button down, it found no windows: they all came later, as new
+        // windows in an arbitrary order)
+        if isLeftMouseButtonDown && !isStartup { return nil }
 
         if let window = try AxWindow.new(windowId: id, axWindow, pid, job) {
             self[id] = window

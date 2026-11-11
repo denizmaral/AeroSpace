@@ -181,12 +181,16 @@ enum WindowPlacementStore {
     private static var restoredWindowIds: Set<UInt32> = []
     private static var lastPersisted: [WindowPlacement] = []
     private static var lastPersistedTrees: [TilingTreeSnapshot] = []
+    private static var didRestoreTilingTrees = false
 
     /// Puts the tiling windows back where they were in the layout of the previous run. Called once, when the windows that
     /// are there at the start of MarSpace are registered (in an arbitrary order, each one placed like a new window), before
     /// the first layout and before the placements are persisted again. A window that shows up later (it was on another
-    /// macOS Space) goes to its workspace, as a new window
+    /// macOS Space) goes to its workspace, as a new window. Only the first call restores: the session that follows the
+    /// startup session is a startup session too, and the layout may have changed meanwhile (the commands after startup)
     static func restoreTilingTreesOfPreviousRun() {
+        if didRestoreTilingTrees { return }
+        didRestoreTilingTrees = true
         guard let previousRun else { return }
         for tree in previousRun.trees {
             Workspace.get(byName: tree.workspace).restoreTilingTree(tree, nativeWindowId: nativeWindowId(of:))
