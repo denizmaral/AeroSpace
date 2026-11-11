@@ -15,9 +15,13 @@ struct ExperimentalUISettings {
     }
 }
 
+/// The style of the menu bar item. Saved by its raw value: an unknown one is the default style
 enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
     case monospacedText
     case systemText
+    case pills
+    case dots
+    case workspaceApps
     case squares
     case i3
     case i3Ordered
@@ -26,51 +30,27 @@ enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
         switch self {
             case .monospacedText: "Monospaced font"
             case .systemText: "System font"
+            case .pills: "Pills"
+            case .dots: "Dots"
+            case .workspaceApps: "Workspace and apps"
             case .squares: "Square images"
             case .i3: "i3 style grouped"
             case .i3Ordered: "i3 style ordered"
+        }
+    }
+    var explanation: String {
+        switch self {
+            case .monospacedText, .systemText: "The workspace that each monitor shows, as text"
+            case .pills: "The workspaces with windows, the focused one filled, one shown on another monitor outlined"
+            case .dots: "A dot for each workspace with windows, the focused one with its name"
+            case .workspaceApps: "The focused workspace and its apps"
+            case .squares: "The workspace that each monitor shows, the focused one filled"
+            case .i3: "The workspaces that the monitors show, then the other ones with windows"
+            case .i3Ordered: "All workspaces with windows, in order"
         }
     }
 }
 
 enum ExperimentalUISettingsItems: String {
     case displayStyle
-}
-
-@MainActor
-func getExperimentalUISettingsMenu(viewModel: TrayMenuModel) -> some View {
-    let color = AppearanceTheme.current == .dark ? Color.white : Color.black
-    return Menu {
-        Text("Menu bar style (macOS 14 or later):")
-        ForEach(MenuBarStyle.allCases, id: \.id) { style in
-            MenuBarStyleButton(style: style, color: color).environmentObject(viewModel)
-        }
-    } label: {
-        // Short: the menu is in the footer of the 312pt wide menu bar panel
-        Label("Menu bar style", systemImage: "paintbrush")
-    }
-    .help("Experimental UI settings (no stability guarantees)")
-}
-
-@MainActor
-struct MenuBarStyleButton: View {
-    @EnvironmentObject var viewModel: TrayMenuModel
-    let style: MenuBarStyle
-    let color: Color
-
-    var body: some View {
-        Button {
-            viewModel.experimentalUISettings.displayStyle = style
-        } label: {
-            Toggle(isOn: .constant(viewModel.experimentalUISettings.displayStyle == style)) {
-                Label {
-                    Text(" -  " + style.title)
-                } icon: {
-                    MenuBarLabel(style: style, color: color)
-                        .environmentObject(viewModel)
-                }
-                .labelStyle(.titleAndIcon)
-            }
-        }
-    }
 }

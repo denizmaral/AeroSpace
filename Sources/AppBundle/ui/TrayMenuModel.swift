@@ -14,6 +14,24 @@ public final class TrayMenuModel: ObservableObject {
     @Published var experimentalUISettings: ExperimentalUISettings = ExperimentalUISettings()
     @Published var settingsHaveProblems: Bool = false
     @Published var axPermissionStatus: AxPermissionStatus = .waitingWithPrompt
+
+    /// What the menu bar item shows
+    @MainActor var menuBarState: MenuBarState {
+        MenuBarState(
+            style: experimentalUISettings.displayStyle,
+            trayText: trayText,
+            trayItems: trayItems,
+            workspaces: workspaces,
+            settingsHaveProblems: settingsHaveProblems,
+        )
+    }
+
+    /// Another style for the menu bar item: the old style fades into the new one
+    @MainActor func setMenuBarStyle(_ style: MenuBarStyle) {
+        let before = menuBarState
+        experimentalUISettings.displayStyle = style
+        MenuBarAnimator.shared.stateDidChange(from: before, to: menuBarState)
+    }
 }
 
 enum AxPermissionStatus: Equatable {
@@ -26,6 +44,7 @@ enum AxPermissionStatus: Equatable {
     let sortedMonitors = globalSortedMonitorInfos
     let focus = globalFocus
     let model = TrayMenuModel.shared
+    let before = model.menuBarState
     model.update(\.trayText, (activeMode?.takeIf { $0 != mainModeId }?.first.map { "(\($0.uppercased())) " } ?? "") +
         sortedMonitors
         .lazy
@@ -35,17 +54,18 @@ enum AxPermissionStatus: Equatable {
             return ($0.visibleWorkspace == focus.workspace && sortedMonitors.count > 1 ? "*" : "") + visibleWorkspaceName
         }
         .joined(separator: " │ "))
+    let isMultiMonitor = sortedMonitors.count > 1
     model.update(\.workspaces, Workspace.all.map {
-        let apps = $0.allLeafWindowsRecursive.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
+        let windows = $0.allLeafWindowsRecursive
+        let apps = windows.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
         let dash = " - "
         let suffix = switch true {
             case !apps.isEmpty: dash + apps.sorted().joinTruncating(separator: ", ", length: 25)
             case $0.isVisible: dash + $0.workspaceMonitorInfo.name
             default: ""
         }
-        let hasFullscreenWindows = $0.allLeafWindowsRecursive.contains { $0.isFullscreen }
         var appBundleUrls: [URL] = []
-        for window in $0.allLeafWindowsRecursive {
+        for window in windows {
             guard appBundleUrls.count < 4, let url = (window.app as? MacApp)?.bundleUrl, !appBundleUrls.contains(url) else { continue }
             appBundleUrls.append(url)
         }
@@ -53,10 +73,12 @@ enum AxPermissionStatus: Equatable {
             name: $0.name,
             suffix: suffix,
             appBundleUrls: appBundleUrls,
+            windowCount: windows.count { $0.lifeStatus.isInhabited },
+            monitorName: isMultiMonitor && $0.isVisible ? $0.workspaceMonitorInfo.name : nil,
             isFocused: focus.workspace == $0,
             isEffectivelyEmpty: $0.isEffectivelyEmpty,
             isVisible: $0.isVisible,
-            hasFullscreenWindows: hasFullscreenWindows,
+            hasFullscreenWindows: windows.contains { $0.isFullscreen },
         )
     })
     var items = sortedMonitors.map {
@@ -75,6 +97,7 @@ enum AxPermissionStatus: Equatable {
         items.insert(mode, at: 0)
     }
     model.update(\.trayItems, items)
+    MenuBarAnimator.shared.stateDidChange(from: before, to: model.menuBarState)
 }
 
 extension TrayMenuModel {
@@ -92,10 +115,17 @@ struct WorkspaceViewModel: Hashable {
     let suffix: String
     /// Up to 4 apps of the workspace (for the icons in the menu)
     let appBundleUrls: [URL]
+    let windowCount: Int
+    /// The monitor that shows the workspace, when there is more than one monitor
+    let monitorName: String?
     let isFocused: Bool
     let isEffectivelyEmpty: Bool
     let isVisible: Bool
     let hasFullscreenWindows: Bool
+
+    /// The menu bar panel and the strips of the menu bar item (pills, dots) leave out the workspaces that are empty and
+    /// not shown: the persistent ones are just noise there
+    var isListed: Bool { !isEffectivelyEmpty || isVisible || isFocused }
 }
 
 enum TrayItemType: String, Hashable {

@@ -113,6 +113,17 @@ macOS Spaces are slow to switch, limited in number, and can't be controlled by a
 instead: the windows of a workspace that isn't shown are moved to a corner of the screen, and come back when you switch
 to it. The menu bar shows the current workspace.
 
+Choose how in the menu bar panel, under "Menu bar style", which shows each style as it would look now:
+- **Monospaced font**, **System font**: the workspace that each monitor shows, as text.
+- **Pills**: all workspaces with windows, the focused one filled, one shown on another monitor outlined.
+- **Dots**: a dot for each workspace with windows, the focused one with its name: the narrowest style that shows them all.
+- **Workspace and apps**: the focused workspace and the icons of its apps.
+- **Square images**, **i3 style grouped**, **i3 style ordered**: the styles of AeroSpace.
+
+When the focus goes to another workspace, the menu bar follows it: the fill of the pills slides over, the focused dot
+moves, the name is pushed up. With "Reduce motion" (System Settings › Accessibility › Display), it fades instead. In
+the panel, a workspace shows how many windows it has, and a display when a monitor shows it.
+
 Use a single macOS Space (one per monitor if "Displays have separate Spaces" is on) and let MarSpace do the rest. When
 MarSpace quits, all windows are put back on screen.
 

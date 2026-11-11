@@ -27,6 +27,9 @@ public func menuBar(viewModel: TrayMenuModel) -> some Scene {
 @MainActor
 private struct MenuBarPanel: View {
     @EnvironmentObject var viewModel: TrayMenuModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion: Bool
+    @Namespace private var focusNamespace
+    @State private var isStylePickerShown = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -54,6 +57,7 @@ private struct MenuBarPanel: View {
             Image(systemName: "square.grid.2x2.fill")
                 .font(.title2)
                 .foregroundStyle(.tint)
+                .symbolEffect(.bounce, value: viewModel.isEnabled)
             VStack(alignment: .leading, spacing: 1) {
                 Text(aeroSpaceAppName).font(.headline)
                 Button {
@@ -103,15 +107,16 @@ private struct MenuBarPanel: View {
 
     @ViewBuilder
     private var workspaces: some View {
-        // The persistent but empty and invisible workspaces are just noise
-        let workspaces = viewModel.workspaces.filter { !$0.isEffectivelyEmpty || $0.isVisible || $0.isFocused }
+        let workspaces = viewModel.workspaces.filter(\.isListed)
         VStack(alignment: .leading, spacing: 6) {
             Text("Workspaces")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                ForEach(workspaces, id: \.name) { WorkspaceTile(workspace: $0) }
+                ForEach(workspaces, id: \.name) { WorkspaceTile(workspace: $0, focusNamespace: focusNamespace) }
             }
+            // The focus slides to the workspace that a click (or a shortcut) focused
+            .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: workspaces.first(where: \.isFocused)?.name)
         }
     }
 
@@ -134,16 +139,34 @@ private struct MenuBarPanel: View {
     }
 
     private var footer: some View {
-        HStack(spacing: 8) {
-            getExperimentalUISettingsMenu(viewModel: viewModel)
-                .menuStyle(.borderlessButton)
-                .controlSize(.small) // The menu is an AppKit control, it ignores the font
-                .fixedSize()
-            Spacer(minLength: 8)
-            Link("Based on AeroSpace (MIT)", destination: URL(string: "https://github.com/nikitabobko/AeroSpace").orDie())
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .fixedSize()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { isStylePickerShown.toggle() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "paintbrush")
+                        Text("Menu bar style")
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .rotationEffect(.degrees(isStylePickerShown ? 90 : 0))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .font(.callout)
+                .foregroundStyle(isStylePickerShown ? .primary : .secondary)
+                .help("How the menu bar shows the workspaces (experimental: no stability guarantees)")
+                Spacer(minLength: 8)
+                Link("Based on AeroSpace (MIT)", destination: URL(string: "https://github.com/nikitabobko/AeroSpace").orDie())
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .fixedSize()
+            }
+            if isStylePickerShown {
+                MenuBarStylePicker()
+                    .transition(reduceMotion ? AnyTransition(OpacityTransition()) : AnyTransition(OpacityTransition().combined(with: MoveTransition(edge: .top))))
+            }
         }
     }
 
@@ -159,7 +182,10 @@ private struct MenuBarPanel: View {
 @MainActor
 private struct WorkspaceTile: View {
     let workspace: WorkspaceViewModel
+    let focusNamespace: Namespace.ID
     @State private var isHovered = false
+
+    private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
 
     var body: some View {
         Button {
@@ -174,6 +200,7 @@ private struct WorkspaceTile: View {
                     .font(.system(.title3, design: .rounded).weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
+                    .foregroundStyle(workspace.isEffectivelyEmpty && !workspace.isFocused ? .secondary : .primary)
                 HStack(spacing: 2) {
                     if workspace.appBundleUrls.isEmpty {
                         Image(systemName: "circle.dashed")
@@ -189,28 +216,56 @@ private struct WorkspaceTile: View {
                 .frame(height: 14)
             }
             .frame(maxWidth: .infinity, minHeight: 54)
-            .background(background, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(workspace.isFocused ? Color.accentColor : .clear, lineWidth: 1.5)
-            }
-            .overlay(alignment: .topTrailing) {
-                if workspace.hasFullscreenWindows {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .padding(5)
+            .background {
+                ZStack {
+                    Self.shape.fill(background)
+                    if workspace.isFocused {
+                        Self.shape
+                            .fill(Color.accentColor.opacity(0.22))
+                            .strokeBorder(Color.accentColor, lineWidth: 1.5)
+                            .matchedGeometryEffect(id: "focus", in: focusNamespace)
+                    }
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(alignment: .topLeading) {
+                if workspace.windowCount > 1 {
+                    Text("\(workspace.windowCount)")
+                        .font(.system(size: 9, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundStyle(.tertiary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                HStack(spacing: 2) {
+                    if workspace.monitorName != nil {
+                        Image(systemName: "display")
+                    }
+                    if workspace.hasFullscreenWindows {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    }
+                }
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.secondary)
+                .padding(5)
+            }
+            .contentShape(Self.shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(TileButtonStyle())
         .onHover { isHovered = $0 }
-        .help(workspace.name + workspace.suffix)
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .help(help)
+    }
+
+    private var help: String {
+        var lines = [workspace.name + workspace.suffix]
+        let windows = workspace.windowCount == 1 ? "1 window" : "\(workspace.windowCount) windows"
+        lines.append([workspace.windowCount > 0 ? windows : nil, workspace.monitorName.map { "on \($0)" }].compactMap(\.self).joined(separator: " "))
+        return lines.filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
     private var background: Color {
         switch true {
-            case workspace.isFocused: Color.accentColor.opacity(0.22)
             case isHovered: Color.primary.opacity(0.10)
             case workspace.isVisible: Color.primary.opacity(0.08)
             default: Color.primary.opacity(0.04)
@@ -218,13 +273,112 @@ private struct WorkspaceTile: View {
     }
 }
 
-/// The icons of the apps in the workspace tiles. The body of the tiles is evaluated on every update of the tray model,
-/// the icon lookup (file system, IconServices) runs once per app. The system icon is lazy and multi resolution: with its
-/// size set to the tile size, only the small representation is ever rendered
+/// Gives way a little while it's pressed
+private struct TileButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.95 : 1)
+            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+/// The styles of the menu bar item, each one as it would look now
 @MainActor
-private enum AppIconCache {
+private struct MenuBarStylePicker: View {
+    @EnvironmentObject var viewModel: TrayMenuModel
+    @Environment(\.colorScheme) private var colorScheme: ColorScheme
+
+    var body: some View {
+        let state = viewModel.menuBarState
+        let selected = state.style
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
+            ForEach(MenuBarStyle.allCases) { style in
+                let preview = MenuBarStylePreview(state: state.with(style: style), isDark: colorScheme == .dark)
+                MenuBarStyleCard(style: style, isSelected: style == selected, preview: preview) {
+                    viewModel.setMenuBarStyle(style)
+                }
+            }
+        }
+    }
+}
+
+@MainActor
+private struct MenuBarStyleCard: View {
+    let style: MenuBarStyle
+    let isSelected: Bool
+    let preview: MenuBarStylePreview
+    let select: () -> Void
+    @State private var isHovered = false
+
+    private static let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+
+    var body: some View {
+        Button(action: select) {
+            VStack(spacing: 5) {
+                preview
+                    .equatable()
+                    .frame(maxWidth: .infinity, minHeight: 26)
+                    .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                HStack(spacing: 3) {
+                    if isSelected { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
+                    Text(style.title).lineLimit(1)
+                }
+                .font(.caption)
+                .foregroundStyle(isSelected ? .primary : .secondary)
+            }
+            .padding(6)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.18) : Color.primary.opacity(isHovered ? 0.08 : 0.03),
+                in: Self.shape,
+            )
+            .overlay { Self.shape.strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 1.5) }
+            .contentShape(Self.shape)
+        }
+        .buttonStyle(TileButtonStyle())
+        .onHover { isHovered = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+        .help(style.explanation)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+/// The menu bar item in a style, scaled down if it's wider than the card. Drawn again only when what it shows changes
+@MainActor
+private struct MenuBarStylePreview: View, Equatable {
+    let state: MenuBarState
+    let isDark: Bool
+
+    private static let maxWidth: CGFloat = 120
+
+    var body: some View {
+        if let cgImage = MenuBarItemContent(state: state, transition: nil, color: isDark ? .white : .black).cgImage {
+            let size = CGSize(width: CGFloat(cgImage.width) / 2, height: CGFloat(cgImage.height) / 2)
+            let scale = min(1, Self.maxWidth / max(size.width, 1))
+            Image(cgImage, scale: 2, label: Text(state.style.title))
+                .resizable()
+                .frame(width: size.width * scale, height: size.height * scale)
+        }
+    }
+}
+
+extension MenuBarState {
+    /// The state in another style, for a preview: without the warning about the settings, which every style shows
+    fileprivate func with(style: MenuBarStyle) -> MenuBarState {
+        var result = self
+        result.style = style
+        result.settingsHaveProblems = false
+        return result
+    }
+}
+
+/// The icons of the apps in the workspace tiles and in the menu bar item. The body of the tiles is evaluated on every
+/// update of the tray model, the icon lookup (file system, IconServices) runs once per app. The system icon is lazy and
+/// multi resolution: only the representation for the size that it's drawn at is ever rendered
+@MainActor
+enum AppIconCache {
     static let size: CGFloat = 14
     private static var icons: [URL: NSImage] = [:]
+    private static var bitmaps: [URL: CGImage] = [:]
 
     static func icon(_ url: URL) -> NSImage {
         if let icon = icons[url] { return icon }
@@ -233,6 +387,24 @@ private enum AppIconCache {
         icon.size = NSSize(width: size, height: size)
         icons[url] = icon
         return icon
+    }
+
+    /// The icon for the menu bar item, `side` pixels wide, in the standard dynamic range: the renderer of the item drew
+    /// it all in an HDR color space for an HDR icon (macOS 26), in which its transparent parts came out black. Drawn once
+    /// per app, the frames of an animation only copy it
+    static func bitmap(_ url: URL, side: Int) -> CGImage? {
+        if let bitmap = bitmaps[url], bitmap.width == side { return bitmap }
+        if bitmaps.count >= 64 { bitmaps.removeAll() }
+        guard let srgb = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = unsafe CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0, space: srgb, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        icon(url).draw(in: NSRect(x: 0, y: 0, width: side, height: side))
+        NSGraphicsContext.restoreGraphicsState()
+        let bitmap = context.makeImage()
+        bitmaps[url] = bitmap
+        return bitmap
     }
 }
 
