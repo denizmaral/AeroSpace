@@ -59,11 +59,20 @@ public final class TrayMenuModel: ObservableObject {
         setFavorites(favorites)
     }
 
-    /// The order of the favorites in the strips of the menu bar item. nil: at the end
-    @MainActor func moveFavorite(_ workspace: String, before other: String?) {
-        var favorites = experimentalUISettings.favoriteWorkspaces.filter { $0 != workspace }
-        favorites.insert(workspace, at: other.flatMap { favorites.firstIndex(of: $0) } ?? favorites.endIndex)
-        setFavorites(favorites)
+    /// A workspace is dragged into the strip in the panel, or within it, before `other` (nil: at the end). Without
+    /// favorites, the workspaces that the strip shows become the favorites, the dragged one joins them (see ``StripWell``)
+    @MainActor func dropFavorite(_ workspace: String, before other: String?) {
+        setFavorites(StripWell.favorites(dropping: workspace, before: other, in: favoritesOrStrip))
+    }
+
+    /// A workspace is dragged out of the strip in the panel
+    @MainActor func removeFavorite(_ workspace: String) {
+        setFavorites(StripWell.favorites(removing: workspace, from: favoritesOrStrip))
+    }
+
+    @MainActor private var favoritesOrStrip: [String] {
+        let favorites = experimentalUISettings.favoriteWorkspaces
+        return favorites.isEmpty ? menuBarState.strip.map(\.name) : favorites
     }
 
     @MainActor private func setFavorites(_ favorites: [String]) {

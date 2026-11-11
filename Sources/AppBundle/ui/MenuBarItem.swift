@@ -166,9 +166,20 @@ final class MenuBarItem: NSObject, NSWindowDelegate {
     }
 }
 
-/// The window of the panel: no title bar, above the other windows like a menu, and it takes the keyboard (⌘Q, Escape)
+/// The window of the panel: no title bar, above the other windows like a menu, and it takes the keyboard (⌘Q, Escape, the
+/// keys of the workspaces: see ``PanelKeyAction``)
 final class MenuBarPanelWindow: NSPanel {
-    static let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+    /// The panels of macOS 26 are rounder. The tiles inside are concentric with it (see ``innerCornerRadius``)
+    static var cornerRadius: CGFloat {
+        if #available(macOS 26, *) { 24 } else { 14 }
+    }
+    static var shape: RoundedRectangle { RoundedRectangle(cornerRadius: cornerRadius, style: .continuous) }
+    /// Between the edge of the panel and its content
+    static let padding: CGFloat = 14
+    /// The tiles and the strip, ``padding`` in from the edge: concentric with the panel (macOS 26)
+    static var innerCornerRadius: CGFloat {
+        if #available(macOS 26, *) { max(6, cornerRadius - padding) } else { 10 }
+    }
 
     init() {
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: true)
@@ -181,6 +192,24 @@ final class MenuBarPanelWindow: NSPanel {
     }
 
     override var canBecomeKey: Bool { true }
+
+    /// The key of a workspace focuses it, with Option the workspace is kept in the menu bar or not any more. Before the
+    /// views: the panel has no text to type into, and SwiftUI may keep keys that nothing handles
+    override func sendEvent(_ event: NSEvent) {
+        let model = TrayMenuModel.shared
+        guard event.type == .keyDown, model.isEnabled, model.axPermissionStatus == .granted,
+              let action = PanelKeyAction.of(event, workspaces: model.workspaces.map(\.name))
+        else { return super.sendEvent(event) }
+        switch action {
+            case .focus(let name):
+                guard let token: RunSessionGuard = .isServerEnabled else { return }
+                Task.startUnstructured {
+                    try await runLightSession(.menuBarButton, token) { _ = Workspace.get(byName: name).focusWorkspace() }
+                }
+            case .toggleFavorite(let name):
+                model.toggleFavorite(name)
+        }
+    }
 
     override func cancelOperation(_ sender: Any?) {
         performClose(sender)

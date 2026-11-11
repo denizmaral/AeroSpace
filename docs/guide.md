@@ -125,8 +125,18 @@ Choose how in the menu bar panel, under "Menu bar style", which shows each style
 - **Square images**, **i3 style grouped**, **i3 style ordered**: the styles of AeroSpace.
 
 When the focus goes to another workspace, the menu bar follows it: the fill of the pills slides over, the focused dot
-moves, the name is pushed up. With "Reduce motion" (System Settings › Accessibility › Display), it fades instead. In
-the panel, a workspace shows how many windows it has, and a display when a monitor shows it.
+moves, the name is pushed up. With "Reduce motion" (System Settings › Accessibility › Display), it fades instead.
+
+The panel shows the menu bar item at the top, half again as big, and a tile for every workspace with its windows as
+panes, each one with the icon of its app (a display when a monitor shows the workspace). In the panel:
+- Click a tile, or type the workspace's key, to go there.
+- Drag a window by its icon onto another tile to move it there.
+- Click the star of a tile (shown while the mouse is over it), or type Option and the workspace's key, to keep the
+  workspace in the menu bar, or not any more.
+- "Edit" next to the menu bar item: drag workspaces from the tiles into it, within it to reorder them, and out of it (or
+  ×) to remove them, like customizing a toolbar. "Automatic" goes back to every workspace with windows.
+- Under "Menu bar style", the menu bar shows a style while the mouse is over it; each style tells what it shows (names,
+  windows, apps, monitors) and how wide it is in the menu bar now.
 
 The styles with a row of workspaces (Pills, Dots, i3) work like the workspace buttons of a bar: click a workspace to go
 there. A right click, or a click on the workspace that you're on, opens the panel; turn off "Click to switch workspace"

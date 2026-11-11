@@ -11,6 +11,7 @@ struct MenuBarPanel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion: Bool
     @Namespace private var focusNamespace
     @State private var isStylePickerShown = false
+    @State private var isEditingStrip = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -22,6 +23,7 @@ struct MenuBarPanel: View {
                     configWarnings
                 }
                 if viewModel.isEnabled {
+                    StripWellView(isEditing: $isEditingStrip)
                     workspaces
                 }
             }
@@ -29,7 +31,7 @@ struct MenuBarPanel: View {
             actions
             footer
         }
-        .padding(14)
+        .padding(MenuBarPanelWindow.padding)
         .frame(width: Self.width)
     }
 
@@ -90,14 +92,26 @@ struct MenuBarPanel: View {
     private var workspaces: some View {
         let workspaces = viewModel.workspaces.filter(\.isListed)
         VStack(alignment: .leading, spacing: 6) {
-            Text("Workspaces")
+            Text(isEditingStrip ? "Drag workspaces into the menu bar above" : "Workspaces")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                ForEach(workspaces, id: \.name) { WorkspaceTile(workspace: $0, focusNamespace: focusNamespace) }
+            TileGlassContainer {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                    ForEach(workspaces, id: \.name) {
+                        WorkspaceTile(workspace: $0, focusNamespace: focusNamespace, isEditingStrip: isEditingStrip)
+                    }
+                }
             }
             // The focus slides to the workspace that a click (or a shortcut) focused
             .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: workspaces.first(where: \.isFocused)?.name)
+            // A workspace dragged out of the strip: it isn't in the menu bar any more
+            .dropDestination(for: String.self) { items, _ in
+                guard isEditingStrip, case .workspace(let name)? = items.first.flatMap(PanelDrag.init),
+                      viewModel.menuBarState.strip.contains(where: { $0.name == name })
+                else { return false }
+                viewModel.removeFavorite(name)
+                return true
+            }
         }
     }
 
@@ -164,49 +178,46 @@ struct MenuBarPanel: View {
 private struct WorkspaceTile: View {
     let workspace: WorkspaceViewModel
     let focusNamespace: Namespace.ID
+    /// The tiles are dragged into the strip then, not their windows
+    let isEditingStrip: Bool
     @EnvironmentObject private var viewModel: TrayMenuModel
     @State private var isHovered = false
+    @State private var isTargeted = false
 
-    private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: MenuBarPanelWindow.innerCornerRadius, style: .continuous) }
 
     var body: some View {
-        Button {
+        let isFavorite = viewModel.experimentalUISettings.favoriteWorkspaces.contains(workspace.name)
+        let tile = Button {
             guard let token: RunSessionGuard = .isServerEnabled else { return }
             let name = workspace.name
             Task.startUnstructured {
                 try await runLightSession(.menuBarButton, token) { _ = Workspace.get(byName: name).focusWorkspace() }
             }
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 5) {
                 Text(workspace.name)
                     .font(.system(.title3, design: .rounded).weight(.semibold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
                     .foregroundStyle(workspace.isEffectivelyEmpty && !workspace.isFocused ? .secondary : .primary)
-                HStack(spacing: 2) {
-                    if workspace.appBundleUrls.isEmpty {
-                        Image(systemName: "circle.dashed")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
-                    }
-                    ForEach(workspace.appBundleUrls, id: \.self) { url in
-                        Image(nsImage: AppIconCache.icon(url))
-                            .resizable()
-                            .frame(width: AppIconCache.size, height: AppIconCache.size)
-                    }
+                if workspace.windows.isEmpty {
+                    Image(systemName: "circle.dashed")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                        .frame(height: PaneMapView.size.height)
+                } else {
+                    PaneMapView(windows: workspace.windows, canDragWindows: !isEditingStrip)
                 }
-                .frame(height: 14)
             }
-            .frame(maxWidth: .infinity, minHeight: 54)
-            .background {
-                ZStack {
-                    Self.shape.fill(background)
-                    if workspace.isFocused {
-                        Self.shape
-                            .fill(Color.accentColor.opacity(0.22))
-                            .strokeBorder(Color.accentColor, lineWidth: 1.5)
-                            .matchedGeometryEffect(id: "focus", in: focusNamespace)
-                    }
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background { shape.fill(background) }
+            .overlay { shape.strokeBorder(Color.accentColor, lineWidth: 1.5).opacity(isTargeted ? 1 : 0) }
+            .modifier(FocusHighlight(isFocused: workspace.isFocused, shape: shape, namespace: focusNamespace))
+            .overlay(alignment: .bottomTrailing) {
+                if isHovered || isFavorite {
+                    FavoriteStar(name: workspace.name, isFavorite: isFavorite) { viewModel.toggleFavorite(workspace.name) }
+                        .padding(3)
                 }
             }
             .overlay(alignment: .topLeading) {
@@ -231,17 +242,28 @@ private struct WorkspaceTile: View {
                 .foregroundStyle(.secondary)
                 .padding(5)
             }
-            .contentShape(Self.shape)
+            .contentShape(shape)
         }
         .buttonStyle(TileButtonStyle())
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .help(help)
         .contextMenu {
-            let isFavorite = viewModel.experimentalUISettings.favoriteWorkspaces.contains(workspace.name)
-            Button(isFavorite ? "Remove from the Menu Bar" : "Keep in the Menu Bar", systemImage: isFavorite ? "pin.slash" : "pin") {
+            Button(isFavorite ? "Remove from the Menu Bar" : "Keep in the Menu Bar", systemImage: isFavorite ? "star.slash" : "star") {
                 viewModel.toggleFavorite(workspace.name)
             }
+        }
+        if isEditingStrip {
+            tile.draggable(PanelDrag.workspace(workspace.name).string) { DragChip(name: workspace.name) }
+        } else {
+            // A window dragged from another workspace moves here
+            tile.dropDestination(for: String.self) { items, _ in
+                guard case .window(let windowId)? = items.first.flatMap(PanelDrag.init),
+                      !workspace.windows.contains(where: { $0.windowId == windowId })
+                else { return false }
+                moveWindowFromPanel(windowId, to: workspace.name)
+                return true
+            } isTargeted: { isTargeted = $0 }
         }
     }
 
@@ -298,10 +320,12 @@ private struct MenuBarStylePicker: View {
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
-            .opacity(state.style.showsStrip ? 1 : 0.5)
-            .help(state.style.showsStrip ? "" : "For the styles that show a row of workspaces: Pills, Dots, i3")
-            FavoriteWorkspacesPicker(state: state)
+            .opacity(selected.showsStrip ? 1 : 0.5)
+            .help(selected.showsStrip ? "" : "For the styles that show a row of workspaces: Pills, Dots, i3")
+            FavoriteWorkspacesPicker(state: state, isForTheStyle: selected.showsStrip)
         }
+        // The mouse leaves the cards with the picker: the menu bar shows the chosen style again
+        .onDisappear { viewModel.previewMenuBarStyle(nil) }
     }
 }
 
@@ -309,6 +333,8 @@ private struct MenuBarStylePicker: View {
 @MainActor
 private struct FavoriteWorkspacesPicker: View {
     let state: MenuBarState
+    /// The chosen style shows a row of workspaces
+    let isForTheStyle: Bool
     @EnvironmentObject var viewModel: TrayMenuModel
 
     var body: some View {
@@ -340,8 +366,8 @@ private struct FavoriteWorkspacesPicker: View {
                 .foregroundStyle(.tertiary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .opacity(state.style.showsStrip ? 1 : 0.5)
-        .help(state.style.showsStrip ? "" : "For the styles that show a row of workspaces: Pills, Dots, i3")
+        .opacity(isForTheStyle ? 1 : 0.5)
+        .help(isForTheStyle ? "" : "For the styles that show a row of workspaces: Pills, Dots, i3")
     }
 }
 
@@ -378,6 +404,7 @@ private struct MenuBarStyleCard: View {
     let isSelected: Bool
     let preview: MenuBarStylePreview
     let select: () -> Void
+    @EnvironmentObject private var viewModel: TrayMenuModel
     @State private var isHovered = false
 
     private static let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
@@ -385,10 +412,7 @@ private struct MenuBarStyleCard: View {
     var body: some View {
         Button(action: select) {
             VStack(spacing: 5) {
-                preview
-                    .equatable()
-                    .frame(maxWidth: .infinity, minHeight: 26)
-                    .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                preview.equatable()
                 HStack(spacing: 3) {
                     if isSelected { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
                     Text(style.title).lineLimit(1)
@@ -405,14 +429,23 @@ private struct MenuBarStyleCard: View {
             .contentShape(Self.shape)
         }
         .buttonStyle(TileButtonStyle())
-        .onHover { isHovered = $0 }
+        .onHover { hovering in
+            isHovered = hovering
+            // The menu bar shows the style while the mouse is over it. The next card may come first: only its own
+            if hovering {
+                viewModel.previewMenuBarStyle(style)
+            } else if viewModel.previewStyle == style {
+                viewModel.previewMenuBarStyle(nil)
+            }
+        }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .help(style.explanation)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
-/// The menu bar item in a style, scaled down if it's wider than the card. Drawn again only when what it shows changes
+/// The menu bar item in a style, scaled down if it's wider than the card, with what the style shows and how wide it is in
+/// the menu bar. Drawn again only when what it shows changes
 @MainActor
 private struct MenuBarStylePreview: View, Equatable {
     let state: MenuBarState
@@ -421,12 +454,31 @@ private struct MenuBarStylePreview: View, Equatable {
     private static let maxWidth: CGFloat = 120
 
     var body: some View {
-        if let cgImage = MenuBarItemContent(state: state, transition: nil, color: isDark ? .white : .black).cgImage {
-            let size = CGSize(width: CGFloat(cgImage.width) / 2, height: CGFloat(cgImage.height) / 2)
-            let scale = min(1, Self.maxWidth / max(size.width, 1))
-            Image(cgImage, scale: 2, label: Text(state.style.title))
-                .resizable()
-                .frame(width: size.width * scale, height: size.height * scale)
+        let cgImage = MenuBarItemContent(state: state, transition: nil, color: isDark ? .white : .black).cgImage
+        VStack(spacing: 3) {
+            Group {
+                if let cgImage {
+                    let size = CGSize(width: CGFloat(cgImage.width) / 2, height: CGFloat(cgImage.height) / 2)
+                    let scale = min(1, Self.maxWidth / max(size.width, 1))
+                    Image(cgImage, scale: 2, label: Text(state.style.title))
+                        .resizable()
+                        .frame(width: size.width * scale, height: size.height * scale)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 26)
+            .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            HStack(spacing: 4) {
+                ForEach(state.style.encodings, id: \.self) { encoding in
+                    Image(systemName: encoding.symbol).help(encoding.help)
+                }
+                Spacer(minLength: 2)
+                if let cgImage {
+                    Text("\(cgImage.width / 2) pt").monospacedDigit().help("Its width in the menu bar now")
+                }
+            }
+            .font(.system(size: 8, weight: .medium))
+            .foregroundStyle(.tertiary)
+            .padding(.horizontal, 2)
         }
     }
 }
