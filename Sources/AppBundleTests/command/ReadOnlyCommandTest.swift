@@ -20,7 +20,7 @@ struct ReadOnlyCommandTest {
     @Test func testMutatingCommandsAreNotReadOnly() {
         for command in [
             "focus left", "workspace 1", "move left", "layout floating", "pin", "close", "reload-config", "mode main",
-            "move-node-to-workspace 2", "fullscreen", "balance-sizes", "enable toggle", "swap left",
+            "move-node-to-workspace 2", "fullscreen", "balance-sizes", "enable toggle", "swap left", "tile-floating-windows",
         ] {
             #expect(parseCliArgs(command)?.isReadOnly == false, "\(command)")
         }

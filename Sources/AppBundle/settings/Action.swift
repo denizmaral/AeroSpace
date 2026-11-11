@@ -36,6 +36,8 @@ enum Action: Codable, Sendable, Equatable {
     /// Shows the floating window on every workspace (Hyprland's `pin`)
     case pin(PinState)
     case flattenWorkspaceTree
+    /// Makes all floating windows of the workspace tiling
+    case tileFloatingWindows
     case balanceSizes
     case closeWindow
     case closeAllWindowsButCurrent
@@ -104,6 +106,7 @@ enum Action: Codable, Sendable, Equatable {
             case .exitFullscreen(let kind): [kind.command, "off"]
             case .pin(let state): state == .toggle ? ["pin"] : ["pin", state.rawValue]
             case .flattenWorkspaceTree: ["flatten-workspace-tree"]
+            case .tileFloatingWindows: ["tile-floating-windows"]
             case .balanceSizes: ["balance-sizes"]
             case .closeWindow: ["close"]
             case .closeAllWindowsButCurrent: ["close-all-windows-but-current"]
@@ -169,6 +172,7 @@ enum Action: Codable, Sendable, Equatable {
             case .exitFullscreen(let kind): args = kind.args(rawArgs, .off)
             case .pin(let state): args = PinCmdArgs(rawArgs: rawArgs, toggle: state == .toggle ? .toggle : state == .on ? .on : .off)
             case .flattenWorkspaceTree: args = FlattenWorkspaceTreeCmdArgs(rawArgs: rawArgs.slice)
+            case .tileFloatingWindows: args = TileFloatingWindowsCmdArgs(rawArgs: rawArgs.slice)
             case .balanceSizes: args = BalanceSizesCmdArgs(rawArgs: rawArgs.slice)
             case .closeWindow: args = CloseCmdArgs(rawArgs: rawArgs.slice)
             case .closeAllWindowsButCurrent: args = CloseAllWindowsButCurrentCmdArgs(rawArgs: rawArgs.slice)

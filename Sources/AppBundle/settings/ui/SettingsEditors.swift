@@ -50,7 +50,7 @@ struct ActionListEditor: View {
 enum ActionKind: String, CaseIterable, Identifiable {
     case focus, cycleFocus, focusBackAndForth, move, swap, joinWith, resize
     case workspace, workspaceBackAndForth, moveWindowToWorkspace, moveWorkspaceToMonitor
-    case layout, fullscreen, pin, flattenWorkspaceTree, balanceSizes
+    case layout, fullscreen, pin, tileFloatingWindows, flattenWorkspaceTree, balanceSizes
     case closeWindow, closeAllWindowsButCurrent
     case enterMode, reloadSettings, moveMouse, custom
 
@@ -72,6 +72,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .layout: "Change the layout"
             case .fullscreen: "Fullscreen"
             case .pin: "Pin the floating window"
+            case .tileFloatingWindows: "Tile all floating windows"
             case .flattenWorkspaceTree: "Reset the layout of the workspace"
             case .balanceSizes: "Balance the window sizes"
             case .closeWindow: "Close the window"
@@ -99,7 +100,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
         [.focus, .cycleFocus, .focusBackAndForth],
         [.move, .swap, .joinWith, .resize],
         [.workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor],
-        [.layout, .fullscreen, .pin, .flattenWorkspaceTree, .balanceSizes],
+        [.layout, .fullscreen, .pin, .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes],
         [.closeWindow, .closeAllWindowsButCurrent],
         [.enterMode, .moveMouse], // Settings apply right away: reloading them is only kept for existing shortcuts
         [.custom],
@@ -121,6 +122,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .layout: .layout
             case .fullscreen, .enterFullscreen, .exitFullscreen: .fullscreen
             case .pin: .pin
+            case .tileFloatingWindows: .tileFloatingWindows
             case .flattenWorkspaceTree: .flattenWorkspaceTree
             case .balanceSizes: .balanceSizes
             case .closeWindow: .closeWindow
@@ -149,6 +151,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .layout: .layout([.tiles, .accordion])
             case .fullscreen: context == .shortcut ? .fullscreen(.marSpace) : .enterFullscreen(.marSpace)
             case .pin: context == .shortcut ? .pin(.toggle) : .pin(.on) // A rule pins the window that has just appeared
+            case .tileFloatingWindows: .tileFloatingWindows
             case .flattenWorkspaceTree: .flattenWorkspaceTree
             case .balanceSizes: .balanceSizes
             case .closeWindow: .closeWindow
@@ -252,7 +255,7 @@ struct ActionEditor: View {
                 }
                 .labelsHidden().fixedSize()
             case .custom(let line): CustomCommandField(line: line) { action = .custom($0) }
-            case .focusBackAndForth, .workspaceBackAndForth, .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent,
+            case .focusBackAndForth, .workspaceBackAndForth, .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent,
                  .reloadSettings:
                 EmptyView()
         }

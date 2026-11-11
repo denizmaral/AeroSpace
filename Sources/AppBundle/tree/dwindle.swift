@@ -153,6 +153,12 @@ private func applyReadyDwindleSplits() {
 }
 
 extension Window {
+    /// The window was just detected and its split isn't applied yet: its place in the tree isn't the final one
+    @MainActor
+    var hasPendingDwindleSplit: Bool {
+        dwindleSplitQueue.contains { $0.window === self && $0.state != .done && !$0.isStale }
+    }
+
     /// Captures the split for the window that was just bound right after its anchor. nil if the split doesn't apply.
     /// The caller must apply (``applyDwindleSplit(_:)``) or discard it, later splits wait for it
     @MainActor

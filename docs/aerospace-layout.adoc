@@ -62,7 +62,8 @@ Possible values:
 * `h_tiles|v_tiles|h_accordion|v_accordion` - Change both tiling layout and orientation in one go
 * `tiles|accordion` - Change tiling layout but preserve orientation
 * `horizontal|vertical` - Change orientation but preserve layout
-* `tiling|floating` - Toggle between floating/tiling mode
+* `tiling|floating` - Toggle between floating/tiling mode +
+A tiling window that is made floating goes back to its place in the layout, with its size, when it's made tiling again
 +
 If several `<target-layout>` are supplied, then the first one that doesn't describe the currently active layout is applied.
 

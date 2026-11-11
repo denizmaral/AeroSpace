@@ -1,7 +1,8 @@
 import AppKit
 import Common
 
-/// The place of a tiling window that left the tiling tree for a macOS native state (fullscreen, minimized, hidden app).
+/// The place of a tiling window that left the tiling tree for a macOS native state (fullscreen, minimized, hidden app), or
+/// that the user made floating (`layout floating`).
 ///
 /// When the window leaves the native state, it comes back to the same place. Otherwise it would be placed as a new window
 /// (e.g. with dwindle placement, it would split the most recent window), and every fullscreen round trip would change the
@@ -94,6 +95,31 @@ extension Window {
             case .floatingWindowsContainer, .macosPopupWindowsContainer, nil:
                 tilingSlot = nil
                 bind(to: container, adaptiveWeight: adaptiveWeight, index: INDEX_BIND_LAST)
+        }
+    }
+
+    /// `layout floating`: the user makes the window floating. A tiling window remembers its place (``tilingSlot``) like a
+    /// window that leaves for a macOS native state: made tiling again, it comes back to it
+    @MainActor
+    func bindAsFloatingWindowRememberingTilingSlot(to workspace: Workspace) {
+        // A window that was just detected has no place to remember yet (e.g. a window rule makes it floating)
+        guard !hasPendingDwindleSplit, case .tilingContainer(let parent) = windowParentCases, parent.nodeWorkspace === workspace else {
+            bindAsFloatingWindow(to: workspace)
+            return
+        }
+        let siblings = siblingsIncludingAwayNodes(parent)
+        let previous = bindAsFloatingWindow(to: workspace).orDie()
+        tilingSlot = TilingSlot(leaving: self, parent, previous, siblings)
+    }
+
+    /// `layout tiling` for a floating window: back to the place where it was made floating, with its size. Like a new
+    /// window if it has none (e.g. a dialog), or if the place is gone
+    @MainActor
+    func tileFloatingWindow(on workspace: Workspace) async throws {
+        // The size to go back to when the window is made floating again
+        lastFloatingSize = (try? await getAxSize(.nonCancellable)) ?? lastFloatingSize
+        if !bindBackToTilingSlot(on: workspace) {
+            try await relayoutWindow(on: workspace, .nonCancellable, forceTile: true)
         }
     }
 
@@ -377,11 +403,13 @@ private func restoredWeight(_ weight: CGFloat, siblings: [WeightedSibling], in p
     return weight * now / before
 }
 
-/// The windows of the workspace that are away in a macOS native state and have a place in its tiling tree
+/// The windows of the workspace that are away (in a macOS native state, or made floating by the user) and have a place in
+/// its tiling tree
 @MainActor
 private func allAwayWindows(of workspace: Workspace) -> [Window] {
     // The existing containers only: the accessors of the workspace create them
-    let containers = workspace.children.filter { $0 is MacosFullscreenWindowsContainer || $0 is MacosHiddenAppsWindowsContainer } +
+    let containers = workspace.children
+        .filter { $0 is MacosFullscreenWindowsContainer || $0 is MacosHiddenAppsWindowsContainer || $0 is FloatingWindowsContainer } +
         [macosMinimizedWindowsContainer] // Global
     return containers.flatMap(\.children).compactMap { $0 as? Window }.filter { $0.tilingSlot != nil }
 }

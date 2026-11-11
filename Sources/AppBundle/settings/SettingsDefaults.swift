@@ -41,6 +41,7 @@ extension Settings {
                 shortcut([], .escape, .enterMode(mainModeId)),
                 shortcut([], .r, .flattenWorkspaceTree, .enterMode(mainModeId)),
                 shortcut([], .f, .layout([.floating, .tiling]), .enterMode(mainModeId)),
+                shortcut([], .t, .tileFloatingWindows, .enterMode(mainModeId)),
                 shortcut([], .delete, .closeAllWindowsButCurrent, .enterMode(mainModeId)),
                 shortcut(controlOptionShift, .h, .joinWith(.left), .enterMode(mainModeId)),
                 shortcut(controlOptionShift, .j, .joinWith(.down), .enterMode(mainModeId)),

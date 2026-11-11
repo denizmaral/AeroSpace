@@ -168,6 +168,9 @@ let test_help_generated = """
     USAGE: test [-h|--help] <lhs> = <rhs>
        OR: test [-h|--help] <lhs> ~= <rhs>
     """
+let tile_floating_windows_help_generated = """
+    USAGE: tile-floating-windows [-h|--help] [--workspace <workspace>]
+    """
 let trigger_binding_help_generated = """
     USAGE: trigger-binding [-h|--help] --mode <mode-id> [--] <binding>
     """

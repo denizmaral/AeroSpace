@@ -42,6 +42,7 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case subscribe
     case summonWorkspace = "summon-workspace"
     case swap
+    case tileFloatingWindows = "tile-floating-windows"
     case test
     case testNot = "test-not"
     case triggerBinding = "trigger-binding"
@@ -139,6 +140,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(SummonWorkspaceCmdArgs.init)
             case .swap:
                 result[kind.rawValue] = SubCommandParser(parseSwapCmdArgs)
+            case .tileFloatingWindows:
+                result[kind.rawValue] = SubCommandParser(TileFloatingWindowsCmdArgs.init)
             case .test:
                 result[kind.rawValue] = SubCommandParser(parseTestCmdArgs)
             case .testNot:

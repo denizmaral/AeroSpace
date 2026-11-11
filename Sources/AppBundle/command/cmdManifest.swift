@@ -84,6 +84,8 @@ extension CmdArgs {
                 command = SummonWorkspaceCommand(args: self as! SummonWorkspaceCmdArgs)
             case .swap:
                 command = SwapCommand(args: self as! SwapCmdArgs)
+            case .tileFloatingWindows:
+                command = TileFloatingWindowsCommand(args: self as! TileFloatingWindowsCmdArgs)
             case .test:
                 command = TestCommand(args: self as! TestCmdArgs)
             case .testNot:

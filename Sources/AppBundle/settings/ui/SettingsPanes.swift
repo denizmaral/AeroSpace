@@ -394,6 +394,7 @@ struct ActionIcon: View {
             case .fullscreen, .enterFullscreen: "arrow.up.left.and.arrow.down.right"
             case .exitFullscreen: "arrow.down.right.and.arrow.up.left"
             case .pin(let state): state == .off ? "pin.slash" : "pin"
+            case .tileFloatingWindows: "rectangle.split.2x1"
             case .flattenWorkspaceTree: "arrow.triangle.2.circlepath"
             case .balanceSizes: "equal"
             case .closeWindow, .closeAllWindowsButCurrent: "xmark"
@@ -470,7 +471,7 @@ private enum ShortcutGroup: CaseIterable, Identifiable {
             case .focus, .cycleFocus, .focusBackAndForth, .move, .swap, .joinWith, .resize, .fullscreen, .pin, .closeWindow,
                  .closeAllWindowsButCurrent: .windows
             case .workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor: .workspaces
-            case .layout, .flattenWorkspaceTree, .balanceSizes: .layout
+            case .layout, .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes: .layout
             case .enterMode, .reloadSettings, .moveMouse, .custom: .other
         }
     }
@@ -518,6 +519,7 @@ extension Action {
             case .pin(.toggle): "Pin or unpin the floating window"
             case .pin(.on): "Pin the floating window: on every workspace"
             case .pin(.off): "Unpin the window"
+            case .tileFloatingWindows: "Tile all floating windows"
             case .flattenWorkspaceTree: "Reset the layout"
             case .balanceSizes: "Balance the sizes"
             case .closeWindow: "Close the window"

@@ -1,0 +1,39 @@
+= aerospace-tile-floating-windows(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-tile-floating-windows
+// tag::purpose[]
+:manpurpose: Make all floating windows of the focused workspace tiling
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace tile-floating-windows [-h|--help] [--workspace <workspace>]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}
+
+It's `layout tiling` for every floating window of the workspace.
+A window that was made floating with `layout floating` goes back to its place in the layout, with its size.
+The others (e.g. dialogs, which MarSpace makes floating itself) are placed like new windows.
+The command is useful when windows were made floating by mistake, and it's easier to tile them all again.
+A pinned window isn't pinned anymore: only a floating window can be.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+--workspace <workspace>::
+include::./util/workspace-flag-desc.adoc[]
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

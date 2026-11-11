@@ -42,6 +42,7 @@ let subcommandDescriptions = [
     ["  swap", "Swaps the focused window with another window."],
     ["  test-not", "Negative condition evaluation utility"],
     ["  test", "Condition evaluation utility"],
+    ["  tile-floating-windows", "Make all floating windows of the focused workspace tiling"],
     ["  trigger-binding", "Trigger AeroSpace binding as if it was pressed by user"],
     ["  true", "Return true value"],
     ["  volume", "Manipulate volume"],

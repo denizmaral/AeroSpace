@@ -398,12 +398,12 @@ struct DwindleConcurrentDetectionTest {
         assertEquals(window12.focusWindow(), true)
         await parseCommand("layout floating").cmdOrDie.run(.defaultEnv, .emptyStdin)
         workspace.normalizeContainers()
-        await parseCommand("layout tiling").cmdOrDie.run(.defaultEnv, .emptyStdin) // Splits window 3
+        await parseCommand("layout tiling").cmdOrDie.run(.defaultEnv, .emptyStdin) // Back to its place
         workspace.normalizeContainers()
         detected[0].0.applyDwindleSplit(detected[0].1)
         workspace.normalizeContainers()
-        // The same as one after another: 3 splits 12 (640x1080, tall), then 12 is tiled again next to 3
-        assertEquals(root.layoutDescription, .h_tiles([.window(10), .window(11), .v_tiles([.window(3), .window(12)])]))
+        // As if 12 had never been floating: 3 splits it (640x1080, tall)
+        assertEquals(root.layoutDescription, .h_tiles([.window(10), .window(11), .v_tiles([.window(12), .window(3)])]))
     }
 
     /// The callbacks of a window detected on workspace A are suspended. Splits on workspace B don't wait for it

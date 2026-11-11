@@ -24,7 +24,8 @@ struct SettingsTest {
             .layout([.tiles, .accordion]), .layout([.horizontal, .vertical]), .layout([.floating, .tiling]), .layout([.tiling]),
             .fullscreen(.marSpace), .fullscreen(.macOSNative), .enterFullscreen(.marSpace), .enterFullscreen(.macOSNative),
             .exitFullscreen(.marSpace), .exitFullscreen(.macOSNative), .pin(.toggle), .pin(.on), .pin(.off),
-            .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent, .enterMode("service"), .enterMode("main"),
+            .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent,
+            .enterMode("service"), .enterMode("main"),
             .reloadSettings,
         ] + MouseTarget.allCases.map(Action.moveMouse)
         assertEquals(Set(actions.map(ActionKind.init)), Set(ActionKind.allCases).subtracting([.custom]))
@@ -92,7 +93,7 @@ struct SettingsTest {
         let (config, problems) = Settings.defaults.compile(keyForCharacter: { keyNotationToKeyCode[$0.lowercased()] })
         assertEquals(problems, [])
         assertEquals(config.modes[mainModeId]?.bindings.count, 15 + 31 + 31) // The shortcuts, going to and moving to 31 workspaces
-        assertEquals(config.modes["service"]?.bindings.count, 8)
+        assertEquals(config.modes["service"]?.bindings.count, 9)
         assertEquals(config.persistentWorkspaces.count, 31)
     }
 

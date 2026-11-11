@@ -73,6 +73,11 @@ when you go to another workspace, like a small video or a note that you want eve
 the focus. A window rule can pin the windows of an app: make them floating first (Change the layout › Floating), then
 pin them.
 
+When windows were made floating by mistake, "Tile all floating windows" (`aerospace tile-floating-windows`, `t` in the
+service mode of new settings) makes every floating window of the workspace tiling again. A window that you made
+floating goes back to its place in the layout, with its size (also when you tile it alone, with Change the layout ›
+Tiling); a window that never had a place, like a dialog, is placed like a new window.
+
 With focus follows the mouse, a focused floating window keeps the focus while the mouse is over the tiled windows behind
 it: focusing a window in macOS brings it to the front, and the floating window would disappear behind it. Click the
 tiled window, or use a shortcut, to focus it.
