@@ -52,8 +52,9 @@ extension TilingContainer {
     }
 }
 
+/// The edges of the window that the user drags are moved to the mouse: the tiles next to them get bigger or smaller
 @MainActor
-private func resizeWithMouse(_ window: Window) async throws { // todo cover with tests
+func resizeWithMouse(_ window: Window) async throws {
     resetClosedWindowsCache()
     switch window.windowParentCases {
         case nil: return
@@ -63,18 +64,23 @@ private func resizeWithMouse(_ window: Window) async throws { // todo cover with
         case .tilingContainer:
             guard let rect = try await window.getAxRect(.cancellable) else { return }
             guard let lastAppliedLayoutRect = window.lastAppliedLayoutPhysicalRect else { return }
+            // Where the window was when the drag started (the layout leaves it alone while it's dragged). An edge that
+            // is still there isn't dragged, also if it isn't at the edge of the tile: the window refuses the size of
+            // its tile, or the layout moved it off a window that is bigger than its tile. A dragged edge takes the
+            // edge of the tile with it
+            let start = window.observedFrame ?? lastAppliedLayoutRect
             let (lParent, lOwnIndex, _) = window.closestParent(hasInhabitedChildrenInDirection: .left, withLayout: .tiles) ?? (nil, nil, nil)
             let (dParent, dOwnIndex, _) = window.closestParent(hasInhabitedChildrenInDirection: .down, withLayout: .tiles) ?? (nil, nil, nil)
             let (uParent, uOwnIndex, _) = window.closestParent(hasInhabitedChildrenInDirection: .up, withLayout: .tiles) ?? (nil, nil, nil)
             let (rParent, rOwnIndex, _) = window.closestParent(hasInhabitedChildrenInDirection: .right, withLayout: .tiles) ?? (nil, nil, nil)
-            let table: [(CGFloat, TilingContainer?, Int?, Int?)] = [
-                (lastAppliedLayoutRect.minX - rect.minX, lParent, 0,                        lOwnIndex),               // Horizontal, to the left of the window
-                (rect.maxY - lastAppliedLayoutRect.maxY, dParent, dOwnIndex.map { $0 + 1 }, dParent?.children.count), // Vertical, to the down of the window
-                (lastAppliedLayoutRect.minY - rect.minY, uParent, 0,                        uOwnIndex),               // Vertical, to the up of the window
-                (rect.maxX - lastAppliedLayoutRect.maxX, rParent, rOwnIndex.map { $0 + 1 }, rParent?.children.count), // Horizontal, to the right of the window
+            let table: [(CGFloat, CGFloat, TilingContainer?, Int?, Int?)] = [
+                (start.minX - rect.minX, lastAppliedLayoutRect.minX - rect.minX, lParent, 0,                        lOwnIndex),               // Horizontal, to the left of the window
+                (rect.maxY - start.maxY, rect.maxY - lastAppliedLayoutRect.maxY, dParent, dOwnIndex.map { $0 + 1 }, dParent?.children.count), // Vertical, to the down of the window
+                (start.minY - rect.minY, lastAppliedLayoutRect.minY - rect.minY, uParent, 0,                        uOwnIndex),               // Vertical, to the up of the window
+                (rect.maxX - start.maxX, rect.maxX - lastAppliedLayoutRect.maxX, rParent, rOwnIndex.map { $0 + 1 }, rParent?.children.count), // Horizontal, to the right of the window
             ]
-            for (diff, parent, startIndex, untilIndex) in table {
-                if let parent, let startIndex, let untilIndex, untilIndex - startIndex > 0 && abs(diff) > 5 { // 5 pixels should be enough to fight with accumulated floating precision error
+            for (dragged, diff, parent, startIndex, untilIndex) in table {
+                if let parent, let startIndex, let untilIndex, untilIndex - startIndex > 0 && abs(dragged) > 5 { // 5 pixels should be enough to fight with accumulated floating precision error
                     let orientation = parent.orientation
 
                     window.parentsWithSelf.lazy

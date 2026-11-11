@@ -83,6 +83,7 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
     case ax(String)
     case focusFollowsMouse
     case popupRecheck
+    case frameReadBack
 
     public var isStartup: Bool {
         if case .startup = self { return true } else { return false }
@@ -105,6 +106,7 @@ public enum RefreshSessionEvent: Sendable, CustomStringConvertible {
             case .startup: "startup"
             case .focusFollowsMouse: "focusFollowsMouse"
             case .popupRecheck: "popupRecheck"
+            case .frameReadBack: "frameReadBack"
         }
     }
 }

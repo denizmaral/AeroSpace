@@ -12,12 +12,18 @@ private var activeRefreshTask: Task<(), any Error>? = nil
 @MainActor
 private var isStartupSessionOver = false
 
+/// The complete refresh sessions that were asked for in unit tests, which don't run them
+@MainActor var completeRefreshSessionsAskedForInTests: [RefreshSessionEvent] = []
+
 @MainActor
 func scheduleCancellableCompleteRefreshSession(
     _ event: RefreshSessionEvent,
     optimisticallyPreLayoutWorkspaces: Bool = false,
 ) {
-    if isUnitTest { return } // Complete refresh sessions talk to the real apps via accessibility
+    if isUnitTest { // Complete refresh sessions talk to the real apps via accessibility
+        completeRefreshSessionsAskedForInTests.append(event)
+        return
+    }
     if !isStartupSessionOver { return }
     activeRefreshTask?.cancel()
     activeRefreshTask = Task.startUnstructured { @MainActor in

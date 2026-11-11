@@ -7,8 +7,12 @@ final class TestWindow: Window, CustomStringConvertible {
     var axRectForTest: Rect?
     /// The app refuses a smaller size, e.g. App Store is at least 1000 wide
     var minimumSizeForTest: CGSize? = nil
+    /// The app refuses a bigger size, e.g. System Settings is at most 740 wide
+    var maximumSizeForTest: CGSize? = nil
     /// The frames read back after sends, delivered by ``deliverReadBacksForTest()``. nil: delivered right away
     var heldReadBacksForTest: [(frame: Rect, generation: UInt)]? = nil
+    /// When the frames are read back. nil: now
+    var readBackInstantForTest: ContinuousClock.Instant? = nil
     var isMacosFullscreenForTest = false
 
     @MainActor
@@ -44,13 +48,16 @@ final class TestWindow: Window, CustomStringConvertible {
         if let minimum = minimumSizeForTest {
             applied = CGSize(width: max(applied.width, minimum.width), height: max(applied.height, minimum.height))
         }
+        if let maximum = maximumSizeForTest {
+            applied = CGSize(width: min(applied.width, maximum.width), height: min(applied.height, maximum.height))
+        }
         let frame = Rect(topLeftX: origin.x, topLeftY: origin.y, width: applied.width, height: applied.height)
         axRectForTest = frame
         guard let readBack else { return }
         if heldReadBacksForTest != nil {
             heldReadBacksForTest?.append((frame, readBack))
         } else {
-            frameWasReadBack(frame, generation: readBack)
+            frameWasReadBack(frame, generation: readBack, at: readBackInstantForTest ?? .now)
         }
     }
 
@@ -58,7 +65,7 @@ final class TestWindow: Window, CustomStringConvertible {
     func deliverReadBacksForTest() {
         let readBacks = heldReadBacksForTest ?? []
         heldReadBacksForTest = []
-        for (frame, generation) in readBacks { frameWasReadBack(frame, generation: generation) }
+        for (frame, generation) in readBacks { frameWasReadBack(frame, generation: generation, at: readBackInstantForTest ?? .now) }
     }
 
     override func closeAxWindow() {

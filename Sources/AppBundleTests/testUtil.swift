@@ -79,6 +79,7 @@ func setUpWorkspacesForTests() {
     lastInvisibleWindowsNativeStateCheck = nil
     currentlyManipulatedWithMouseWindowId = nil
     dwindleSplitQueue = []
+    completeRefreshSessionsAskedForInTests = []
 }
 
 extension ParsedCmd {

@@ -23,9 +23,14 @@ open class Window: TreeNode, Hashable {
     /// Floating windows are read by every layout (``observeFrame(_:)``). Code that deals with the screen (the focus
     /// border, focus-follows-mouse) uses it, the layout and the tree commands use the tile
     private(set) var observedFrame: Rect? = nil
-    /// The last frame that was read back, and what was sent for it: sending the same again gives the same frame (e.g.
-    /// App Store refuses the tile again after a workspace switch hid it in a corner of the screen)
-    private var lastReadBack: (request: SentFrame, frame: Rect)? = nil
+    /// What the window made of the last two sizes that it was asked for: an app can refuse a size (App Store is at least
+    /// 1000 wide, System Settings at most 740). Asking for the same size again gives the same answer, wherever the window
+    /// is (e.g. after a workspace switch hid it in a corner of the screen). Two: the size of its tile comes back after
+    /// macOS fullscreen, or after a window was opened next to it and closed again. See ``size(inTile:)``
+    private var sizeAnswers: (latest: SizeAnswer?, previous: SizeAnswer?) = (nil, nil)
+    /// The refresh sessions that were asked for in a row because of what the window made of its tile. See
+    /// ``rememberSizeAnswer(asked:got:at:)``
+    private var layoutRequestsAfterReadBack: (count: Int, last: ContinuousClock.Instant)? = nil
     /// Identifies the latest knowledge about the frame: a read back of an older send is stale
     private var frameGeneration: UInt = 0
     /// The native state (minimized, fullscreen) may have changed. See normalizeLayoutReason
@@ -110,14 +115,47 @@ open class Window: TreeNode, Hashable {
         if frame == sentFrame { return }
         sentFrame = frame
         frameGeneration &+= 1
-        // Until it's read back: what the same request gave the previous time, otherwise what is sent (most windows accept it)
+        // Until it's read back: what the window is expected to make of it
         // The layout runs in a refresh session, which updates the focus border at its end
-        if let lastReadBack, lastReadBack.request == frame {
-            setObservedFrame(lastReadBack.frame, updatesFocusBorder: false)
-        } else if let origin = topLeft ?? observedFrame?.topLeftCorner, let size = size ?? observedFrame?.size {
+        if let origin = topLeft ?? observedFrame?.topLeftCorner, let size = size.map(answer(to:)) ?? observedFrame?.size {
             setObservedFrame(Rect(topLeftX: origin.x, topLeftY: origin.y, width: size.width, height: size.height), updatesFocusBorder: false)
         }
         sendAxFrame(topLeft, size, readBack: readBack ? frameGeneration : nil)
+    }
+
+    /// What the window makes of `size`, as far as it's known: its answer the last time, otherwise `size` itself (most
+    /// windows accept it)
+    private func answer(to size: CGSize) -> CGSize {
+        if let latest = sizeAnswers.latest, latest.asked == size { return latest.got }
+        if let previous = sizeAnswers.previous, previous.asked == size { return previous.got }
+        return size
+    }
+
+    private func remember(_ answer: SizeAnswer) {
+        if sizeAnswers.latest?.asked != answer.asked { sizeAnswers.previous = sizeAnswers.latest }
+        sizeAnswers.latest = answer
+    }
+
+    /// The size of the window when the layout asks it for the size of its tile, as far as it's known (see
+    /// ``answer(to:)``). A difference below a point is rounding (tiles aren't whole points), not a refused size: the
+    /// size of the tile itself then, exactly
+    final func size(inTile tile: CGSize) -> CGSize {
+        let got = answer(to: tile)
+        return CGSize(
+            width: abs(got.width - tile.width) < 1 ? tile.width : got.width,
+            height: abs(got.height - tile.height) < 1 ? tile.height : got.height,
+        )
+    }
+
+    /// The window reaches beyond the gap after its tile, as far as it's known: it covers a part of the tile next to it.
+    /// Windows are moved off each other only then (see `TilingContainer.layoutTiles`). A window that reaches only into
+    /// the gap covers nothing (Terminal snaps to its character grid)
+    @MainActor
+    final var isBiggerThanTile: Bool {
+        guard let tile = lastAppliedLayoutPhysicalRect?.size else { return false }
+        let size = size(inTile: tile)
+        let gaps = config.gaps.inner
+        return size.width - tile.width > CGFloat(gaps.horizontal) || size.height - tile.height > CGFloat(gaps.vertical)
     }
 
     /// The next ``setAxFrame(_:_:readBack:)`` sends the frame even if it's the same as the previous one
@@ -129,11 +167,36 @@ open class Window: TreeNode, Hashable {
 
     /// - Parameter generation: the send that the frame was read back for
     @MainActor
-    final func frameWasReadBack(_ frame: Rect, generation: UInt) {
+    final func frameWasReadBack(_ frame: Rect, generation: UInt, at now: ContinuousClock.Instant = .now) {
         guard generation == frameGeneration else { return } // Sent again or moved meanwhile: a newer read back follows
-        if let sentFrame { lastReadBack = (sentFrame, frame) }
+        if let asked = sentFrame?.size { rememberSizeAnswer(asked: asked, got: frame.size, at: now) }
         // It arrives after the session that sent the frame (it doesn't matter if another session is running)
         setObservedFrame(frame, updatesFocusBorder: true)
+    }
+
+    /// An app is expected to make the same of the same size every time. A window that doesn't isn't followed forever:
+    /// every layout that moves it would ask for the next one. After a quiet second, it's followed again
+    private static let maxLayoutRequestsAfterReadBack = 3
+    private static let layoutRequestsAfterReadBackQuietInterval: Duration = .seconds(1)
+
+    /// The layout that sent the frame didn't know the answer yet, or the window changed its mind: the windows are laid
+    /// out again if that can move one of them. Windows are moved only around a window that is bigger than its tile, so
+    /// a window that is only smaller than its tile, or reaches only into the gap after it (Terminal snaps to its
+    /// character grid), doesn't cost a refresh session
+    @MainActor
+    private func rememberSizeAnswer(asked: CGSize, got: CGSize, at now: ContinuousClock.Instant) {
+        let assumed = size(inTile: asked)
+        let wasBiggerThanTile = isBiggerThanTile
+        remember(SizeAnswer(asked: asked, got: got))
+        guard lastAppliedLayoutPhysicalRect?.size == asked, size(inTile: asked) != assumed else { return }
+        guard wasBiggerThanTile || nodeWorkspace?.rootTilingContainer.allLeafWindowsRecursive
+            .contains(where: { $0.lifeStatus.isInhabited && $0.isBiggerThanTile }) == true
+        else { return }
+        let inARow = layoutRequestsAfterReadBack
+            .flatMap { now - $0.last < Self.layoutRequestsAfterReadBackQuietInterval ? $0.count : nil } ?? 0
+        guard inARow < Self.maxLayoutRequestsAfterReadBack else { return }
+        layoutRequestsAfterReadBack = (inARow + 1, now)
+        scheduleCancellableCompleteRefreshSession(.frameReadBack)
     }
 
     /// - Parameter frame: read from the window just now
@@ -162,6 +225,12 @@ open class Window: TreeNode, Hashable {
 private struct SentFrame: Equatable {
     let topLeft: CGPoint?
     let size: CGSize?
+}
+
+/// What a window made of a size that it was asked for, see `Window.sizeAnswers`
+private struct SizeAnswer {
+    let asked: CGSize
+    let got: CGSize
 }
 
 enum MacosWindowNativeState: Sendable {
