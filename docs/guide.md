@@ -117,6 +117,10 @@ Choose how in the menu bar panel, under "Menu bar style", which shows each style
 - **Monospaced font**, **System font**: the workspace that each monitor shows, as text.
 - **Pills**: all workspaces with windows, the focused one filled, one shown on another monitor outlined.
 - **Dots**: a dot for each workspace with windows, the focused one with its name: the narrowest style that shows them all.
+- **Panes**: each workspace as a tiny screen split into its windows (one, two, three side by side, four and more in a
+  grid); the screens that the monitors show stand on a foot.
+- **Skyline**: a bar for each workspace, as high as it has windows: the crowded ones and the free ones at a glance.
+- **Shelf**: each workspace as the icon of its first app, the focused one with the icons of its apps.
 - **Workspace and apps**: the focused workspace and the icons of its apps.
 - **Square images**, **i3 style grouped**, **i3 style ordered**: the styles of AeroSpace.
 

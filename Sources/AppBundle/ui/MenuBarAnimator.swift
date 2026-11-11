@@ -16,9 +16,14 @@ struct MenuBarState: Equatable {
     var focusedWorkspace: WorkspaceViewModel? { workspaces.first(where: \.isFocused) }
     var mode: TrayItem? { trayItems.first { $0.type == .mode } }
 
-    /// The workspaces that the strips (pills, dots, i3) show, in the order of the workspaces: the favorite ones, also
-    /// when they are empty, and the ones that the monitors show. Without favorites, all workspaces with windows
-    var strip: [WorkspaceViewModel] { workspaces.filter { isInStrip($0) } }
+    /// The workspaces that the strips (pills, dots, i3, …) show: the favorite ones, also when they are empty, in the order
+    /// of the workspaces, then the other ones that the monitors show. The favorites stay where they are, under the mouse.
+    /// Without favorites, all workspaces with windows, in order
+    var strip: [WorkspaceViewModel] {
+        favorites.isEmpty
+            ? workspaces.filter(\.isListed)
+            : workspaces.filter { favorites.contains($0.name) } + workspaces.filter { $0.isVisible && !favorites.contains($0.name) }
+    }
 
     func isInStrip(_ workspace: WorkspaceViewModel) -> Bool {
         favorites.isEmpty ? workspace.isListed : workspace.isVisible || favorites.contains(workspace.name)
@@ -31,7 +36,8 @@ struct MenuBarState: Equatable {
         style == other.style && trayText == other.trayText && mode == other.mode && favorites == other.favorites &&
             workspaces.elementsEqual(other.workspaces) {
                 $0.name == $1.name && $0.isFocused == $1.isFocused && $0.isVisible == $1.isVisible &&
-                    $0.isEffectivelyEmpty == $1.isEffectivelyEmpty
+                    $0.isEffectivelyEmpty == $1.isEffectivelyEmpty &&
+                    (!style.showsWindowCount || min($0.windowCount, 4) == min($1.windowCount, 4))
             }
     }
 }

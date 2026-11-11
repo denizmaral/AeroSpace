@@ -31,6 +31,9 @@ enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
     case systemText
     case pills
     case dots
+    case panes
+    case skyline
+    case shelf
     case workspaceApps
     case squares
     case i3
@@ -42,16 +45,22 @@ enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
             case .systemText: "System font"
             case .pills: "Pills"
             case .dots: "Dots"
+            case .panes: "Panes"
+            case .skyline: "Skyline"
+            case .shelf: "Shelf"
             case .workspaceApps: "Workspace and apps"
             case .squares: "Square images"
             case .i3: "i3 style grouped"
             case .i3Ordered: "i3 style ordered"
         }
     }
+    /// A window that comes or goes changes the item: it's animated (Skyline and Panes show up to four windows)
+    var showsWindowCount: Bool { self == .panes || self == .skyline }
+
     /// Shows a row of workspaces: the favorites choose them, and a click on one focuses it
     var showsStrip: Bool {
         switch self {
-            case .pills, .dots, .i3, .i3Ordered: true
+            case .pills, .dots, .panes, .skyline, .shelf, .i3, .i3Ordered: true
             case .monospacedText, .systemText, .workspaceApps, .squares: false
         }
     }
@@ -60,6 +69,9 @@ enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
             case .monospacedText, .systemText: "The workspace that each monitor shows, as text"
             case .pills: "The workspaces with windows, the focused one filled, one shown on another monitor outlined"
             case .dots: "A dot for each workspace with windows, the focused one with its name"
+            case .panes: "Each workspace as a small screen, split into its windows"
+            case .skyline: "A bar for each workspace, as high as it has windows"
+            case .shelf: "Each workspace as the icon of its app, the focused one with its apps"
             case .workspaceApps: "The focused workspace and its apps"
             case .squares: "The workspace that each monitor shows, the focused one filled"
             case .i3: "The workspaces that the monitors show, then the other ones with windows"

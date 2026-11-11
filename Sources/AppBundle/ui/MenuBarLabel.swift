@@ -49,6 +49,9 @@ struct MenuBarItemContent: View {
             case .squares, .i3, .i3Ordered: ClassicMenuBarItem(state: state, color: color)
             case .pills: withMode(state) { WorkspacePills(state: state, from: from, progress: progress.easedInOut, color: color) }
             case .dots: withMode(state) { WorkspaceDots(state: state, from: from, progress: progress.easedInOut, color: color) }
+            case .panes: withMode(state) { WorkspacePanes(state: state, from: from, progress: progress.easedInOut, color: color) }
+            case .skyline: withMode(state) { WorkspaceSkyline(state: state, from: from, progress: progress.easedInOut, color: color) }
+            case .shelf: withMode(state) { WorkspaceShelf(state: state, from: from, progress: progress.easedOut, color: color) }
             case .workspaceApps: withMode(state) { WorkspaceWithApps(state: state, from: from, progress: progress.easedOut, color: color) }
         }
     }
@@ -84,9 +87,15 @@ struct MenuBarItemContent: View {
         var x: CGFloat = state.settingsHaveProblems ? height + spacing : 0
         let slots: [WorkspaceSlot]
         switch state.style {
-            case .pills, .dots:
+            case .pills, .dots, .panes, .skyline, .shelf:
                 if let mode = state.mode { x += width(of: modeView(mode, color)) + spacing }
-                slots = state.style == .pills ? WorkspacePills.slots(state.strip) : WorkspaceDots.slots(state.strip)
+                slots = switch state.style {
+                    case .dots: WorkspaceDots.slots(state.strip)
+                    case .panes: WorkspacePanes.slots(state.strip)
+                    case .skyline: WorkspaceSkyline.slots(state.strip)
+                    case .shelf: WorkspaceShelf.slots(state.strip)
+                    default: WorkspacePills.slots(state.strip)
+                }
             case .squares, .i3, .i3Ordered:
                 var elementX: CGFloat = 0
                 slots = ClassicMenuBarItem(state: state, color: color).elements.compactMap { element in
@@ -116,7 +125,7 @@ extension MenuBarStyle {
     /// The styles that move from the old state to the new one. The others fade
     fileprivate var movesOnChange: Bool {
         switch self {
-            case .monospacedText, .systemText, .pills, .dots, .workspaceApps: true
+            case .monospacedText, .systemText, .pills, .dots, .panes, .skyline, .shelf, .workspaceApps: true
             case .squares, .i3, .i3Ordered: false
         }
     }
@@ -276,7 +285,8 @@ private struct WorkspaceDots: View {
     let progress: Double
     let color: Color
 
-    private static let gap: CGFloat = 7
+    /// A dot and its gap are 10 points: wide enough to click
+    private static let gap: CGFloat = 10
     private static let fontSize: CGFloat = 20
     private static let font = Font.system(size: fontSize, weight: .bold, design: .rounded)
 
@@ -620,7 +630,7 @@ func stripEntries(from fromListed: [WorkspaceViewModel], to toListed: [Workspace
 
 /// The width of a name in the rounded system font, to lay out the strips before they are drawn
 @MainActor
-private func textWidth(_ text: String, size: CGFloat, weight: NSFont.Weight) -> CGFloat {
+func textWidth(_ text: String, size: CGFloat, weight: NSFont.Weight) -> CGFloat {
     let key = TextWidthKey(text: text, size: size, weight: weight.rawValue)
     if let width = textWidths[key] { return width }
     let system = NSFont.systemFont(ofSize: size, weight: weight)
@@ -640,15 +650,15 @@ private struct TextWidthKey: Hashable {
 
 @MainActor private var textWidths: [TextWidthKey: CGFloat] = [:]
 
-private func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat { a + (b - a) * t }
+func lerp(_ a: CGFloat, _ b: CGFloat, _ t: CGFloat) -> CGFloat { a + (b - a) * t }
 
-private func lerp(_ a: CGRect, _ b: CGRect, _ t: CGFloat) -> CGRect {
+func lerp(_ a: CGRect, _ b: CGRect, _ t: CGFloat) -> CGRect {
     CGRect(x: lerp(a.minX, b.minX, t), y: lerp(a.minY, b.minY, t), width: lerp(a.width, b.width, t), height: lerp(a.height, b.height, t))
 }
 
 extension Double {
-    fileprivate var easedOut: Double { 1 - pow(1 - self, 3) }
-    fileprivate var easedInOut: Double { self < 0.5 ? 4 * self * self * self : 1 - pow(-2 * self + 2, 3) / 2 }
+    var easedOut: Double { 1 - pow(1 - self, 3) }
+    var easedInOut: Double { self < 0.5 ? 4 * self * self * self : 1 - pow(-2 * self + 2, 3) / 2 }
 }
 
 extension String {

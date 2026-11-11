@@ -78,9 +78,41 @@ struct MenuBarItemTest {
         #expect(!state(workspaces).looksAnimatedTheSame(as: state(workspaces, favorites: ["C"])))
     }
 
+    /// The shown workspace that isn't a favorite comes after the favorites: they stay where they are, under the mouse
+    @Test func testTheShownWorkspaceComesAfterTheFavorites() {
+        let workspaces = [workspace("1", focused: true), workspace("C"), workspace("X")]
+        #expect(state(workspaces, favorites: ["C", "X"]).strip.map(\.name) == ["C", "X", "1"])
+    }
+
+    /// From the shown workspace after the favorites to a favorite: it shrinks away at the end
+    @Test func testFocusFromAGuestToAFavorite() {
+        let from = state([workspace("1"), workspace("C"), workspace("T", focused: true)], favorites: ["1", "C"])
+        let to = state([workspace("1"), workspace("C", focused: true), workspace("T")], favorites: ["1", "C"])
+        let entries = stripEntries(from: from.strip, to: to.strip)
+        #expect(entries.map(\.name) == ["1", "C", "T"])
+        #expect(entries.last?.to == nil)
+    }
+
+    /// The focused workspace becomes a favorite: it moves from the end to its place, every workspace once
+    @Test func testTheFocusedWorkspaceBecomesAFavorite() {
+        let workspaces = [workspace("B"), workspace("T", focused: true), workspace("X")]
+        let entries = stripEntries(from: state(workspaces, favorites: ["B", "X"]).strip, to: state(workspaces, favorites: ["B", "X", "T"]).strip)
+        #expect(entries.map(\.name) == ["B", "T", "X"])
+        #expect(entries.allSatisfy { $0.from != nil && $0.to != nil })
+    }
+
+    /// A window that comes or goes is animated in the styles that show the windows
+    @Test func testAWindowThatComesIsAnimatedWhereTheWindowsAreShown() {
+        let one = [workspace("T", focused: true), workspace("X")]
+        let two = [workspace("T", focused: true, apps: [URL(fileURLWithPath: "/a.app"), URL(fileURLWithPath: "/b.app")]), workspace("X")]
+        #expect(!state(one, style: .panes).looksAnimatedTheSame(as: state(two, style: .panes)))
+        #expect(!state(one, style: .skyline).looksAnimatedTheSame(as: state(two, style: .skyline)))
+        #expect(state(one, style: .pills).looksAnimatedTheSame(as: state(two, style: .pills)))
+    }
+
     /// A click in the middle of a workspace focuses it, a click on the focused one opens the panel. The workspaces end
     /// where the drawing ends
-    @Test(arguments: [MenuBarStyle.pills, .dots, .i3, .i3Ordered])
+    @Test(arguments: [MenuBarStyle.pills, .dots, .panes, .skyline, .shelf, .i3, .i3Ordered])
     func testAClickOnAWorkspaceFindsIt(style: MenuBarStyle) throws {
         let item = state([workspace("1"), workspace("C"), workspace("T", focused: true), workspace("X")], style: style)
         let slots = MenuBarItemContent.workspaceSlots(item, .white)
