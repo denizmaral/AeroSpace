@@ -288,6 +288,18 @@ private struct MenuBarStylePicker: View {
                     }
                 }
             }
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle(isOn: $viewModel.experimentalUISettings.switchesWorkspaceOnClick) {
+                    Text("Click to switch workspace").font(.callout)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                Text("A right click opens this panel")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            .opacity(state.style.showsStrip ? 1 : 0.5)
+            .help(state.style.showsStrip ? "" : "For the styles that show a row of workspaces: Pills, Dots, i3")
             FavoriteWorkspacesPicker(state: state)
         }
     }

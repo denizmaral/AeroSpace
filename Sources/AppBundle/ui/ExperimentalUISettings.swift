@@ -12,9 +12,16 @@ struct ExperimentalUISettings {
         didSet { UserDefaults.standard.setValue(favoriteWorkspaces, forKey: ExperimentalUISettingsItems.favoriteWorkspaces.rawValue) }
     }
 
+    /// A click on a workspace in the row of the menu bar item focuses it (see ``MenuBarClicks``). Off: every click opens
+    /// the panel
+    var switchesWorkspaceOnClick: Bool {
+        didSet { UserDefaults.standard.setValue(switchesWorkspaceOnClick, forKey: ExperimentalUISettingsItems.switchesWorkspaceOnClick.rawValue) }
+    }
+
     init(_ defaults: UserDefaults = .standard) {
         displayStyle = defaults.string(forKey: ExperimentalUISettingsItems.displayStyle.rawValue).flatMap(MenuBarStyle.init(rawValue:)) ?? .monospacedText
         favoriteWorkspaces = defaults.stringArray(forKey: ExperimentalUISettingsItems.favoriteWorkspaces.rawValue) ?? []
+        switchesWorkspaceOnClick = defaults.object(forKey: ExperimentalUISettingsItems.switchesWorkspaceOnClick.rawValue) as? Bool ?? true
     }
 }
 
@@ -64,4 +71,5 @@ enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
 enum ExperimentalUISettingsItems: String {
     case displayStyle
     case favoriteWorkspaces
+    case switchesWorkspaceOnClick
 }

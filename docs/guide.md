@@ -125,7 +125,8 @@ moves, the name is pushed up. With "Reduce motion" (System Settings › Accessib
 the panel, a workspace shows how many windows it has, and a display when a monitor shows it.
 
 The styles with a row of workspaces (Pills, Dots, i3) work like the workspace buttons of a bar: click a workspace to go
-there. A click on the workspace that you're on, or anywhere else on the item, opens the panel. Under "Workspaces in the
+there. A right click, or a click on the workspace that you're on, opens the panel; turn off "Click to switch workspace"
+under "Menu bar style" to open it with every click. Under "Workspaces in the
 menu bar" (or with a right click on a workspace in the panel), pick the workspaces to keep in the row: they stay there
 also when they're empty, together with the workspace that you're on. Without picked workspaces, the row shows every
 workspace with windows.

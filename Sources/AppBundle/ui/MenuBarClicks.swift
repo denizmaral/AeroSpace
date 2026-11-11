@@ -10,7 +10,8 @@ enum MenuBarClicks {
     /// - Returns: the workspace that the item was clicked on. nil: the panel opens
     static func clickedWorkspace(on button: NSStatusBarButton) -> String? {
         let model = TrayMenuModel.shared
-        guard NSApp.currentEvent?.type == .leftMouseDown,
+        guard model.experimentalUISettings.switchesWorkspaceOnClick,
+              NSApp.currentEvent?.type == .leftMouseDown,
               NSEvent.modifierFlags.isDisjoint(with: [.command, .option, .control, .shift]), // Not Caps Lock
               model.isEnabled, model.axPermissionStatus == .granted,
               let window = unsafe button.window, let content = window.contentView,
