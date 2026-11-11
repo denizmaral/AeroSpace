@@ -6,6 +6,8 @@ struct WorkspaceBackAndForthCommand: Command {
     /*conforms*/ let shouldResetClosedWindowsCache = false
 
     func run(_ env: CmdEnv, _ io: CmdIo) -> BinaryExitCode {
-        return .from(bool: prevFocusedWorkspace?.focusWorkspace() == true)
+        // E.g. right after the start of MarSpace
+        guard let prevFocusedWorkspace else { return .fail(io.err("There is no previous workspace yet")) }
+        return .from(bool: prevFocusedWorkspace.focusWorkspace())
     }
 }

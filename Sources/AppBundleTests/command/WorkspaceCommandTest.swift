@@ -83,6 +83,7 @@ struct WorkspaceCommandTest {
 
         let result = await parseCommand("workspace --auto-back-and-forth a").cmdOrDie.run(.defaultEnv, .emptyStdin)
         assertEquals(result.exitCode.rawValue, 2)
+        assertEquals(result.stderr, ["There is no previous workspace yet"])
         assertEquals(globalFocus.workspace.name, "a")
     }
 
