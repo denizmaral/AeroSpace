@@ -23,6 +23,10 @@ final class FocusBorderController {
     private var stackingRecheck: Task<(), any Error>? = nil
     /// Updates for read backs of the focused window, see ``windowFrameDidChange(_:)``
     private(set) var readBackUpdates: UInt = 0
+    /// The window and the panel frame for which the panel was found right above the window, and nothing happened since
+    /// that can restack the windows (see ``stackingMayHaveChanged()``): the window server isn't asked again. Most
+    /// refresh sessions (a command, a shortcut, a click) change neither the focus, nor the frame, nor the stacking
+    private var verifiedStacking: (window: UInt32, frame: CGRect)? = nil
 
     // periphery:ignore - the properties are only compared (Equatable)
     private struct Appearance: Equatable {
@@ -52,10 +56,15 @@ final class FocusBorderController {
               windowRect.width > 0, windowRect.height > 0
         else { return hide() }
         let panel = getOrCreatePanel()
-        let stacking = windowStacking(of: nativeWindowId, pid: window.macApp.pid, panel: panel.isVisible ? CGWindowID(panel.windowNumber) : nil)
-        if stacking == .offScreen { return hide() }
-
         let frame = focusBorderPanelFrame(windowRect: windowRect, borderWidth: border.width, mainMonitorHeight: mainMonitorInfo.height)
+        let isVerified = !isStackingRecheck && panel.isVisible &&
+            verifiedStacking.map { $0.window == nativeWindowId && $0.frame == frame } == true
+        let stacking = isVerified
+            ? .onScreen(isPanelRightAbove: true)
+            : windowStacking(of: nativeWindowId, pid: window.macApp.pid, panel: panel.isVisible ? CGWindowID(panel.windowNumber) : nil)
+        if stacking == .offScreen { return hide() }
+        verifiedStacking = stacking == .onScreen(isPanelRightAbove: true) ? (nativeWindowId, frame) : nil
+
         let appearance = Appearance(size: frame.size, border: border)
         if drawnAppearance != appearance {
             panel.draw(size: frame.size, border)
@@ -78,6 +87,13 @@ final class FocusBorderController {
                 }
             }
         }
+    }
+
+    /// Something happened that can change the order of the windows on the screen: an accessibility event of an app
+    /// (a window was created, focused, moved, resized, closed), an app was activated, the Space changed, a click. The
+    /// next update asks the window server where the panel is
+    func stackingMayHaveChanged() {
+        verifiedStacking = nil
     }
 
     /// The frame of a window was read back after the refresh session that sent it
@@ -119,6 +135,7 @@ final class FocusBorderController {
     }
 
     func hide() {
+        verifiedStacking = nil
         stackingRecheck?.cancel()
         guard let panel, panel.isVisible else { return }
         panel.orderOut(nil)

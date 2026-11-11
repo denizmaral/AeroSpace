@@ -9,6 +9,7 @@ func resizedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutabl
     let nativeWindowId = ax.containingNativeWindowId()
     let pid = ax.pid
     Task.startUnstructured { @MainActor in
+        FocusBorderController.shared.stackingMayHaveChanged()
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         let window = nativeWindowId.flatMap { nativeWindowId in pid.flatMap { Window.get(byNativeId: nativeWindowId, pid: $0) } }
         // The window may be moved or resized by somebody else (the user, the app). See Window.setAxFrame

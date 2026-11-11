@@ -179,6 +179,7 @@ func refreshObs(_: AXObserver, _ ax: AXUIElement, notif: CFString, _: UnsafeMuta
     let nativeWindowId = isNativeStateChange ? ax.containingNativeWindowId() : nil
     let pid = isNativeStateChange ? ax.pid : nil
     Task.startUnstructured { @MainActor in
+        FocusBorderController.shared.stackingMayHaveChanged()
         if !TrayMenuModel.shared.isEnabled { return }
         if let nativeWindowId, let pid { // See normalizeLayoutReason
             Window.get(byNativeId: nativeWindowId, pid: pid)?.isNativeStateCheckRequested = true

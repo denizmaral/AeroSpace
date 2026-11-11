@@ -15,6 +15,7 @@ enum GlobalObserver {
         Task.startUnstructured { @MainActor in
             // Normally known already: the list of the running apps changes before the notification is posted
             if notifName == NSWorkspace.didLaunchApplicationNotification.rawValue, let app { RunningApps.get(app) }
+            FocusBorderController.shared.stackingMayHaveChanged()
             if !TrayMenuModel.shared.isEnabled { return }
             switch notifName {
                 case NSWorkspace.activeSpaceDidChangeNotification.rawValue:
@@ -98,6 +99,7 @@ enum GlobalObserver {
             //  resetManipulatedWithMouseIfPossible might call its own refreshSession
             //  The end of the callback calls refreshSession
             Task.startUnstructured { @MainActor in
+                FocusBorderController.shared.stackingMayHaveChanged() // A click raises the window under the mouse
                 FocusBorderController.shared.showAfterMouseDrag()
                 try await resetManipulatedWithMouseIfPossible()
                 let mouseLocation = mouseLocation

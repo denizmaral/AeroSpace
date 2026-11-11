@@ -9,6 +9,7 @@ func movedObs(_: AXObserver, ax: AXUIElement, notif: CFString, _: UnsafeMutableR
     let notif = notif as String
     let pid = ax.pid
     Task.startUnstructured { @MainActor in
+        FocusBorderController.shared.stackingMayHaveChanged()
         guard let token: RunSessionGuard = .isServerEnabled else { return }
         if let nativeWindowId, let pid {
             // The window may be moved or resized by somebody else (the user, the app). See Window.setAxFrame
