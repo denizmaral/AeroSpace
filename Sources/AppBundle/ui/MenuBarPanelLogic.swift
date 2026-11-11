@@ -120,7 +120,7 @@ extension MenuBarStyle {
     var encodings: [MenuBarStyleEncoding] {
         switch self {
             case .monospacedText, .systemText, .pills, .dots, .squares, .i3, .i3Ordered: [.names, .monitors]
-            case .panes, .skyline: [.names, .windowCount, .monitors]
+            case .panes, .skyline, .matrix, .heft: [.names, .windowCount, .monitors]
             case .shelf: [.names, .apps, .monitors]
             case .workspaceApps: [.names, .apps]
         }

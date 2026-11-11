@@ -319,6 +319,18 @@ private struct MenuBarStylePicker: View {
                 Text("A right click opens this panel")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                Toggle(isOn: Binding(
+                    get: { viewModel.experimentalUISettings.groupsWorkspacesByMonitor },
+                    set: { viewModel.setGroupsWorkspacesByMonitor($0) },
+                )) {
+                    Text("Group by monitor").font(.callout)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .padding(.top, 6)
+                Text("With more than one monitor: the pills are in a bay for each monitor")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
             .opacity(selected.showsStrip ? 1 : 0.5)
             .help(selected.showsStrip ? "" : "For the styles that show a row of workspaces: Pills, Dots, i3")

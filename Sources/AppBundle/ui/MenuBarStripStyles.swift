@@ -112,7 +112,7 @@ struct WorkspacePanes: View {
     let progress: Double
     let color: Color
 
-    private static let screen = CGSize(width: 22, height: 18)
+    nonisolated private static let screen = CGSize(width: 22, height: 18)
     private static let screenY: CGFloat = 8
     private static let gap: CGFloat = 5
     private static let paneGap: CGFloat = 2

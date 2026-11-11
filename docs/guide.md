@@ -121,6 +121,12 @@ Choose how in the menu bar panel, under "Menu bar style", which shows each style
   grid); the screens that the monitors show stand on a foot.
 - **Skyline**: a bar for each workspace, as high as it has windows: the crowded ones and the free ones at a glance.
 - **Shelf**: each workspace as the icon of its first app, the focused one with the icons of its apps.
+- **Matrix**: the workspaces in two rows of small cells, like a keypad (ten of them in 35 points); a mark as big as its
+  workspace has windows, the focused one with its name on a tile after the grid.
+- **Heft**: the names, as heavy as their workspaces are full (light, regular, black).
+
+With more than one monitor, "Group by monitor" puts the workspaces of a monitor together: the pills are in a bay for
+each monitor.
 - **Workspace and apps**: the focused workspace and the icons of its apps.
 - **Square images**, **i3 style grouped**, **i3 style ordered**: the styles of AeroSpace.
 
