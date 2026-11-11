@@ -10,15 +10,25 @@ struct MenuBarState: Equatable {
     var trayItems: [TrayItem]
     var workspaces: [WorkspaceViewModel]
     var settingsHaveProblems: Bool
+    /// See ``ExperimentalUISettings/favoriteWorkspaces``
+    var favorites: [String] = []
 
     var focusedWorkspace: WorkspaceViewModel? { workspaces.first(where: \.isFocused) }
     var mode: TrayItem? { trayItems.first { $0.type == .mode } }
+
+    /// The workspaces that the strips (pills, dots, i3) show, in the order of the workspaces: the favorite ones, also
+    /// when they are empty, and the ones that the monitors show. Without favorites, all workspaces with windows
+    var strip: [WorkspaceViewModel] { workspaces.filter { isInStrip($0) } }
+
+    func isInStrip(_ workspace: WorkspaceViewModel) -> Bool {
+        favorites.isEmpty ? workspace.isListed : workspace.isVisible || favorites.contains(workspace.name)
+    }
 
     /// A change of the focused workspace, of the shown or listed workspaces, of the binding mode or of the style is
     /// animated. Not a new app icon: the item just shows it. Compared at the end of every refresh session, without
     /// allocations
     func looksAnimatedTheSame(as other: MenuBarState) -> Bool {
-        style == other.style && trayText == other.trayText && mode == other.mode &&
+        style == other.style && trayText == other.trayText && mode == other.mode && favorites == other.favorites &&
             workspaces.elementsEqual(other.workspaces) {
                 $0.name == $1.name && $0.isFocused == $1.isFocused && $0.isVisible == $1.isVisible &&
                     $0.isEffectivelyEmpty == $1.isEffectivelyEmpty

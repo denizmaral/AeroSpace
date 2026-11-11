@@ -23,6 +23,7 @@ public final class TrayMenuModel: ObservableObject {
             trayItems: trayItems,
             workspaces: workspaces,
             settingsHaveProblems: settingsHaveProblems,
+            favorites: experimentalUISettings.favoriteWorkspaces,
         )
     }
 
@@ -30,6 +31,22 @@ public final class TrayMenuModel: ObservableObject {
     @MainActor func setMenuBarStyle(_ style: MenuBarStyle) {
         let before = menuBarState
         experimentalUISettings.displayStyle = style
+        MenuBarAnimator.shared.stateDidChange(from: before, to: menuBarState)
+    }
+
+    /// The workspace is shown in the strips of the menu bar item, or not any more: it comes in or shrinks away
+    @MainActor func toggleFavorite(_ workspace: String) {
+        let before = menuBarState
+        var favorites = experimentalUISettings.favoriteWorkspaces
+        if let index = favorites.firstIndex(of: workspace) { favorites.remove(at: index) } else { favorites.append(workspace) }
+        experimentalUISettings.favoriteWorkspaces = favorites
+        MenuBarAnimator.shared.stateDidChange(from: before, to: menuBarState)
+    }
+
+    /// All workspaces with windows are shown in the strips of the menu bar item again
+    @MainActor func clearFavorites() {
+        let before = menuBarState
+        experimentalUISettings.favoriteWorkspaces = []
         MenuBarAnimator.shared.stateDidChange(from: before, to: menuBarState)
     }
 }
@@ -55,7 +72,7 @@ enum AxPermissionStatus: Equatable {
         }
         .joined(separator: " │ "))
     let isMultiMonitor = sortedMonitors.count > 1
-    model.update(\.workspaces, Workspace.all.map {
+    var workspaces = Workspace.all.map {
         let windows = $0.allLeafWindowsRecursive
         let apps = windows.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
         let dash = " - "
@@ -80,7 +97,26 @@ enum AxPermissionStatus: Equatable {
             isVisible: $0.isVisible,
             hasFullscreenWindows: windows.contains { $0.isFullscreen },
         )
-    })
+    }
+    // An empty workspace is kept only if it's persistent: a favorite one is in the strips of the menu bar item anyway
+    let favorites = model.experimentalUISettings.favoriteWorkspaces
+    if favorites.contains(where: { name in !workspaces.contains { $0.name == name } }) {
+        for name in favorites where !workspaces.contains(where: { $0.name == name }) {
+            workspaces.append(WorkspaceViewModel(
+                name: name,
+                suffix: "",
+                appBundleUrls: [],
+                windowCount: 0,
+                monitorName: nil,
+                isFocused: false,
+                isEffectivelyEmpty: true,
+                isVisible: false,
+                hasFullscreenWindows: false,
+            ))
+        }
+        workspaces.sort { $0.name.toLogicalSegments() < $1.name.toLogicalSegments() }
+    }
+    model.update(\.workspaces, workspaces)
     var items = sortedMonitors.map {
         let hasFullscreenWindows = $0.visibleWorkspace.allLeafWindowsRecursive.contains { $0.isFullscreen }
         return TrayItem(

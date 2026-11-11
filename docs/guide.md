@@ -124,6 +124,12 @@ When the focus goes to another workspace, the menu bar follows it: the fill of t
 moves, the name is pushed up. With "Reduce motion" (System Settings › Accessibility › Display), it fades instead. In
 the panel, a workspace shows how many windows it has, and a display when a monitor shows it.
 
+The styles with a row of workspaces (Pills, Dots, i3) work like the workspace buttons of a bar: click a workspace to go
+there. A click on the workspace that you're on, or anywhere else on the item, opens the panel. Under "Workspaces in the
+menu bar" (or with a right click on a workspace in the panel), pick the workspaces to keep in the row: they stay there
+also when they're empty, together with the workspace that you're on. Without picked workspaces, the row shows every
+workspace with windows.
+
 Use a single macOS Space (one per monitor if "Displays have separate Spaces" is on) and let MarSpace do the rest. When
 MarSpace quits, all windows are put back on screen.
 

@@ -1,17 +1,20 @@
 import SwiftUI
 
+/// The look of the menu bar item, kept in the user defaults. Read once: the menu bar item is drawn from them after every
+/// refresh session that changes what it shows
 struct ExperimentalUISettings {
     var displayStyle: MenuBarStyle {
-        get {
-            switch UserDefaults.standard.string(forKey: ExperimentalUISettingsItems.displayStyle.rawValue) {
-                case let value?: MenuBarStyle(rawValue: value) ?? .monospacedText
-                case nil: .monospacedText
-            }
-        }
-        set {
-            UserDefaults.standard.setValue(newValue.rawValue, forKey: ExperimentalUISettingsItems.displayStyle.rawValue)
-            UserDefaults.standard.synchronize()
-        }
+        didSet { UserDefaults.standard.setValue(displayStyle.rawValue, forKey: ExperimentalUISettingsItems.displayStyle.rawValue) }
+    }
+    /// The workspaces that the strips of the menu bar item show (pills, dots, i3), also when they are empty. None: all
+    /// workspaces with windows. See ``MenuBarState/strip``
+    var favoriteWorkspaces: [String] {
+        didSet { UserDefaults.standard.setValue(favoriteWorkspaces, forKey: ExperimentalUISettingsItems.favoriteWorkspaces.rawValue) }
+    }
+
+    init(_ defaults: UserDefaults = .standard) {
+        displayStyle = defaults.string(forKey: ExperimentalUISettingsItems.displayStyle.rawValue).flatMap(MenuBarStyle.init(rawValue:)) ?? .monospacedText
+        favoriteWorkspaces = defaults.stringArray(forKey: ExperimentalUISettingsItems.favoriteWorkspaces.rawValue) ?? []
     }
 }
 
@@ -38,6 +41,13 @@ enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
             case .i3Ordered: "i3 style ordered"
         }
     }
+    /// Shows a row of workspaces: the favorites choose them, and a click on one focuses it
+    var showsStrip: Bool {
+        switch self {
+            case .pills, .dots, .i3, .i3Ordered: true
+            case .monospacedText, .systemText, .workspaceApps, .squares: false
+        }
+    }
     var explanation: String {
         switch self {
             case .monospacedText, .systemText: "The workspace that each monitor shows, as text"
@@ -53,4 +63,5 @@ enum MenuBarStyle: String, CaseIterable, Identifiable, Equatable, Hashable {
 
 enum ExperimentalUISettingsItems: String {
     case displayStyle
+    case favoriteWorkspaces
 }

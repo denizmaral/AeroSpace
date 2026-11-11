@@ -49,7 +49,7 @@ struct MenuBarItemContent: View {
     var cgImage: CGImage? { ImageRenderer(content: self).cgImage }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: Self.spacing) {
             if state.settingsHaveProblems {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .resizable()
@@ -85,24 +85,63 @@ struct MenuBarItemContent: View {
         }
     }
 
+    private static let spacing: CGFloat = 6
+
     /// The binding mode (other than the main one) in a circle, before the workspaces
     private func withMode(_ state: MenuBarState, @ViewBuilder _ workspaces: () -> some View) -> some View {
-        HStack(spacing: 6) {
-            if let mode = state.mode {
-                if let symbol = mode.systemImageName {
-                    Image(systemName: symbol)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(color)
-                        .frame(width: 30, height: 30)
-                } else {
-                    Text("(\(mode.name))").font(.system(.largeTitle)).foregroundStyle(color)
-                }
-            }
+        HStack(spacing: Self.spacing) {
+            if let mode = state.mode { Self.modeView(mode, color) }
             workspaces()
         }
     }
+
+    @ViewBuilder
+    private static func modeView(_ mode: TrayItem, _ color: Color) -> some View {
+        if let symbol = mode.systemImageName {
+            Image(systemName: symbol)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .fontWeight(.semibold)
+                .foregroundStyle(color)
+                .frame(width: 30, height: 30)
+        } else {
+            Text("(\(mode.name))").font(.system(.largeTitle)).foregroundStyle(color)
+        }
+    }
+
+    /// Where the workspaces are in the item at rest, from its left edge, in the units of the drawing (twice the
+    /// points). A click there focuses the workspace (see ``MenuBarClicks``). Measured when the item is clicked: the
+    /// classic styles are laid out by SwiftUI
+    static func workspaceSlots(_ state: MenuBarState, _ color: Color) -> [WorkspaceSlot] {
+        var x: CGFloat = state.settingsHaveProblems ? height + spacing : 0
+        let slots: [WorkspaceSlot]
+        switch state.style {
+            case .pills, .dots:
+                if let mode = state.mode { x += width(of: modeView(mode, color)) + spacing }
+                slots = state.style == .pills ? WorkspacePills.slots(state.strip) : WorkspaceDots.slots(state.strip)
+            case .squares, .i3, .i3Ordered:
+                var elementX: CGFloat = 0
+                slots = ClassicMenuBarItem(state: state, color: color).elements.compactMap { element in
+                    let width = width(of: element.view)
+                    defer { elementX += width + spacing }
+                    return element.workspace.map { WorkspaceSlot(name: $0, minX: elementX, maxX: elementX + width) }
+                }
+            case .monospacedText, .systemText, .workspaceApps:
+                slots = []
+        }
+        return slots.map { WorkspaceSlot(name: $0.name, minX: $0.minX + x, maxX: $0.maxX + x) }
+    }
+
+    private static func width(of view: some View) -> CGFloat {
+        ImageRenderer(content: view).cgImage.map { CGFloat($0.width) } ?? 0
+    }
+}
+
+/// Where a workspace is in the menu bar item, along its width
+struct WorkspaceSlot: Equatable {
+    let name: String
+    let minX: CGFloat
+    let maxX: CGFloat
 }
 
 extension MenuBarStyle {
@@ -167,8 +206,22 @@ private struct WorkspacePills: View {
         let outlineOpacity: CGFloat
     }
 
+    private static func width(_ name: String) -> CGFloat {
+        max(pillHeight - 6, textWidth(name, size: fontSize, weight: .semibold) + 12)
+    }
+
+    /// Each pill and half of the gaps next to it (see ``MenuBarItemContent/workspaceSlots(_:_:)``)
+    static func slots(_ strip: [WorkspaceViewModel]) -> [WorkspaceSlot] {
+        var x: CGFloat = 0
+        return strip.map { workspace in
+            let width = width(workspace.name) + gap
+            defer { x += width }
+            return WorkspaceSlot(name: workspace.name, minX: x, maxX: x + width)
+        }
+    }
+
     var body: some View {
-        let entries = stripEntries(from: from?.workspaces ?? state.workspaces, to: state.workspaces)
+        let entries = stripEntries(from: (from ?? state).strip, to: state.strip)
         let t = CGFloat(progress)
         let midY = MenuBarItemContent.height / 2
         var x: CGFloat = 0
@@ -176,7 +229,7 @@ private struct WorkspacePills: View {
         var fromFocused: CGRect? = nil
         var toFocused: CGRect? = nil
         for entry in entries {
-            let width = max(Self.pillHeight - 6, textWidth(entry.name, size: Self.fontSize, weight: .semibold) + 12)
+            let width = Self.width(entry.name)
             // A workspace that comes or goes grows or shrinks from its middle
             let presence = lerp(entry.from == nil ? 0 : 1, entry.to == nil ? 0 : 1, t)
             let midX = x + (width + Self.gap) * presence / 2
@@ -290,8 +343,18 @@ private struct WorkspaceDots: View {
         }
     }
 
+    /// Each dot and the gap after it (see ``MenuBarItemContent/workspaceSlots(_:_:)``)
+    static func slots(_ strip: [WorkspaceViewModel]) -> [WorkspaceSlot] {
+        var x: CGFloat = 0
+        return strip.map { workspace in
+            let width = look(workspace).width + gap
+            defer { x += width }
+            return WorkspaceSlot(name: workspace.name, minX: x, maxX: x + width)
+        }
+    }
+
     var body: some View {
-        let entries = stripEntries(from: from?.workspaces ?? state.workspaces, to: state.workspaces)
+        let entries = stripEntries(from: (from ?? state).strip, to: state.strip)
         let t = CGFloat(progress)
         let midY = MenuBarItemContent.height / 2
         var x: CGFloat = 0
@@ -433,57 +496,55 @@ private struct ClassicMenuBarItem: View {
     private let itemBorderSize = CGFloat(3)
     private let itemCornerRadius = CGFloat(6)
 
+    /// A part of the item, side by side with the others
+    struct Element: Identifiable {
+        let id: String
+        /// A click on it focuses this workspace
+        let workspace: String?
+        let view: AnyView
+    }
+
     var body: some View {
         HStack(spacing: 6) {
-            switch state.style {
-                case .i3:
-                    squares
-                    let workspaces = state.workspaces.filter { !$0.isEffectivelyEmpty && !$0.isVisible }
-                    if !workspaces.isEmpty {
-                        otherWorkspaces(with: workspaces)
-                    }
-                case .i3Ordered:
-                    if let modeItem = state.mode {
-                        itemView(for: modeItem)
-                        modeSeparator(with: .monospaced)
-                    }
-                    let orderedWorkspaces = state.workspaces.filter { !$0.isEffectivelyEmpty || $0.isVisible }
-                    ForEach(orderedWorkspaces, id: \.name) { item in
-                        let trayItem = TrayItem(
-                            type: .workspace,
-                            name: item.name,
-                            isActive: item.isFocused,
-                            hasFullscreenWindows: item.hasFullscreenWindows,
-                        )
-                        itemView(for: trayItem)
-                            .opacity(item.isVisible ? 1 : 0.5)
-                    }
-                default: squares
-            }
+            ForEach(elements) { $0.view }
         }
     }
 
-    private var squares: some View {
-        ForEach(state.trayItems, id: \.id) { item in
-            itemView(for: item)
-            if item.type == .mode {
-                modeSeparator(with: .monospaced)
+    /// Drawn side by side, and measured to find the workspace that is clicked (see
+    /// ``MenuBarItemContent/workspaceSlots(_:_:)``)
+    var elements: [Element] {
+        var result: [Element] = []
+        func workspace(_ workspace: WorkspaceViewModel, isActive: Bool, opacity: Double) {
+            let item = TrayItem(type: .workspace, name: workspace.name, isActive: isActive, hasFullscreenWindows: workspace.hasFullscreenWindows)
+            result.append(Element(id: "workspace \(workspace.name)", workspace: workspace.name, view: AnyView(itemView(for: item).opacity(opacity))))
+        }
+        func trayItems() {
+            for item in state.trayItems {
+                result.append(Element(id: item.id, workspace: item.type == .workspace ? item.name : nil, view: AnyView(itemView(for: item))))
+                if item.type == .mode {
+                    result.append(Element(id: "mode separator", workspace: nil, view: AnyView(modeSeparator(with: .monospaced))))
+                }
             }
         }
-    }
-
-    private func otherWorkspaces(with otherWorkspaces: [WorkspaceViewModel]) -> some View {
-        Group {
-            Text("|")
-                .font(.system(.largeTitle))
-                .foregroundStyle(color)
-                .bold()
-                .padding(.bottom, 6)
-            ForEach(otherWorkspaces, id: \.name) { item in
-                itemView(for: TrayItem(type: .workspace, name: item.name, isActive: false, hasFullscreenWindows: item.hasFullscreenWindows))
-            }
+        switch state.style {
+            case .i3:
+                trayItems()
+                let others = state.strip.filter { !$0.isVisible }
+                if !others.isEmpty {
+                    let separator = Text("|").font(.system(.largeTitle)).foregroundStyle(color).bold().padding(.bottom, 6).opacity(0.6)
+                    result.append(Element(id: "separator", workspace: nil, view: AnyView(separator)))
+                    for other in others { workspace(other, isActive: false, opacity: 0.6) }
+                }
+            case .i3Ordered:
+                if let mode = state.mode {
+                    result.append(Element(id: mode.id, workspace: nil, view: AnyView(itemView(for: mode))))
+                    result.append(Element(id: "mode separator", workspace: nil, view: AnyView(modeSeparator(with: .monospaced))))
+                }
+                for item in state.strip { workspace(item, isActive: item.isFocused, opacity: item.isVisible ? 1 : 0.5) }
+            default:
+                trayItems()
         }
-        .opacity(0.6)
+        return result
     }
 
     private func modeSeparator(with design: Font.Design) -> some View {
@@ -564,11 +625,9 @@ struct StripEntry {
     let to: WorkspaceViewModel?
 }
 
-/// The workspaces listed before or after the change, in the order of the workspaces. A workspace that is gone (an
-/// empty workspace that was left) stays where it was, until it has shrunk away
-func stripEntries(from: [WorkspaceViewModel], to: [WorkspaceViewModel]) -> [StripEntry] {
-    let fromListed = from.filter(\.isListed)
-    let toListed = to.filter(\.isListed)
+/// The workspaces of the strip before or after the change (see ``MenuBarState/strip``), in the order of the workspaces.
+/// A workspace that is gone (an empty workspace that was left) stays where it was, until it has shrunk away
+func stripEntries(from fromListed: [WorkspaceViewModel], to toListed: [WorkspaceViewModel]) -> [StripEntry] {
     let fromByName = Dictionary(fromListed.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
     let toNames = Set(toListed.map(\.name))
     var result: [StripEntry] = []

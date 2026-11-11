@@ -183,6 +183,7 @@ private struct MenuBarPanel: View {
 private struct WorkspaceTile: View {
     let workspace: WorkspaceViewModel
     let focusNamespace: Namespace.ID
+    @EnvironmentObject private var viewModel: TrayMenuModel
     @State private var isHovered = false
 
     private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -255,6 +256,12 @@ private struct WorkspaceTile: View {
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .help(help)
+        .contextMenu {
+            let isFavorite = viewModel.experimentalUISettings.favoriteWorkspaces.contains(workspace.name)
+            Button(isFavorite ? "Remove from the Menu Bar" : "Keep in the Menu Bar", systemImage: isFavorite ? "pin.slash" : "pin") {
+                viewModel.toggleFavorite(workspace.name)
+            }
+        }
     }
 
     private var help: String {
@@ -291,14 +298,84 @@ private struct MenuBarStylePicker: View {
     var body: some View {
         let state = viewModel.menuBarState
         let selected = state.style
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
-            ForEach(MenuBarStyle.allCases) { style in
-                let preview = MenuBarStylePreview(state: state.with(style: style), isDark: colorScheme == .dark)
-                MenuBarStyleCard(style: style, isSelected: style == selected, preview: preview) {
-                    viewModel.setMenuBarStyle(style)
+        VStack(alignment: .leading, spacing: 12) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
+                ForEach(MenuBarStyle.allCases) { style in
+                    let preview = MenuBarStylePreview(state: state.with(style: style), isDark: colorScheme == .dark)
+                    MenuBarStyleCard(style: style, isSelected: style == selected, preview: preview) {
+                        viewModel.setMenuBarStyle(style)
+                    }
                 }
             }
+            FavoriteWorkspacesPicker(state: state)
         }
+    }
+}
+
+/// The workspaces that the strips of the menu bar item show (see ``ExperimentalUISettings/favoriteWorkspaces``)
+@MainActor
+private struct FavoriteWorkspacesPicker: View {
+    let state: MenuBarState
+    @EnvironmentObject var viewModel: TrayMenuModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Workspaces in the menu bar")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !state.favorites.isEmpty {
+                    Button("Show all with windows") { viewModel.clearFavorites() }
+                        .buttonStyle(.link)
+                        .font(.caption)
+                }
+            }
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 27, maximum: 44), spacing: 5)], spacing: 5) {
+                ForEach(state.workspaces, id: \.name) { workspace in
+                    FavoriteWorkspaceChip(
+                        name: workspace.name,
+                        isFavorite: state.favorites.contains(workspace.name),
+                        isShown: state.isInStrip(workspace),
+                    ) { viewModel.toggleFavorite(workspace.name) }
+                }
+            }
+            Text(state.favorites.isEmpty
+                ? "Every workspace with windows. Pick the ones to keep there, also when they're empty."
+                : "The picked ones, and the workspace that you're on.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .opacity(state.style.showsStrip ? 1 : 0.5)
+        .help(state.style.showsStrip ? "" : "For the styles that show a row of workspaces: Pills, Dots, i3")
+    }
+}
+
+@MainActor
+private struct FavoriteWorkspaceChip: View {
+    let name: String
+    let isFavorite: Bool
+    /// In the menu bar right now: picked, or (without favorites) a workspace with windows
+    let isShown: Bool
+    let toggle: () -> Void
+
+    private static let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+
+    var body: some View {
+        Button(action: toggle) {
+            Text(name)
+                .font(.system(.callout, design: .rounded).weight(.semibold))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, minHeight: 24)
+                .foregroundStyle(isFavorite ? Color.white : isShown ? .primary : .secondary)
+                .background(isFavorite ? Color.accentColor : Color.primary.opacity(isShown ? 0.12 : 0.05), in: Self.shape)
+                .contentShape(Self.shape)
+        }
+        .buttonStyle(TileButtonStyle())
+        .animation(.snappy(duration: 0.2), value: isFavorite)
+        .help(isFavorite ? "Picked: always in the menu bar. Click to remove" : "Click to keep \(name) in the menu bar")
+        .accessibilityAddTraits(isFavorite ? .isSelected : [])
     }
 }
 
