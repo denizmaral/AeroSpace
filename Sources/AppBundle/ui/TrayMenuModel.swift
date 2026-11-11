@@ -14,11 +14,13 @@ public final class TrayMenuModel: ObservableObject {
     @Published var experimentalUISettings: ExperimentalUISettings = ExperimentalUISettings()
     @Published var settingsHaveProblems: Bool = false
     @Published var axPermissionStatus: AxPermissionStatus = .waitingWithPrompt
+    /// See ``previewMenuBarStyle(_:)``. Never saved
+    @Published private(set) var previewStyle: MenuBarStyle? = nil
 
     /// What the menu bar item shows
     @MainActor var menuBarState: MenuBarState {
         MenuBarState(
-            style: experimentalUISettings.displayStyle,
+            style: previewStyle ?? experimentalUISettings.displayStyle,
             trayText: trayText,
             trayItems: trayItems,
             workspaces: workspaces,
@@ -34,20 +36,45 @@ public final class TrayMenuModel: ObservableObject {
         MenuBarAnimator.shared.stateDidChange(from: before, to: menuBarState)
     }
 
-    /// The workspace is shown in the strips of the menu bar item, or not any more: it comes in or shrinks away
-    @MainActor func toggleFavorite(_ workspace: String) {
+    /// The menu bar item shows the style for a moment (the mouse is over it in the panel), without saving it. nil: the
+    /// chosen style again
+    @MainActor func previewMenuBarStyle(_ style: MenuBarStyle?) {
+        if style == previewStyle { return }
         let before = menuBarState
+        previewStyle = style
+        MenuBarAnimator.shared.stateDidChange(from: before, to: menuBarState)
+    }
+
+    /// The workspace is shown in the strips of the menu bar item, or not any more: it comes in or shrinks away. A new
+    /// favorite goes before the first one that comes after it in the order of the workspaces
+    @MainActor func toggleFavorite(_ workspace: String) {
         var favorites = experimentalUISettings.favoriteWorkspaces
-        if let index = favorites.firstIndex(of: workspace) { favorites.remove(at: index) } else { favorites.append(workspace) }
+        if let index = favorites.firstIndex(of: workspace) {
+            favorites.remove(at: index)
+        } else {
+            let key = workspace.toLogicalSegments()
+            favorites.insert(workspace, at: favorites.firstIndex { key < $0.toLogicalSegments() } ?? favorites.endIndex)
+        }
+        setFavorites(favorites)
+    }
+
+    /// The order of the favorites in the strips of the menu bar item. nil: at the end
+    @MainActor func moveFavorite(_ workspace: String, before other: String?) {
+        var favorites = experimentalUISettings.favoriteWorkspaces.filter { $0 != workspace }
+        favorites.insert(workspace, at: other.flatMap { favorites.firstIndex(of: $0) } ?? favorites.endIndex)
+        setFavorites(favorites)
+    }
+
+    @MainActor private func setFavorites(_ favorites: [String]) {
+        if favorites == experimentalUISettings.favoriteWorkspaces { return }
+        let before = menuBarState
         experimentalUISettings.favoriteWorkspaces = favorites
         MenuBarAnimator.shared.stateDidChange(from: before, to: menuBarState)
     }
 
     /// All workspaces with windows are shown in the strips of the menu bar item again
     @MainActor func clearFavorites() {
-        let before = menuBarState
-        experimentalUISettings.favoriteWorkspaces = []
-        MenuBarAnimator.shared.stateDidChange(from: before, to: menuBarState)
+        setFavorites([])
     }
 }
 
@@ -74,6 +101,7 @@ enum AxPermissionStatus: Equatable {
     let isMultiMonitor = sortedMonitors.count > 1
     var workspaces = Workspace.all.map {
         let windows = $0.allLeafWindowsRecursive
+        let monitor = $0.workspaceMonitorInfo
         let apps = windows.map { $0.app.name?.takeIf { !$0.isEmpty } }.filterNotNil().toSet()
         let dash = " - "
         let suffix = switch true {
@@ -96,6 +124,10 @@ enum AxPermissionStatus: Equatable {
             isEffectivelyEmpty: $0.isEffectivelyEmpty,
             isVisible: $0.isVisible,
             hasFullscreenWindows: windows.contains { $0.isFullscreen },
+            windows: ($0.rootTilingContainer.allLeafWindowsRecursive + $0.floatingWindowsContainer.children.filterIsInstance(of: Window.self))
+                .filter(\.lifeStatus.isInhabited)
+                .map { WindowSummary(windowId: $0.windowId, appBundleUrl: ($0.app as? MacApp)?.bundleUrl) },
+            monitorIndex: sortedMonitors.firstIndex { $0.rect == monitor.rect } ?? 0,
         )
     }
     // An empty workspace is kept only if it's persistent: a favorite one is in the strips of the menu bar item anyway
@@ -158,10 +190,21 @@ struct WorkspaceViewModel: Hashable {
     let isEffectivelyEmpty: Bool
     let isVisible: Bool
     let hasFullscreenWindows: Bool
+    /// Its windows in the order of the layout, the tiling ones first (the panel shows them as panes, and a window can be
+    /// dragged to another workspace)
+    var windows: [WindowSummary] = []
+    /// Its monitor (the one that shows it, or would show it), in the order of the monitors
+    var monitorIndex: Int = 0
 
     /// The menu bar panel and the strips of the menu bar item (pills, dots) leave out the workspaces that are empty and
     /// not shown: the persistent ones are just noise there
     var isListed: Bool { !isEffectivelyEmpty || isVisible || isFocused }
+}
+
+/// A window in the menu bar panel
+struct WindowSummary: Hashable {
+    let windowId: OpaqueWindowId
+    let appBundleUrl: URL?
 }
 
 enum TrayItemType: String, Hashable {

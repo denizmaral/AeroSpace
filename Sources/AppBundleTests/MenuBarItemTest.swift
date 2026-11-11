@@ -74,7 +74,8 @@ struct MenuBarItemTest {
     @Test func testTheStripShowsTheFavoritesAndTheShownWorkspace() {
         let workspaces = [workspace("1"), workspace("B", empty: true), workspace("C"), workspace("T", focused: true), workspace("X")]
         #expect(state(workspaces).strip.map(\.name) == ["1", "C", "T", "X"])
-        #expect(state(workspaces, favorites: ["C", "B"]).strip.map(\.name) == ["B", "C", "T"])
+        // In the order of the user (the panel inserts a new favorite at its place in the order of the workspaces)
+        #expect(state(workspaces, favorites: ["C", "B"]).strip.map(\.name) == ["C", "B", "T"])
         #expect(!state(workspaces).looksAnimatedTheSame(as: state(workspaces, favorites: ["C"])))
     }
 
@@ -96,7 +97,7 @@ struct MenuBarItemTest {
     /// The focused workspace becomes a favorite: it moves from the end to its place, every workspace once
     @Test func testTheFocusedWorkspaceBecomesAFavorite() {
         let workspaces = [workspace("B"), workspace("T", focused: true), workspace("X")]
-        let entries = stripEntries(from: state(workspaces, favorites: ["B", "X"]).strip, to: state(workspaces, favorites: ["B", "X", "T"]).strip)
+        let entries = stripEntries(from: state(workspaces, favorites: ["B", "X"]).strip, to: state(workspaces, favorites: ["B", "T", "X"]).strip) // toggleFavorite puts T at its place
         #expect(entries.map(\.name) == ["B", "T", "X"])
         #expect(entries.allSatisfy { $0.from != nil && $0.to != nil })
     }

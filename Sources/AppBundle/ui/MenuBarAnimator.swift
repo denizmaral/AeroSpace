@@ -16,13 +16,13 @@ struct MenuBarState: Equatable {
     var focusedWorkspace: WorkspaceViewModel? { workspaces.first(where: \.isFocused) }
     var mode: TrayItem? { trayItems.first { $0.type == .mode } }
 
-    /// The workspaces that the strips (pills, dots, i3, …) show: the favorite ones, also when they are empty, in the order
-    /// of the workspaces, then the other ones that the monitors show. The favorites stay where they are, under the mouse.
-    /// Without favorites, all workspaces with windows, in order
+    /// The workspaces that the strips (pills, dots, i3, …) show: the favorite ones in the order of the user, also when
+    /// they are empty, then the other ones that the monitors show. The favorites stay where they are, under the mouse.
+    /// Without favorites, all workspaces with windows, in the order of the workspaces
     var strip: [WorkspaceViewModel] {
         favorites.isEmpty
             ? workspaces.filter(\.isListed)
-            : workspaces.filter { favorites.contains($0.name) } + workspaces.filter { $0.isVisible && !favorites.contains($0.name) }
+            : favorites.compactMap { name in workspaces.first { $0.name == name } } + workspaces.filter { $0.isVisible && !favorites.contains($0.name) }
     }
 
     func isInStrip(_ workspace: WorkspaceViewModel) -> Bool {

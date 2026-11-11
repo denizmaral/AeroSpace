@@ -132,6 +132,7 @@ final class MenuBarItem: NSObject, NSWindowDelegate {
     private func closePanel() {
         guard let panel else { return }
         self.panel = nil // Released: nothing of it is kept while it's closed
+        TrayMenuModel.shared.previewMenuBarStyle(nil) // The mouse may still be over a style, it doesn't leave it
         panelClosedAt = .now
         panel.delegate = nil
         panel.orderOut(nil)

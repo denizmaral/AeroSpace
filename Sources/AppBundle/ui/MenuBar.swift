@@ -278,7 +278,7 @@ private struct MenuBarStylePicker: View {
 
     var body: some View {
         let state = viewModel.menuBarState
-        let selected = state.style
+        let selected = viewModel.experimentalUISettings.displayStyle // Not the one that is previewed
         VStack(alignment: .leading, spacing: 12) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
                 ForEach(MenuBarStyle.allCases) { style in
