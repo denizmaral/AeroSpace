@@ -88,13 +88,19 @@ struct SettingsTest {
         assertEquals(config.onWindowDetected.count, 1) // Only the Mail rule
     }
 
-    /// The settings of the first launch: valid, everything a new user needs (⌃⌥ shortcuts, workspaces, a service mode)
+    /// The settings of the first launch: valid, everything a new user needs (⌃⌥ shortcuts, workspaces), in one mode
     @Test func testTheDefaults() {
         let (config, problems) = Settings.defaults.compile(keyForCharacter: { keyNotationToKeyCode[$0.lowercased()] })
         assertEquals(problems, [])
-        assertEquals(config.modes[mainModeId]?.bindings.count, 15 + 31 + 31) // The shortcuts, going to and moving to 31 workspaces
-        assertEquals(config.modes["service"]?.bindings.count, 9)
-        assertEquals(config.persistentWorkspaces.count, 31)
+        assertEquals(config.modes.keys.sorted(), [mainModeId])
+        assertEquals(config.modes[mainModeId]?.bindings.count, 16 + 35 + 35) // The shortcuts, going to and moving to 35 workspaces
+        assertEquals(config.persistentWorkspaces.count, 35)
+        let bindings = config.modes[mainModeId]?.bindings ?? [:]
+        // The arrow keys, not H, J, K and L: those are workspaces like the other letters
+        assertEquals(bindings["alt-ctrl-left"]?.commands.shellOfCommandsDescription, "focus left")
+        assertEquals(bindings["alt-ctrl-shift-down"]?.commands.shellOfCommandsDescription, "move down")
+        assertEquals(bindings["alt-ctrl-h"]?.commands.shellOfCommandsDescription, "workspace H")
+        assertEquals(bindings["alt-ctrl-shift-l"]?.commands.shellOfCommandsDescription, "move-node-to-workspace L")
     }
 
     @Test func testSettingsSurviveTheStorageFormat() throws {

@@ -3,6 +3,28 @@
 Everything here is set up in the settings window: open it from the menu bar panel, or open MarSpace again while it
 runs. Changes apply right away.
 
+## The shortcuts you start with
+
+A new installation starts with these shortcuts. All of them use ⌃⌥ (Control and Option), and ⇧ for what moves a
+window. Change them in Settings › Shortcuts; settings that exist already keep their shortcuts.
+
+| Shortcut | What it does |
+|---|---|
+| ⌃⌥ ← ↓ ↑ → | Focus the window in that direction |
+| ⌃⌥⇧ ← ↓ ↑ → | Move the window in that direction |
+| ⌃⌥ and 1 … 9 or A … Z | Go to the workspace with that name |
+| ⌃⌥⇧ and 1 … 9 or A … Z | Move the window to that workspace |
+| ⌃⌥ ⇥ | Go back to the previous workspace |
+| ⌃⌥⇧ ⇥ | Move the workspace to the next monitor |
+| ⌃⌥ − and ⌃⌥ = | Make the window smaller or bigger, again and again while the keys are held |
+| ⌃⌥ / | Tiles: side by side, or on top of each other |
+| ⌃⌥ , | Accordion: horizontal or vertical |
+| ⌃⌥⇧ Space | Make the window floating, or tiling again |
+| ⌃⌥⇧ ⌫ | Reset the layout of the workspace: its windows side by side again |
+
+−, =, / and , are the keys at these places of a US keyboard: the settings window shows every shortcut with the labels
+of your keyboard layout.
+
 ## Windows live in a tree
 
 MarSpace arranges the windows of a workspace in a tree, like [i3](https://i3wm.org/docs/userguide.html#tree):
@@ -73,8 +95,8 @@ when you go to another workspace, like a small video or a note that you want eve
 the focus. A window rule can pin the windows of an app: make them floating first (Change the layout › Floating), then
 pin them.
 
-When windows were made floating by mistake, "Tile all floating windows" (`aerospace tile-floating-windows`, `t` in the
-service mode of new settings) makes every floating window of the workspace tiling again. A window that you made
+When windows were made floating by mistake, the action "Tile all floating windows" (`aerospace tile-floating-windows`)
+makes every floating window of the workspace tiling again. A window that you made
 floating goes back to its place in the layout, with its size (also when you tile it alone, with Change the layout ›
 Tiling); a window that never had a place, like a dialog, is placed like a new window.
 

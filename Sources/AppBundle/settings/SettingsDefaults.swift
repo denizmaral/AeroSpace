@@ -2,7 +2,11 @@ import Common
 import HotKey
 
 extension Settings {
-    /// The settings of the first launch. ⌃⌥ for everything: ⌥ alone types characters on most keyboard layouts
+    /// The settings of the first launch. ⌃⌥ for everything: ⌥ alone types characters on most keyboard layouts.
+    ///
+    /// The arrow keys focus and move, like the window shortcuts that Mac users know (Rectangle, Magnet), not H, J, K
+    /// and L. And there is one mode: no action is behind a second set of shortcuts, where plain keys act on the
+    /// windows (AeroSpace's service mode: once in it, F made the window floating and ⌫ closed all the others)
     static let defaults: Settings = {
         var settings = Settings()
         settings.appearance.gaps = Appearance.Gaps(
@@ -21,36 +25,26 @@ extension Settings {
         }
         settings.modes = [
             BindingMode(name: mainModeId, shortcuts: [
-                shortcut(controlOption, .h, .focus(.left)),
-                shortcut(controlOption, .j, .focus(.down)),
-                shortcut(controlOption, .k, .focus(.up)),
-                shortcut(controlOption, .l, .focus(.right)),
-                shortcut(controlOptionShift, .h, .move(.left)),
-                shortcut(controlOptionShift, .j, .move(.down)),
-                shortcut(controlOptionShift, .k, .move(.up)),
-                shortcut(controlOptionShift, .l, .move(.right)),
+                shortcut(controlOption, .leftArrow, .focus(.left)),
+                shortcut(controlOption, .downArrow, .focus(.down)),
+                shortcut(controlOption, .upArrow, .focus(.up)),
+                shortcut(controlOption, .rightArrow, .focus(.right)),
+                shortcut(controlOptionShift, .leftArrow, .move(.left)),
+                shortcut(controlOptionShift, .downArrow, .move(.down)),
+                shortcut(controlOptionShift, .upArrow, .move(.up)),
+                shortcut(controlOptionShift, .rightArrow, .move(.right)),
                 shortcut(controlOption, .minus, .resize(.smart, .subtract(50))),
                 shortcut(controlOption, .equal, .resize(.smart, .add(50))),
                 shortcut(controlOption, .slash, .layout([.tiles, .horizontal, .vertical])),
                 shortcut(controlOption, .comma, .layout([.accordion, .horizontal, .vertical])),
                 shortcut(controlOption, .tab, .workspaceBackAndForth),
                 shortcut(controlOptionShift, .tab, .moveWorkspaceToMonitor(.next, wrapAround: true)),
-                shortcut(controlOptionShift, .semicolon, .enterMode("service")),
-            ]),
-            BindingMode(name: "service", shortcuts: [
-                shortcut([], .escape, .enterMode(mainModeId)),
-                shortcut([], .r, .flattenWorkspaceTree, .enterMode(mainModeId)),
-                shortcut([], .f, .layout([.floating, .tiling]), .enterMode(mainModeId)),
-                shortcut([], .t, .tileFloatingWindows, .enterMode(mainModeId)),
-                shortcut([], .delete, .closeAllWindowsButCurrent, .enterMode(mainModeId)),
-                shortcut(controlOptionShift, .h, .joinWith(.left), .enterMode(mainModeId)),
-                shortcut(controlOptionShift, .j, .joinWith(.down), .enterMode(mainModeId)),
-                shortcut(controlOptionShift, .k, .joinWith(.up), .enterMode(mainModeId)),
-                shortcut(controlOptionShift, .l, .joinWith(.right), .enterMode(mainModeId)),
+                shortcut(controlOptionShift, .space, .layout([.floating, .tiling])),
+                shortcut(controlOptionShift, .delete, .flattenWorkspaceTree),
             ]),
         ]
-        // The workspaces of the keys that the shortcuts above don't use (H, J, K, L)
-        settings.workspaces.persistent = "123456789ABCDEFGIMNOPQRSTUVWXYZ".map(String.init)
+        // A workspace for every key that types a digit or a letter: the shortcuts above use none of them
+        settings.workspaces.persistent = "123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".map(String.init)
         settings.automation.onFocusedMonitorChanged = [.moveMouse(.monitorLazyCenter)]
         return settings
     }()
