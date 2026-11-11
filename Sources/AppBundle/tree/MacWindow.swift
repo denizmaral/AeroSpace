@@ -166,8 +166,10 @@ final class MacWindow: Window {
     }
 
     // todo it's part of the window layout and should be moved to layoutRecursive.swift
+    /// - Parameter tile: the size of the tile of a tiling window (see ``Workspace/tileSizesWhileHidden()``). The window
+    ///   gets it in the corner
     @MainActor
-    func hideInCorner(_ corner: OptimalHideCorner) async throws {
+    func hideInCorner(_ corner: OptimalHideCorner, tile: CGSize?) async throws {
         guard let nodeMonitorInfo else { return }
         // Don't accidentally override prevUnhiddenEmulationPosition in case of subsequent `hideInCorner` calls
         if !isHiddenInCorner {
@@ -187,18 +189,22 @@ final class MacWindow: Window {
         let p: CGPoint
         switch corner {
             case .bottomLeftCorner:
-                guard let s = try await getAxSize(.cancellable) else { fallthrough }
+                // Its right edge at the left edge of the monitor: the width that it's going to have
+                let width: CGFloat? = if let tile { size(inTile: tile).width } else { try await getAxSize(.cancellable)?.width }
+                guard let width else { fallthrough }
                 // Zoom will jump off if you do one pixel offset AeroSpace issue #527
                 // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
                 let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: -1)
-                p = nodeMonitorInfo.visibleRect.bottomLeftCorner + onePixelOffset + CGPoint(x: -s.width, y: 0)
+                p = nodeMonitorInfo.visibleRect.bottomLeftCorner + onePixelOffset + CGPoint(x: -width, y: 0)
             case .bottomRightCorner:
                 // Zoom will jump off if you do one pixel offset AeroSpace issue #527
                 // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
                 let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: 1)
                 p = nodeMonitorInfo.visibleRect.bottomRightCorner - onePixelOffset
         }
-        setAxFrame(p, nil, readBack: false) // Nothing on the screen deals with it until it's shown again
+        // Nothing on the screen deals with it until it's shown again. What it makes of the size of its tile is read back:
+        // the layout knows it when the workspace is shown (App Store refuses to be narrower than 1000)
+        setAxFrame(p, tile, readBack: tile != nil)
     }
 
     @MainActor

@@ -85,7 +85,7 @@ Async functions take a `CancellationMode` (`.cancellable` / `.nonCancellable`). 
 - **Normalizations** (`normalizeContainers.swift`, both on by default and controlled by config):
   - flatten containers that have a single child;
   - force nested containers to the opposite orientation of their parent.
-- Workspaces are emulated: windows on invisible workspaces are moved into a screen corner. macOS Spaces are deliberately ignored.
+- Workspaces are emulated: windows on invisible workspaces are moved into a screen corner, tiling windows with the sizes of their tiles (`tileSizesWhileHidden`). macOS Spaces are deliberately ignored.
 
 ### New-window placement (`AppBundle/tree/MacWindow.swift`)
 1. `MacWindow.getOrRegister` classifies a window as popup, dialog or tiling (see "Dialogs" in `docs/guide.md`).

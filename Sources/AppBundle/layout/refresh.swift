@@ -241,8 +241,9 @@ private func layoutWorkspaces() async throws {
     }
     for workspace in Workspace.all where !workspace.isVisible {
         let corner = monitorToOptimalHideCorner[workspace.workspaceMonitorInfo.rect.topLeftCorner] ?? .bottomRightCorner
+        let tiles = workspace.tileSizesWhileHidden()
         for window in workspace.windowsToHideInCorner {
-            try await (window as! MacWindow).hideInCorner(corner) // todo as!
+            try await (window as! MacWindow).hideInCorner(corner, tile: tiles[window]) // todo as!
         }
     }
 }

@@ -6,7 +6,29 @@ extension Workspace {
     func layoutWorkspace() async throws { // todo revisit API
         if isEffectivelyEmpty { return }
         let rect = rootTilingRect
-        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height, virtual: tilingRectPaddedByOuterGaps, LayoutContext(self))
+        try await layoutRecursive(rect.topLeftCorner, width: rect.width, height: rect.height, virtual: tilingRectPaddedByOuterGaps, LayoutContext(self, isInCorner: false))
+    }
+
+    /// The sizes of the tiles of the tiling windows, laid out as if the workspace was shown. While the workspace isn't
+    /// shown, its windows wait in a corner of the screen with these sizes (see `MacWindow.hideInCorner`): showing it only
+    /// moves them, and a window that went to the workspace meanwhile, or that MarSpace found there when it started (it
+    /// had the size that it had when the previous run first saw it), isn't resized when it's shown.
+    ///
+    /// Sends nothing
+    @MainActor
+    func tileSizesWhileHidden() -> [Window: CGSize] {
+        if isEffectivelyEmpty { return [:] }
+        let rect = rootTilingRect
+        var frames: [TiledWindowFrame] = []
+        _ = rootTilingContainer.layoutTiling(
+            rect.topLeftCorner,
+            width: rect.width,
+            height: rect.height,
+            virtual: tilingRectPaddedByOuterGaps,
+            LayoutContext(self, isInCorner: true),
+            &frames,
+        )
+        return Dictionary(frames.map { ($0.window, $0.size) }, uniquingKeysWith: { _, last in last })
     }
 
     /// The part of the monitor for the tiling windows: without the gaps at the screen edges. A single tiling window gets
@@ -86,7 +108,11 @@ extension TreeNode {
                 lastAppliedLayoutVirtualRect = virtual
                 if window.isFullscreen && window == context.workspace.rootTilingContainer.mostRecentWindowRecursive {
                     lastAppliedLayoutPhysicalRect = nil
-                    window.layoutFullscreen(context)
+                    if context.isInCorner { // Only its size counts, the containers don't move it
+                        frames.append(TiledWindowFrame(window: window, topLeft: point, size: window.fullscreenRect(context).size))
+                    } else {
+                        window.layoutFullscreen(context)
+                    }
                     return .zero
                 }
                 lastAppliedLayoutPhysicalRect = physicalRect
@@ -150,11 +176,15 @@ extension TilingContainer {
 private struct LayoutContext {
     let workspace: Workspace
     let gaps: Gaps
+    /// The workspace isn't shown, its windows are in a corner of the screen: the layout only gives them the sizes of
+    /// their tiles, and sends nothing (see ``Workspace/tileSizesWhileHidden()``)
+    let isInCorner: Bool
 
     @MainActor
-    init(_ workspace: Workspace) {
+    init(_ workspace: Workspace, isInCorner: Bool) {
         self.workspace = workspace
         self.gaps = config.gaps
+        self.isInCorner = isInCorner
     }
 }
 
@@ -187,10 +217,15 @@ extension Window {
 
     @MainActor
     fileprivate func layoutFullscreen(_ context: LayoutContext) {
-        let monitorRect = noOuterGapsInFullscreen
+        let rect = fullscreenRect(context)
+        setAxFrame(rect.topLeftCorner, rect.size)
+    }
+
+    @MainActor
+    fileprivate func fullscreenRect(_ context: LayoutContext) -> Rect {
+        noOuterGapsInFullscreen
             ? context.workspace.workspaceMonitorInfo.visibleRect
             : context.workspace.workspaceMonitorInfo.visibleRectPaddedByOuterGaps
-        setAxFrame(monitorRect.topLeftCorner, CGSize(width: monitorRect.width, height: monitorRect.height))
     }
 }
 
