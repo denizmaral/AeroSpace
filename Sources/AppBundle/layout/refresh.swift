@@ -62,8 +62,9 @@ func runHeavyCompleteRefreshSession(
 
             await refreshModel_nonCancellable()
             try await refresh()
-            // The windows were registered one by one, in an arbitrary order: back to their places of the previous run
-            if event.isStartup { WindowPlacementStore.restoreTilingTreesOfPreviousRun() }
+            // The windows were registered one by one, in an arbitrary order: back to their places of the previous run (when
+            // the first windows of the previous run are there: the screen may be locked when MarSpace starts)
+            WindowPlacementStore.restoreTilingTreesOfPreviousRunIfPending()
             gcMonitors()
 
             updateTrayText()

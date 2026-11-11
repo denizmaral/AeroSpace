@@ -152,7 +152,7 @@ struct WindowPlacementSnapshot: Sendable {
 /// windows that it detects after a restart (or later: after a native fullscreen Space, after the lock screen) are put
 /// on the focused workspace. With the store, every window goes back to its own workspace, and the windows that are
 /// there when MarSpace starts go back to their places in the layout, with their sizes
-/// (``restoreTilingTreesOfPreviousRun()``).
+/// (``restoreTilingTreesOfPreviousRunIfPending()``).
 ///
 /// The file of the previous run is memory-mapped once at startup (zero copy, no parsing). It's rewritten atomically
 /// only when the placement of some window changes.
@@ -183,15 +183,27 @@ enum WindowPlacementStore {
     private static var lastPersistedTrees: [TilingTreeSnapshot] = []
     private static var didRestoreTilingTrees = false
 
-    /// Puts the tiling windows back where they were in the layout of the previous run. Called once, when the windows that
+    /// Puts the tiling windows back where they were in the layout of the previous run. Done once, when the windows that
     /// are there at the start of MarSpace are registered (in an arbitrary order, each one placed like a new window), before
     /// the first layout and before the placements are persisted again. A window that shows up later (it was on another
     /// macOS Space) goes to its workspace, as a new window. Only the first call restores: the session that follows the
     /// startup session is a startup session too, and the layout may have changed meanwhile (the commands after startup)
-    static func restoreTilingTreesOfPreviousRun() {
+    ///
+    /// The windows of the previous run may not be there yet: the screen is locked when MarSpace starts (it sees no window
+    /// then), or a macOS fullscreen Space is shown. Then the complete refresh sessions try again, until one of them sees a
+    /// window of the previous run (the screen is unlocked). The trees were restored only by the startup session: after a
+    /// restart behind the lock screen, the windows came back as new windows, without their layout
+    static func restoreTilingTreesOfPreviousRunIfPending() {
         if didRestoreTilingTrees { return }
+        guard let previousRun else {
+            didRestoreTilingTrees = true
+            return
+        }
+        let isAnyWindowOfPreviousRunThere = MacWindow.allWindowsMap.values.contains { window in
+            nativeWindowId(of: window).flatMap { previousRun.placement(nativeWindowId: $0, pid: window.macApp.pid) } != nil
+        }
+        guard isAnyWindowOfPreviousRunThere else { return }
         didRestoreTilingTrees = true
-        guard let previousRun else { return }
         for tree in previousRun.trees {
             Workspace.get(byName: tree.workspace).restoreTilingTree(tree, nativeWindowId: nativeWindowId(of:))
         }
