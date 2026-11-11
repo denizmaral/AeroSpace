@@ -63,14 +63,22 @@ struct ShortcutsPane: View {
                         title: "Go to a workspace", symbol: "square.grid.2x2", modifiers: $model.settings.workspaceShortcuts.goTo,
                         defaultModifiers: [.control, .option],
                     )
+                    if model.settings.workspaceShortcuts.goTo != nil {
+                        HStack(spacing: 12) {
+                            Text("Press it again to go back to the previous workspace")
+                            Spacer(minLength: 12)
+                            Toggle("Press it again to go back to the previous workspace", isOn: $model.settings.workspaceShortcuts.goToTogglesBack)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                        }
+                        .padding(.leading, 36) // Under the title of "Go to a workspace"
+                        .help("Press the shortcut of a workspace twice to look at it and come back")
+                    }
                     WorkspaceShortcutRow(
                         title: "Move the window to a workspace", symbol: "macwindow.and.cursorarrow",
                         modifiers: $model.settings.workspaceShortcuts.moveWindowTo, defaultModifiers: [.control, .option, .shift],
                     )
-                    if model.settings.workspaceShortcuts.goTo != nil {
-                        Toggle("The shortcut of the workspace that is shown goes back to the previous one", isOn: $model.settings.workspaceShortcuts.goToTogglesBack)
-                            .help("Press the shortcut of a workspace twice to look at it and come back")
-                    }
                     ForEach(model.problems(at: "Shortcuts › \(mainModeId) › Workspaces"), id: \.message) { problem in
                         Label(problem.message, systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                     }

@@ -85,9 +85,12 @@ enum ActionKind: String, CaseIterable, Identifiable {
 
     /// Separators in the menu
     /// Their parameters go on a line of their own
-    var hasWideParameters: Bool {
+    ///
+    /// - Parameter context: a shortcut has a switch next to the workspace (go back, go there too), an event does not
+    func hasWideParameters(in context: ActionContext) -> Bool {
         switch self {
             case .resize, .moveWorkspaceToMonitor, .fullscreen, .moveMouse, .custom: true
+            case .workspace, .moveWindowToWorkspace: context == .shortcut
             default: false
         }
     }
@@ -167,7 +170,7 @@ struct ActionEditor: View {
 
     var body: some View {
         // A fixed layout per kind: switching layouts while a field is edited would recreate the field (and lose the focus)
-        if ActionKind(action).hasWideParameters {
+        if ActionKind(action).hasWideParameters(in: context) {
             VStack(alignment: .leading, spacing: 6) {
                 kindMenu
                 HStack(spacing: 8) {
