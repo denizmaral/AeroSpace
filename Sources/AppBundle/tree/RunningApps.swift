@@ -14,6 +14,10 @@ import Common
 enum RunningApps {
     private static var apps: [pid_t: RunningApp] = [:]
     private static var listObservation: NSKeyValueObservation? = nil
+    private static var frontmostObservation: NSKeyValueObservation? = nil
+    /// See ``frontmost``. Key-value observed: `NSWorkspace.frontmostApplication` is a new instance every time, and its
+    /// pid a round trip to Launch Services (in every refresh session: the native focus is read first)
+    private static var observedFrontmost: RunningApp? = nil
 
     /// An observed property of an app changed (its name is passed). Set when MarSpace is ready for refresh sessions
     static var onChange: (@MainActor (RunningApp, _ property: String) -> Void)? = nil
@@ -25,7 +29,12 @@ enum RunningApps {
     }
 
     /// The app that gets the key events
-    static var frontmost: RunningApp? { NSWorkspace.shared.frontmostApplication.flatMap(get) }
+    static var frontmost: RunningApp? {
+        startObserving()
+        if let observedFrontmost, !observedFrontmost.nsApp.isTerminated { return observedFrontmost }
+        observedFrontmost = NSWorkspace.shared.frontmostApplication.flatMap(get)
+        return observedFrontmost
+    }
 
     static func isRunning(pid: pid_t) -> Bool {
         startObserving()
@@ -64,6 +73,13 @@ enum RunningApps {
                     case .removal: apps = apps.filter { !$0.value.nsApp.isTerminated }
                     default: sync() // The list was replaced
                 }
+            }
+        }
+        frontmostObservation = NSWorkspace.shared.observe(\.frontmostApplication, options: [.new]) { _, change in
+            let frontmost = change.newValue.flatMap { $0 }
+            Task.startUnstructured { @MainActor in
+                // Before the app is known, e.g. MarSpace itself (nil): asked again when it's read
+                observedFrontmost = frontmost.flatMap(get)
             }
         }
         sync()

@@ -47,6 +47,13 @@ struct RunningAppsTest {
         assertFalse(RunningApps.isRunning(pid: pid))
     }
 
+    /// The frontmost app is observed, not asked for in every refresh session: it's the one of NSWorkspace
+    @Test func testFrontmostIsTheOneOfNSWorkspace() {
+        let expected = NSWorkspace.shared.frontmostApplication.map(\.processIdentifier).flatMap { $0 == myPid ? nil : $0 }
+        assertEquals(RunningApps.frontmost?.pid, expected)
+        assertEquals(RunningApps.frontmost?.pid, expected) // From the observation
+    }
+
     /// Accessibility requests crash if you send them to yourself
     @Test func testMarSpaceItselfIsNotAnApp() {
         assertNil(RunningApps.get(.current))
