@@ -123,29 +123,12 @@ final class MacWindow: Window {
         }
         if !skipClosedWindowsCache { cacheClosedWindowIfNeeded() }
         let parent = unbindAsClosed().parent
-        let deadWindowWorkspace = parent.nodeWorkspace
-        let focus = globalFocus
-        if let deadWindowWorkspace, deadWindowWorkspace == focus.workspace ||
-            deadWindowWorkspace == prevFocusedWorkspace && prevFocusedWorkspaceDate.distance(to: .now) < 1
-        {
-            switch parent.cases {
-                case .tilingContainer, .floatingWindowsContainer, .macosHiddenAppsWindowsContainer, .macosFullscreenWindowsContainer:
-                    let deadWindowFocus = deadWindowWorkspace.toLiveFocus()
-                    _ = setFocus(to: deadWindowFocus)
-                    // Guard against "Apple Reminders popup" bug: AeroSpace issue #201
-                    if focus.windowOrNil?.app.pid != app.pid {
-                        // Force focus to fix macOS annoyance with focused apps without windows.
-                        //   AeroSpace issue #65
-                        deadWindowFocus.windowOrNil?.nativeFocus()
-                    }
-                case .macosPopupWindowsContainer, // Don't switch back on popup destruction
-                     .workspace, // Workspace is invalid parent for windows
-                     .monitor, // Monitor is invalid parent for windows
-                     .workspacesContainer, // WorkspacesContainer is invalid parent for windows
-                     .macosMinimizedWindowsContainer: // Don't switch back on minimized windows destruction
-                    break
-            }
-        }
+        moveFocusAfterClose(
+            closedWindowParent: parent,
+            closedWindowPid: app.pid,
+            isClosedWindowAppRunning: RunningApps.isRunning(pid: app.pid) && isProcessAlive(app.pid),
+            frontmost: RunningApps.frontmostHistory,
+        )
     }
 
     override func getTitle(_ cm: CancellationMode) async throws -> String { try await macApp.getAxTitle(windowId, cm) ?? "" }

@@ -36,6 +36,14 @@ enum RunningApps {
         return observedFrontmost
     }
 
+    /// Which app has the keyboard focus and which app had it before. Unlike ``frontmost``, an app that quit since is kept
+    /// (it passed the focus on by quitting) and MarSpace itself counts
+    static var frontmostHistory: FrontmostHistory {
+        startObserving()
+        return _frontmostHistory
+    }
+    private static var _frontmostHistory = FrontmostHistory()
+
     static func isRunning(pid: pid_t) -> Bool {
         startObserving()
         return apps[pid].map { !$0.nsApp.isTerminated } ?? false
@@ -77,11 +85,15 @@ enum RunningApps {
         }
         frontmostObservation = NSWorkspace.shared.observe(\.frontmostApplication, options: [.new]) { _, change in
             let frontmost = change.newValue.flatMap { $0 }
+            let pid = frontmost?.processIdentifier // Once per activation
             Task.startUnstructured { @MainActor in
                 // Before the app is known, e.g. MarSpace itself (nil): asked again when it's read
                 observedFrontmost = frontmost.flatMap(get)
+                // No frontmost app for a moment (e.g. the frontmost app quit): the history goes on with the next one
+                if let pid { _frontmostHistory = _frontmostHistory.changed(to: pid, at: .now) }
             }
         }
+        if let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier { _frontmostHistory = FrontmostHistory(pid: pid) }
         sync()
     }
 
@@ -98,6 +110,25 @@ enum RunningApps {
 
     fileprivate static func forget(_ app: RunningApp) {
         if apps[app.pid] === app { apps[app.pid] = nil }
+    }
+}
+
+/// The app that has the keyboard focus of macOS, and the app that had it before. See ``RunningApps/frontmostHistory``
+struct FrontmostHistory: Equatable {
+    /// The last app that macOS made frontmost, even if it quit since. nil until one is known
+    var pid: pid_t? = nil
+    /// The app that had the focus before ``pid``
+    var previousPid: pid_t? = nil
+    /// When ``previousPid`` passed the focus to ``pid``
+    var changedAt: ContinuousClock.Instant? = nil
+
+    func changed(to newPid: pid_t, at instant: ContinuousClock.Instant) -> Self {
+        newPid == pid ? self : Self(pid: newPid, previousPid: pid, changedAt: instant)
+    }
+
+    /// The app gave the focus to another app at most `interval` ago
+    func passedTheFocusOn(_ pid: pid_t, within interval: Duration, now: ContinuousClock.Instant = .now) -> Bool {
+        previousPid == pid && changedAt.map { now - $0 <= interval } == true
     }
 }
 
