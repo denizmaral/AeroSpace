@@ -23,8 +23,8 @@ final class Monitor: TreeNode, NonLeafTreeNodeObject {
     @MainActor static var all: [Monitor] { Array(pointToMonitor.values) }
 }
 
-@MainActor private func rearrangeMonitors() {
-    var newMonitorPoints = globalUnsortedMonitorInfos.grouped(by: { $0.rect.topLeftCorner }).mapValues { $0.singleOrNil().orDie() }
+@MainActor private func rearrangeMonitors(_ infos: [MonitorInfo] = globalUnsortedMonitorInfos) {
+    var newMonitorPoints = infos.grouped(by: { $0.rect.topLeftCorner }).mapValues { $0.singleOrNil().orDie() }
 
     var oldPointToMonitor = pointToMonitor
     pointToMonitor = [:]
@@ -112,8 +112,21 @@ extension MonitorInfo {
     }
 }
 
-@MainActor func gcMonitors() {
-    if pointToMonitor.count != globalUnsortedMonitorInfos.count {
-        rearrangeMonitors()
+/// The monitors follow the screens: one was added or removed, changed its resolution or its Dock, or took the place of
+/// another one. The external display is unplugged and the built-in one opened: both are the only screen, at (0, 0), and
+/// only their sizes and names tell them apart. The Dock and the menu bar settle after the screen: the visible rect of
+/// the first notification may not be the last one
+@MainActor func gcMonitors(_ infos: [MonitorInfo] = globalUnsortedMonitorInfos) {
+    if infos.isEmpty { return } // Between two configurations of the displays
+    let isUpToDate = infos.count == pointToMonitor.count && infos.allSatisfy { info in
+        pointToMonitor[info.rect.topLeftCorner]?.info.isSameScreen(as: info) == true
+    }
+    if !isUpToDate { rearrangeMonitors(infos) }
+}
+
+extension MonitorInfo {
+    fileprivate func isSameScreen(as other: MonitorInfo) -> Bool {
+        rect == other.rect && visibleRect == other.visibleRect && name == other.name && isMain == other.isMain &&
+            monitorAppKitNsScreenScreensId == other.monitorAppKitNsScreenScreensId
     }
 }
