@@ -547,13 +547,14 @@ struct WindowRulesPane: View {
                     .onMove { source, destination in
                         model.store.update("Move Rule") { $0.windowRules.move(fromOffsets: source, toOffset: destination) }
                     }
-            } header: {
-                Text("When a window opens, the first rule that matches it runs")
-            } footer: {
+                // A row, not the footer of the section: a footer of a list is one line, the end was cut off
                 Text("Drag the rules to change their order. Click a rule to change it. Moving a window to a workspace with its shortcut makes it the rule of the app.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .listRowSeparator(.hidden, edges: .bottom)
+            } header: {
+                Text("When a window opens, the first rule that matches it runs")
             }
             Section {
                 Button {
