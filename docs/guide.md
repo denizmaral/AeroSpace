@@ -215,7 +215,8 @@ Apps can tell macOS which of their windows are dialogs, but many don't, or get i
 for example, a window without a fullscreen button is treated as a dialog (except in terminal apps). Dialogs float.
 
 If a window floats or tiles when it shouldn't, add a window rule for its app (Settings › Window Rules) that makes it
-tiling or floating. Improvements to the guess are welcome: see `isDialogHeuristic` in the sources.
+tiling or floating. A rule runs when a window opens, and when you close the editor of a rule that you changed: then it
+runs on the windows that are open too. Improvements to the guess are welcome: see `isDialogHeuristic` in the sources.
 
 ## Shortcuts that repeat
 

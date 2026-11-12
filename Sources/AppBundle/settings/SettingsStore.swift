@@ -15,6 +15,7 @@ final class SettingsStore {
     static let shared = SettingsStore(
         repository: isUnitTest ? nil : .applicationSupport,
         applyToEngine: { if !isUnitTest { await applySettingsToEngine($0) } },
+        runWindowRule: { if !isUnitTest { await runChangedWindowRuleInSession($0) } },
     )
 
     /// Writing goes through ``update(_:_:)``: a change made through a binding of the settings window is a transaction too
@@ -42,20 +43,25 @@ final class SettingsStore {
     private var current: Settings
     private let repository: SettingsRepository?
     private let applyToEngine: @MainActor (Settings) async -> Void
+    private let runWindowRule: @MainActor (IdentifiedList<Settings.WindowRule>.ID) async -> Void
     @ObservationIgnored private var commitTask: Task<(), any Error>? = nil
     @ObservationIgnored private var editBurst: Task<(), any Error>? = nil
     @ObservationIgnored private var removalCount = 0
 
-    /// - Parameter repository: where the settings are saved. nil: not saved (tests)
+    /// - Parameters:
+    ///   - repository: where the settings are saved. nil: not saved (tests)
+    ///   - runWindowRule: see ``finishedEditing(windowRule:)``
     init(
         settings: Settings = Settings(),
         repository: SettingsRepository?,
         applyToEngine: @escaping @MainActor (Settings) async -> Void,
+        runWindowRule: @escaping @MainActor (IdentifiedList<Settings.WindowRule>.ID) async -> Void = { _ in },
     ) {
         current = settings
         problems = settings.compile().problems
         self.repository = repository
         self.applyToEngine = applyToEngine
+        self.runWindowRule = runWindowRule
     }
 
     func problems(at location: String) -> [SettingsProblem] {
@@ -146,7 +152,9 @@ final class SettingsStore {
     }
 
     /// Saves and applies the current settings. A change that waits is committed first
-    private func commit() async {
+    /// - Returns: false if they can't be saved: they aren't applied either
+    @discardableResult
+    private func commit() async -> Bool {
         do {
             try repository?.save(current)
         } catch {
@@ -154,9 +162,22 @@ final class SettingsStore {
                 description: "\(aeroSpaceAppName) Settings",
                 body: "The settings can't be saved: \(error.localizedDescription)",
             )
-            return
+            return false
         }
         await applyToEngine(current)
+        return true
+    }
+
+    /// The user changed a window rule in the settings window and closed its editor: the rule runs on the open windows that
+    /// it matches (``runChangedWindowRule(_:)``). The change that waits is applied first: the rule runs as it is now. Not
+    /// for the other changes of a rule (undo, ``assign(_:toWorkspace:)``, `reload-config`): they don't move the windows
+    func finishedEditing(windowRule id: IdentifiedList<Settings.WindowRule>.ID) async {
+        if commitTask != nil {
+            commitTask?.cancel()
+            commitTask = nil
+            guard await commit() else { return }
+        }
+        await runWindowRule(id)
     }
 
     /// Loads the settings from the disk and applies them right away: the startup, `reload-config`. A change that waits is
@@ -192,4 +213,11 @@ func applySettingsToEngine(_ settings: Settings) async {
     TrayMenuModel.shared.settingsHaveProblems = !problems.isEmpty
     await applyConfig_nonCancellable(config)
     scheduleCancellableCompleteRefreshSession(.settingsChanged) // Gaps, border, layout
+}
+
+/// See ``SettingsStore/finishedEditing(windowRule:)``. Nothing runs while MarSpace is disabled
+@MainActor
+private func runChangedWindowRuleInSession(_ ruleId: UUID) async {
+    guard let token: RunSessionGuard = .isServerEnabled else { return }
+    _ = try? await runLightSession(.settingsChanged, token) { await runChangedWindowRule(ruleId) }
 }

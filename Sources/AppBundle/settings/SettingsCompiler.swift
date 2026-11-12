@@ -86,7 +86,9 @@ extension Settings {
             guard rule.isComplete, let matcher = rule.condition.runtimeMatcher(location, &problems),
                   let commands = compileActions(rule.actions, location, &problems, modeNames)
             else { continue }
-            config.onWindowDetected.append(WindowDetectedCallback(matcher: matcher, checkFurtherCallbacks: rule.checkFurtherRules, run: commands))
+            config.onWindowDetected.append(WindowDetectedCallback(
+                matcher: matcher, checkFurtherCallbacks: rule.checkFurtherRules, run: commands, ruleId: windowRules.ids[index],
+            ))
         }
 
         let empty = Shell<any Command>.newCompound([], Shell<any Command>.seq)

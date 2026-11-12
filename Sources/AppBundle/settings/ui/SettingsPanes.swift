@@ -537,6 +537,8 @@ extension Action {
 struct WindowRulesPane: View {
     @Bindable var model: SettingsModel
     @State fileprivate var editing: IdentifiedList<Settings.WindowRule>.ID? = nil
+    /// The rule whose editor is open, as it was when it opened
+    @State private var ruleBeforeEditing: Settings.WindowRule? = nil
 
     var body: some View {
         List {
@@ -551,6 +553,7 @@ struct WindowRulesPane: View {
                 Text("Drag the rules to change their order. Click a rule to change it. Moving a window to a workspace with its shortcut makes it the rule of the app.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Section {
                 Button {
@@ -564,6 +567,23 @@ struct WindowRulesPane: View {
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
         .background(Color(nsColor: .windowBackgroundColor))
+        .onChange(of: editing) { previous, next in
+            if let previous { finishEditing(previous) }
+            ruleBeforeEditing = next.flatMap { model.settings.windowRules[id: $0] }
+        }
+        .onDisappear { // The settings window closes, or shows another pane, while the editor of a rule is open
+            if let editing {
+                finishEditing(editing)
+                ruleBeforeEditing = model.settings.windowRules[id: editing]
+            }
+        }
+    }
+
+    /// A rule that was changed runs on the open windows that it matches: see ``SettingsStore/finishedEditing(windowRule:)``
+    private func finishEditing(_ id: IdentifiedList<Settings.WindowRule>.ID) {
+        guard let rule = model.settings.windowRules[id: id], rule != ruleBeforeEditing else { return }
+        let store = model.store
+        Task.startUnstructured { await store.finishedEditing(windowRule: id) }
     }
 }
 
@@ -699,6 +719,11 @@ private struct WindowRuleEditor: View {
                 Toggle("Check the next rules too", isOn: $rule.checkFurtherRules)
             } header: {
                 Text("Then")
+            } footer: {
+                Text("When you close this, a changed rule also runs on the windows that are open.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if !problems.isEmpty {
                 Section {

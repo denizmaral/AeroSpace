@@ -1,10 +1,14 @@
 import Common
+import Foundation
 
 /// A window rule of the settings, for the engine: the windows that it matches, and the commands that run for them
 struct WindowDetectedCallback: Withable, Equatable {
     var matcher = WindowMatcher()
     var checkFurtherCallbacks: Bool = false
     var run: Shell<any Command>
+    /// The id of the rule in the settings window (see ``runChangedWindowRule(_:)``). Like the ids of the settings, it
+    /// exists only in memory: two callbacks that do the same are equal
+    var ruleId: UUID? = nil
 
     var debugJson: Json {
         .dict(["matcher": matcher.debugJson, "commands": .string(run.shellOfCommandsDescription)])

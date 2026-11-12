@@ -352,3 +352,25 @@ func onWindowDetected(_ env: CmdEnv, _ io: CmdIo, _ window: Window) async -> Int
     }
     return lastExitCode
 }
+
+/// The user changed a window rule in the settings window: it runs on the open windows that it matches, as if they had just
+/// opened (they don't have to be closed and opened again). Only this rule runs, on the windows that it would get: the first
+/// rule that matches a window runs, the next ones only after rules that check them too
+@MainActor
+func runChangedWindowRule(_ ruleId: UUID) async {
+    let rules = config.onWindowDetected
+    guard rules.contains(where: { $0.ruleId == ruleId }) else { return } // Removed, or it does nothing yet
+    // Taken before: a window that the rule moves to another workspace isn't met again there
+    for window in Workspace.all.flatMap(\.allLeafWindowsRecursive) where window.lifeStatus != .dead {
+        for rule in rules where await rule.matcher.matches(window) {
+            if rule.ruleId == ruleId {
+                // Not a move by the user: the app isn't remembered on that workspace
+                _ = await WindowRuleContext.$isRunning.withValue(true) {
+                    await rule.run.run(.defaultEnv.withWindowId(window.windowId), CmdIoImpl.emptyStdinIgnoringOut)
+                }
+                break
+            }
+            if !rule.checkFurtherCallbacks { break }
+        }
+    }
+}

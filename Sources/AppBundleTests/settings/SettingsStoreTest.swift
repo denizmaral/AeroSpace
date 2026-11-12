@@ -84,6 +84,25 @@ struct SettingsStoreTest {
         assertEquals(store.settings.appearance.gaps.innerHorizontal, 11)
     }
 
+    /// The editor of a rule closes right after the rule was changed: the engine gets the rule as it is before it runs
+    @Test func testAnEditedRuleRunsAfterItIsApplied() async throws {
+        var events: [String] = []
+        let store = SettingsStore(
+            settings: settings(), repository: nil,
+            applyToEngine: { events.append("apply \($0.windowRules.count) rule") },
+            runWindowRule: { _ in events.append("run") },
+        )
+        store.update("Add Rule") { $0.windowRules.append(Settings.WindowRule(actions: [.layout([.floating])])) }
+        let id = try #require(store.settings.windowRules.lastId)
+        await store.finishedEditing(windowRule: id)
+        assertEquals(events, ["apply 1 rule", "run"])
+
+        try await Task.sleep(for: .milliseconds(600))
+        assertEquals(events, ["apply 1 rule", "run"]) // Applied once
+        await store.finishedEditing(windowRule: id) // Nothing waits
+        assertEquals(events, ["apply 1 rule", "run", "run"])
+    }
+
     @Test func testADryRunChangesNothing() async throws {
         let repository = repository()
         var onDisk = settings()
