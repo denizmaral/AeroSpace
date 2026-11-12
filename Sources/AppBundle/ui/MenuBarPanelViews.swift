@@ -94,13 +94,15 @@ struct StripWellView: View {
     }
 
     /// The workspaces of the strip: the favorites can be moved and removed, the one that is shown only because it's
-    /// focused can be dragged in place
+    /// focused can be dragged in place. Room for two lines of them, also with fewer: the palette under it stays where it
+    /// is while its workspaces are clicked one after the other (the first one replaces every workspace with windows)
     private func chips(_ state: MenuBarState) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 28, maximum: 40), spacing: 4)], spacing: 4) {
             ForEach(state.strip, id: \.name) { workspace in
                 WellChip(name: workspace.name, isFavorite: state.favorites.contains(workspace.name) || state.favorites.isEmpty)
             }
         }
+        .frame(minHeight: 2 * WellChip.height + 4, alignment: .top)
         .padding(.vertical, 6)
         .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: state.strip.map(\.name))
     }
@@ -118,12 +120,13 @@ private struct WellChip: View {
     @State private var isTargeted = false
 
     private static let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
+    static let height: CGFloat = 26
 
     var body: some View {
         Text(name)
             .font(.system(.callout, design: .rounded).weight(.semibold))
             .lineLimit(1)
-            .frame(maxWidth: .infinity, minHeight: 26)
+            .frame(maxWidth: .infinity, minHeight: Self.height)
             .foregroundStyle(isFavorite ? .primary : .secondary)
             .background(Color.primary.opacity(isFavorite ? 0.14 : 0.05), in: Self.shape)
             .accessibilityLabel(isFavorite ? "Workspace \(name)" : "Workspace \(name), shown because you're on it")

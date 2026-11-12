@@ -52,7 +52,7 @@ struct MenuBarPanelTest {
     /// The workspaces of the owner: nine of them with windows, T focused, the other ones empty (and persistent)
     /// - Parameter style: the chosen style. "Workspace and apps" shows no row of workspaces: the strip says so while
     ///   it's edited, which makes the panel higher
-    private func withWorkspaces<T>(style: MenuBarStyle = .workspaceApps, _ body: () -> T) -> T {
+    private func withWorkspaces<T>(style: MenuBarStyle = .workspaceApps, favorites: [String] = [], _ body: () -> T) -> T {
         let model = TrayMenuModel.shared
         let before = (model.workspaces, model.trayText, model.trayItems, model.isEnabled, model.axPermissionStatus, model.experimentalUISettings)
         defer { (model.workspaces, model.trayText, model.trayItems, model.isEnabled, model.axPermissionStatus, model.experimentalUISettings) = before }
@@ -61,6 +61,7 @@ struct MenuBarPanelTest {
         let defaults = UserDefaults(suiteName: suite).orDie()
         defaults.removePersistentDomain(forName: suite)
         defaults.set(style.rawValue, forKey: ExperimentalUISettingsItems.displayStyle.rawValue)
+        defaults.set(favorites, forKey: ExperimentalUISettingsItems.favoriteWorkspaces.rawValue)
         model.experimentalUISettings = ExperimentalUISettings(defaults)
         defaults.removePersistentDomain(forName: suite)
         let windows = ["1": 2, "C": 1, "F": 4, "G": 1, "I": 1, "M": 1, "P": 1, "T": 4, "X": 1]
@@ -119,6 +120,15 @@ struct MenuBarPanelTest {
             withWorkspaces(style: style) { panelHeight(maxHeight: .infinity, isStylePickerShown: true) }
         }
         #expect(Set(heights).count == 1, "\(heights)")
+    }
+
+    /// Workspaces of the palette clicked one after the other: the first one replaces the nine workspaces with windows in
+    /// the strip (two lines) by itself and the one you're on (one line). The palette didn't stay under the mouse, the
+    /// second click hit the workspace above (seen in the real panel)
+    @Test func testThePaletteStaysWhereItIsWhileItsWorkspacesArePicked() {
+        let automatic = withWorkspaces(style: .pills) { panelHeight(maxHeight: .infinity, isEditingStrip: true) }
+        let picked = withWorkspaces(style: .pills, favorites: ["B"]) { panelHeight(maxHeight: .infinity, isEditingStrip: true) }
+        assertEquals(picked, automatic)
     }
 
     /// A screen that has less than the panel wants: the panel takes what there is (and scrolls under its header), in
