@@ -67,6 +67,19 @@
         let isMacosMinimized = state == .nativeMinimized
         let isMacosWindowOfHiddenApp = !isMacosFullscreen && !isMacosMinimized &&
             !config.automaticallyUnhideMacosHiddenApps && window.macAppUnsafe.nsApp.isHidden
+        // Away in a native state, but bound into the tiling tree or as floating by something that doesn't know about the
+        // native states (e.g. the closed windows cache restored a layout of before the native state): the window is a
+        // standard window where it is now. Otherwise a window still in the native state would never leave the tile again
+        // (Brave stayed a tile in its fullscreen Space, with the focus border drawn over it)
+        let isTilingOrFloating = switch window.windowParentCases {
+            case .tilingContainer, .floatingWindowsContainer: true
+            case .macosFullscreenWindowsContainer, .macosHiddenAppsWindowsContainer, .macosMinimizedWindowsContainer,
+                 .macosPopupWindowsContainer, nil: false
+        }
+        if case .macos = window.layoutReason, isTilingOrFloating {
+            window.layoutReason = .standard
+            window.tilingSlot = nil // The place that it left for the native state: it has another one now
+        }
         switch window.layoutReason {
             case .standard:
                 guard let parent = window.windowParentCases else { continue }
