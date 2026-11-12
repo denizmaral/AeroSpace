@@ -1,6 +1,30 @@
 import AppKit
 import Common
 
+/// Where the panel is: under the menu bar item, as high as its content, and never higher than what the screen has under
+/// the item (what doesn't fit scrolls: see `MenuBarPanel`). In the coordinates of the screens: y goes up, and a screen
+/// below or left of the main one has negative coordinates
+enum MenuBarPanelFrame {
+    /// Between the panel and the bottom of the visible area of its screen (the Dock, or the edge of the screen)
+    static let bottomMargin: CGFloat = 8
+    /// The header and a few lines of the rest: for a screen that has less under the item (it doesn't happen), and for
+    /// an item that isn't on any screen
+    static let minHeight: CGFloat = 200
+
+    /// - Parameter top: the top edge of the panel
+    /// - Parameter visibleFrame: of the screen that the panel opens on (without the menu bar and the Dock)
+    static func maxHeight(top: CGFloat, visibleFrame: CGRect) -> CGFloat {
+        max(minHeight, top - visibleFrame.minY - bottomMargin)
+    }
+
+    /// The top left corner stays where it is, the panel grows and shrinks at its bottom
+    /// - Parameter size: what the content of the panel asks for
+    static func frame(size: CGSize, topLeft: CGPoint, maxHeight: CGFloat) -> CGRect {
+        let height = min(size.height, maxHeight)
+        return CGRect(x: topLeft.x, y: topLeft.y - height, width: size.width, height: height)
+    }
+}
+
 /// The strip of the menu bar item, customized in the panel like a toolbar: workspaces are dragged into it, out of it and
 /// within it (see `MenuBarPanel`). The order of the strip is the order of the favorites
 enum StripWell {

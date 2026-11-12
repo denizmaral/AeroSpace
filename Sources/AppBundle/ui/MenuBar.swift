@@ -7,15 +7,55 @@ import SwiftUI
 struct MenuBarPanel: View {
     static let width: CGFloat = 312
 
+    /// What the screen has under the menu bar item (see ``MenuBarPanelFrame``)
+    let maxHeight: CGFloat
     @EnvironmentObject var viewModel: TrayMenuModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion: Bool
     @Namespace private var focusNamespace
-    @State private var isStylePickerShown = false
-    @State private var isEditingStrip = false
+    @State private var isStylePickerShown: Bool
+    @State private var isEditingStrip: Bool
+    @State private var isScrolled = false
 
+    /// - Parameter isStylePickerShown: the panel opens with the styles (the tests measure it)
+    /// - Parameter isEditingStrip: the panel opens with the strip being edited
+    init(maxHeight: CGFloat, isStylePickerShown: Bool = false, isEditingStrip: Bool = false) {
+        self.maxHeight = maxHeight
+        _isStylePickerShown = State(initialValue: isStylePickerShown)
+        _isEditingStrip = State(initialValue: isEditingStrip)
+    }
+
+    private static let spacing: CGFloat = 12
+    private static let stylePickerId = "stylePicker"
+
+    /// As high as its content, at most `maxHeight`: then the header stays, and what is under it scrolls
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            header
+        HeightLimit(maxHeight: maxHeight) {
+            VStack(spacing: 0) {
+                header
+                    .padding([.top, .horizontal], MenuBarPanelWindow.padding)
+                    .padding(.bottom, Self.spacing)
+                    .overlay(alignment: .bottom) { Divider().opacity(isScrolled ? 1 : 0) }
+                ScrollViewReader { scrollView in
+                    ScrollView(.vertical) {
+                        content
+                            .padding([.horizontal, .bottom], MenuBarPanelWindow.padding)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
+                    .onScrollGeometryChange(for: Bool.self) { $0.contentOffset.y > 0.5 } action: { _, isScrolled in
+                        self.isScrolled = isScrolled
+                    }
+                    // The styles open at the bottom: under the edge of a panel that scrolls
+                    .onChange(of: isStylePickerShown) {
+                        if isStylePickerShown { scrollView.scrollTo(Self.stylePickerId, anchor: .top) }
+                    }
+                }
+            }
+        }
+        .frame(width: Self.width)
+    }
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: Self.spacing) {
             if viewModel.axPermissionStatus != .granted {
                 permissionCallout
             } else {
@@ -31,8 +71,6 @@ struct MenuBarPanel: View {
             actions
             footer
         }
-        .padding(MenuBarPanelWindow.padding)
-        .frame(width: Self.width)
     }
 
     private var header: some View {
@@ -158,6 +196,7 @@ struct MenuBarPanel: View {
                     .foregroundStyle(.tertiary)
                     .fixedSize()
             }
+            .id(Self.stylePickerId)
             if isStylePickerShown {
                 MenuBarStylePicker()
                     .transition(reduceMotion ? AnyTransition(OpacityTransition()) : AnyTransition(OpacityTransition().combined(with: MoveTransition(edge: .top))))

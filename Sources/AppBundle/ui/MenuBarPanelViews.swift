@@ -2,6 +2,25 @@ import AppKit
 import Common
 import SwiftUI
 
+// MARK: - The height of the panel
+
+/// Its content as high as it wants to be, but not higher than `maxHeight`: what the content does with less is up to it
+/// (the panel scrolls). In one pass: the window of the panel follows this size (see ``MenuBarItem``), and a height that
+/// is measured first and applied after would open the panel at the wrong height for a moment
+struct HeightLimit: SwiftUI.Layout {
+    let maxHeight: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let ideal = content.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: ideal.width, height: min(ideal.height, maxHeight))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+    }
+}
+
 // MARK: - The strip
 
 /// The menu bar item as it is now, half again as big, at the top of the panel. "Edit" turns it into its workspaces, to

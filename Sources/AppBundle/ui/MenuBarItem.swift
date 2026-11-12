@@ -110,20 +110,16 @@ final class MenuBarItem: NSObject, NSWindowDelegate {
     }
 
     private func openPanel(below button: NSStatusBarButton) {
-        let panel = MenuBarPanelWindow()
+        let (anchor, maxHeight) = Self.panelAnchor(below: button)
+        let panel = MenuBarPanelWindow(maxHeight: maxHeight)
         panel.delegate = self
-        let root = MenuBarPanel()
-            .environmentObject(TrayMenuModel.shared)
-            .background(PanelBackground())
-            .clipShape(MenuBarPanelWindow.shape)
-            .overlay { MenuBarPanelWindow.shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1) }
-            // Its own size, whatever the size of the window: the window follows it (the style picker opens and closes)
-            .fixedSize()
+        // The window follows the size of the content (the style picker opens and closes)
+        let root = MenuBarPanelWindow.content(maxHeight: maxHeight)
             .onGeometryChange(for: CGSize.self, of: \.size) { [weak self] size in self?.resizePanel(to: size) }
         let host = NSHostingView(rootView: root)
         panel.contentView = host
         self.panel = panel
-        resizePanel(to: host.fittingSize, anchor: Self.panelAnchor(below: button))
+        resizePanel(to: host.fittingSize, anchor: anchor)
         button.highlight(true)
         NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
@@ -139,20 +135,25 @@ final class MenuBarItem: NSObject, NSWindowDelegate {
         statusItem?.button?.highlight(false)
     }
 
-    /// The top left corner of the panel stays where it is, under the item
+    /// The top left corner of the panel stays where it is, under the item. The content doesn't ask for more than the
+    /// screen has under the item (see ``MenuBarPanel``): the window wouldn't follow it there either
     private func resizePanel(to size: CGSize, anchor: CGPoint? = nil) {
         guard let panel, size.width > 0, size.height > 0 else { return }
         let topLeft = anchor ?? CGPoint(x: panel.frame.minX, y: panel.frame.maxY)
-        panel.setFrame(CGRect(x: topLeft.x, y: topLeft.y - size.height, width: size.width, height: size.height), display: true)
+        panel.setFrame(MenuBarPanelFrame.frame(size: size, topLeft: topLeft, maxHeight: panel.maxHeight), display: true)
         panel.invalidateShadow()
     }
 
     /// Under the left edge of the item, like the menus of the menu bar, and inside the screen
-    private static func panelAnchor(below button: NSStatusBarButton) -> CGPoint {
-        guard let window = unsafe button.window, let screen = window.screen ?? NSScreen.main else { return .zero }
+    /// - Returns: the top left corner of the panel, and how high it can be on the screen of the item
+    private static func panelAnchor(below button: NSStatusBarButton) -> (topLeft: CGPoint, maxHeight: CGFloat) {
+        guard let window = unsafe button.window, let screen = window.screen ?? NSScreen.main else {
+            return (.zero, MenuBarPanelFrame.minHeight)
+        }
         let width = MenuBarPanel.width
         let x = min(window.frame.minX, screen.visibleFrame.maxX - width - 6)
-        return CGPoint(x: max(screen.visibleFrame.minX + 6, x), y: window.frame.minY - 2)
+        let topLeft = CGPoint(x: max(screen.visibleFrame.minX + 6, x), y: window.frame.minY - 2)
+        return (topLeft, MenuBarPanelFrame.maxHeight(top: topLeft.y, visibleFrame: screen.visibleFrame))
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -181,7 +182,11 @@ final class MenuBarPanelWindow: NSPanel {
         if #available(macOS 26, *) { max(6, cornerRadius - padding) } else { 10 }
     }
 
-    init() {
+    /// What its screen has under the menu bar item (see ``MenuBarPanelFrame``)
+    let maxHeight: CGFloat
+
+    init(maxHeight: CGFloat) {
+        self.maxHeight = maxHeight
         super.init(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: true)
         level = .popUpMenu
         isOpaque = false
@@ -192,6 +197,18 @@ final class MenuBarPanelWindow: NSPanel {
     }
 
     override var canBecomeKey: Bool { true }
+
+    /// What the window shows: the panel on the material of the menus, at its own size whatever the size of the window
+    /// - Parameter isStylePickerShown: see ``MenuBarPanel/init(maxHeight:isStylePickerShown:isEditingStrip:)``
+    @MainActor
+    static func content(maxHeight: CGFloat, isStylePickerShown: Bool = false, isEditingStrip: Bool = false) -> some View {
+        MenuBarPanel(maxHeight: maxHeight, isStylePickerShown: isStylePickerShown, isEditingStrip: isEditingStrip)
+            .environmentObject(TrayMenuModel.shared)
+            .background(PanelBackground())
+            .clipShape(shape)
+            .overlay { shape.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1) }
+            .fixedSize()
+    }
 
     /// The key of a workspace focuses it, with Option the workspace is kept in the menu bar or not any more. Before the
     /// views: the panel has no text to type into, and SwiftUI may keep keys that nothing handles

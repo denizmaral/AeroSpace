@@ -1,14 +1,103 @@
 @testable import AppBundle
 import AppKit
 import Common
+import SwiftUI
 import Testing
 
-/// The panel of the menu bar item: the strip customized like a toolbar, the keys of the workspaces, the windows of a
-/// workspace as panes, what the styles show
+/// The panel of the menu bar item: its height on the screen, the strip customized like a toolbar, the keys of the
+/// workspaces, the windows of a workspace as panes, what the styles show
 @MainActor
 @Suite(.serializedGlobally)
 struct MenuBarPanelTest {
     init() { setUpWorkspacesForTests() }
+
+    // MARK: - The height
+
+    /// The built-in display of a MacBook Pro 14" (1800×1169 points) with the Dock at the bottom: the item is in the menu
+    /// bar of 40 points, the panel 2 points under it
+    private let builtIn = (top: CGFloat(1127), visibleFrame: CGRect(x: 0, y: 90, width: 1800, height: 1039))
+
+    @Test func testThePanelIsNotHigherThanTheScreenHasUnderTheItem() {
+        let maxHeight = MenuBarPanelFrame.maxHeight(top: builtIn.top, visibleFrame: builtIn.visibleFrame)
+        #expect(maxHeight == 1029) // Down to the Dock, less the margin
+        let topLeft = CGPoint(x: 1215, y: builtIn.top)
+        // The content fits: the panel is as high as it. The top left corner stays under the item
+        #expect(MenuBarPanelFrame.frame(size: CGSize(width: 312, height: 423), topLeft: topLeft, maxHeight: maxHeight) == CGRect(x: 1215, y: 704, width: 312, height: 423))
+        // It doesn't fit: the panel ends above the Dock
+        let limited = MenuBarPanelFrame.frame(size: CGSize(width: 312, height: 1235), topLeft: topLeft, maxHeight: maxHeight)
+        #expect(limited == CGRect(x: 1215, y: 98, width: 312, height: 1029))
+        #expect(limited.minY == builtIn.visibleFrame.minY + MenuBarPanelFrame.bottomMargin)
+        #expect(limited.maxY == topLeft.y)
+    }
+
+    /// The coordinates of a screen under or above the main one, and of one without a Dock
+    @Test func testTheHeightOfThePanelOnOtherScreens() {
+        // An external display of 2560×1707 above the built-in one, without a Dock: down to its bottom edge
+        let above = CGRect(x: -380, y: 1169, width: 2560, height: 1667)
+        #expect(MenuBarPanelFrame.maxHeight(top: 1169 + 1707 - 42, visibleFrame: above) == 1657)
+        // The same display below the main one: its coordinates are negative
+        let below = CGRect(x: -380, y: -1707, width: 2560, height: 1667)
+        #expect(MenuBarPanelFrame.maxHeight(top: -42, visibleFrame: below) == 1657)
+        let frame = MenuBarPanelFrame.frame(size: CGSize(width: 312, height: 2000), topLeft: CGPoint(x: 100, y: -42), maxHeight: 1657)
+        #expect(frame == CGRect(x: 100, y: -1699, width: 312, height: 1657))
+        #expect(frame.minY == below.minY + MenuBarPanelFrame.bottomMargin)
+    }
+
+    /// An item that isn't on any screen, or a screen that has nothing under the item: the panel still has a height
+    @Test func testThePanelHasAHeightWithoutAScreen() {
+        #expect(MenuBarPanelFrame.maxHeight(top: 0, visibleFrame: .zero) == MenuBarPanelFrame.minHeight)
+        #expect(MenuBarPanelFrame.maxHeight(top: 100, visibleFrame: CGRect(x: 0, y: 90, width: 1800, height: 50)) == MenuBarPanelFrame.minHeight)
+    }
+
+    /// The workspaces of the owner: nine of them with windows, T focused, the other ones empty (and persistent)
+    private func withWorkspaces<T>(_ body: () -> T) -> T {
+        let model = TrayMenuModel.shared
+        let before = (model.workspaces, model.trayText, model.trayItems, model.isEnabled, model.axPermissionStatus)
+        defer { (model.workspaces, model.trayText, model.trayItems, model.isEnabled, model.axPermissionStatus) = before }
+        let windows = ["1": 2, "C": 1, "F": 4, "G": 1, "I": 1, "M": 1, "P": 1, "T": 4, "X": 1]
+        model.workspaces = "123456789ABCDEFGIMNOPQRSTUVWXYZ".map { name in
+            let count = windows[String(name)] ?? 0
+            return WorkspaceViewModel(
+                name: String(name),
+                suffix: "",
+                appBundleUrls: [],
+                windowCount: count,
+                monitorName: nil,
+                isFocused: name == "T",
+                isEffectivelyEmpty: count == 0,
+                isVisible: name == "T",
+                hasFullscreenWindows: false,
+                windows: (0 ..< count).map { WindowSummary(windowId: OpaqueWindowId(UInt64(name.unicodeScalars.first.orDie().value) * 10 + UInt64($0)), appBundleUrl: nil) },
+            )
+        }
+        model.trayText = "T"
+        model.trayItems = [TrayItem(type: .workspace, name: "T", isActive: true, hasFullscreenWindows: false)]
+        model.isEnabled = true
+        model.axPermissionStatus = .granted
+        return body()
+    }
+
+    /// The height that the window of the panel gets: what its content asks for
+    private func panelHeight(maxHeight: CGFloat, isStylePickerShown: Bool = false, isEditingStrip: Bool = false) -> CGFloat {
+        let content = MenuBarPanelWindow.content(maxHeight: maxHeight, isStylePickerShown: isStylePickerShown, isEditingStrip: isEditingStrip)
+        return NSHostingView(rootView: content).fittingSize.height
+    }
+
+    /// "The view is now too tall": with the styles open, the panel is higher than the built-in display has under the
+    /// item. It takes what there is (and scrolls under its header), in every state
+    @Test func testThePanelIsNeverHigherThanItsMaxHeight() {
+        withWorkspaces {
+            let maxHeight = MenuBarPanelFrame.maxHeight(top: builtIn.top, visibleFrame: builtIn.visibleFrame)
+            #expect(panelHeight(maxHeight: .infinity, isStylePickerShown: true) > maxHeight)
+            #expect(panelHeight(maxHeight: maxHeight, isStylePickerShown: true) == maxHeight)
+            #expect(panelHeight(maxHeight: 400) == 400)
+            #expect(panelHeight(maxHeight: 400, isEditingStrip: true) == 400)
+            #expect(panelHeight(maxHeight: 400, isStylePickerShown: true, isEditingStrip: true) == 400)
+            // And not higher than its content on a screen that has more
+            #expect(panelHeight(maxHeight: maxHeight) < 500)
+            #expect(panelHeight(maxHeight: maxHeight) == panelHeight(maxHeight: .infinity))
+        }
+    }
 
     // MARK: - The strip
 
