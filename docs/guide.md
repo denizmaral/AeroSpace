@@ -124,32 +124,36 @@ Choose how in the menu bar panel, under "Menu bar style", which shows each style
 - **Matrix**: the workspaces in two rows of small cells, like a keypad (ten of them in 35 points); a mark as big as its
   workspace has windows, the focused one with its name on a tile after the grid.
 - **Heft**: the names, as heavy as their workspaces are full (light, regular, black).
-
-With more than one monitor, "Group by monitor" puts the workspaces of a monitor together: the pills are in a bay for
-each monitor.
 - **Workspace and apps**: the focused workspace and the icons of its apps.
 - **Square images**, **i3 style grouped**, **i3 style ordered**: the styles of AeroSpace.
+
+The menu bar shows a style while the mouse is over it in the panel. The lines under the styles tell what that style
+shows of the workspaces (names, windows, apps, monitors) and how wide it is in the menu bar now.
 
 When the focus goes to another workspace, the menu bar follows it: the fill of the pills slides over, the focused dot
 moves, the name is pushed up. With "Reduce motion" (System Settings › Accessibility › Display), it fades instead.
 
 The panel shows the menu bar item at the top, half again as big, and a tile for every workspace with its windows as
-panes, each one with the icon of its app (a display when a monitor shows the workspace). In the panel:
+panes, each one with the icon of its app (a display when a monitor shows the workspace). It is never higher than the
+screen has under the menu bar: what doesn't fit scrolls under its header. In the panel:
 - Click a tile, or type the workspace's key, to go there.
 - Drag a window by its icon onto another tile to move it there.
-- Click the star of a tile (shown while the mouse is over it), or type Option and the workspace's key, to keep the
-  workspace in the menu bar, or not any more.
-- "Edit" next to the menu bar item: drag workspaces from the tiles into it, within it to reorder them, and out of it (or
-  ×) to remove them, like customizing a toolbar. "Automatic" goes back to every workspace with windows.
-- Under "Menu bar style", the menu bar shows a style while the mouse is over it; each style tells what it shows (names,
-  windows, apps, monitors) and how wide it is in the menu bar now.
+- Click the star of a tile (shown while the mouse is over it), right click the tile, or type Option and the workspace's
+  key, to keep the workspace in the menu bar, or not any more.
 
-The styles with a row of workspaces (Pills, Dots, i3) work like the workspace buttons of a bar: click a workspace to go
-there. A right click, or a click on the workspace that you're on, opens the panel; turn off "Click to switch workspace"
-under "Menu bar style" to open it with every click. Under "Workspaces in the
-menu bar" (or with a right click on a workspace in the panel), pick the workspaces to keep in the row: they stay there
-also when they're empty, together with the workspace that you're on. Without picked workspaces, the row shows every
-workspace with windows.
+All the styles but the text ones, "Workspace and apps" and "Square images" show a row of workspaces. The row works like
+the workspace buttons of a bar: click a workspace to go there. A right click, or a click on the workspace that you're
+on, opens the panel.
+
+"Edit" next to the menu bar item in the panel is for everything about the row, like customizing a toolbar: the row is
+at the top, and all the workspaces are under it, in place of the tiles, also the empty ones:
+- Click a workspace to keep it in the row, or not any more. Drag it into the row to put it at its place.
+- Drag a workspace within the row to reorder, and out of it (or ×) to remove it.
+- The workspaces that you keep stay in the row also when they're empty, together with the workspace that you're on.
+  Without them, the row shows every workspace with windows: "Automatic" goes back to that.
+- Turn off "Click to switch workspace" to open the panel with every click.
+- With more than one monitor, "Group by monitor" puts the workspaces of a monitor together: the pills are in a bay for
+  each monitor.
 
 Use a single macOS Space (one per monitor if "Displays have separate Spaces" is on) and let MarSpace do the rest. When
 MarSpace quits, all windows are put back on screen.

@@ -64,7 +64,12 @@ struct MenuBarPanel: View {
                 }
                 if viewModel.isEnabled {
                     StripWellView(isEditing: $isEditingStrip)
-                    workspaces
+                    // The strip is edited like a toolbar: what can be in it takes the place of the tiles
+                    if isEditingStrip {
+                        StripEditorView().transition(.opacity)
+                    } else {
+                        workspaces.transition(.opacity)
+                    }
                 }
             }
             Divider()
@@ -79,6 +84,7 @@ struct MenuBarPanel: View {
                 .font(.title2)
                 .foregroundStyle(.tint)
                 .symbolEffect(.bounce, value: viewModel.isEnabled)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 1) {
                 Text(aeroSpaceAppName).font(.headline)
                 Button {
@@ -130,26 +136,16 @@ struct MenuBarPanel: View {
     private var workspaces: some View {
         let workspaces = viewModel.workspaces.filter(\.isListed)
         VStack(alignment: .leading, spacing: 6) {
-            Text(isEditingStrip ? "Drag workspaces into the menu bar above" : "Workspaces")
+            Text("Workspaces")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
             TileGlassContainer {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                    ForEach(workspaces, id: \.name) {
-                        WorkspaceTile(workspace: $0, focusNamespace: focusNamespace, isEditingStrip: isEditingStrip)
-                    }
+                    ForEach(workspaces, id: \.name) { WorkspaceTile(workspace: $0, focusNamespace: focusNamespace) }
                 }
             }
             // The focus slides to the workspace that a click (or a shortcut) focused
             .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: workspaces.first(where: \.isFocused)?.name)
-            // A workspace dragged out of the strip: it isn't in the menu bar any more
-            .dropDestination(for: String.self) { items, _ in
-                guard isEditingStrip, case .workspace(let name)? = items.first.flatMap(PanelDrag.init),
-                      viewModel.menuBarState.strip.contains(where: { $0.name == name })
-                else { return false }
-                viewModel.removeFavorite(name)
-                return true
-            }
         }
     }
 
@@ -190,6 +186,7 @@ struct MenuBarPanel: View {
                 .font(.callout)
                 .foregroundStyle(isStylePickerShown ? .primary : .secondary)
                 .help("How the menu bar shows the workspaces (experimental: no stability guarantees)")
+                .accessibilityValue(isStylePickerShown ? "expanded" : "collapsed")
                 Spacer(minLength: 8)
                 Link("Based on AeroSpace (MIT)", destination: URL(string: "https://github.com/nikitabobko/AeroSpace").orDie())
                     .font(.caption2)
@@ -217,8 +214,6 @@ struct MenuBarPanel: View {
 private struct WorkspaceTile: View {
     let workspace: WorkspaceViewModel
     let focusNamespace: Namespace.ID
-    /// The tiles are dragged into the strip then, not their windows
-    let isEditingStrip: Bool
     @EnvironmentObject private var viewModel: TrayMenuModel
     @State private var isHovered = false
     @State private var isTargeted = false
@@ -227,7 +222,7 @@ private struct WorkspaceTile: View {
 
     var body: some View {
         let isFavorite = viewModel.experimentalUISettings.favoriteWorkspaces.contains(workspace.name)
-        let tile = Button {
+        Button {
             guard let token: RunSessionGuard = .isServerEnabled else { return }
             let name = workspace.name
             Task.startUnstructured {
@@ -246,7 +241,7 @@ private struct WorkspaceTile: View {
                         .foregroundStyle(.tertiary)
                         .frame(height: PaneMapView.size.height)
                 } else {
-                    PaneMapView(windows: workspace.windows, canDragWindows: !isEditingStrip)
+                    PaneMapView(windows: workspace.windows)
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 64)
@@ -263,7 +258,7 @@ private struct WorkspaceTile: View {
                 if workspace.windowCount > 1 {
                     Text("\(workspace.windowCount)")
                         .font(.system(size: 9, weight: .semibold, design: .rounded).monospacedDigit())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 4)
                 }
@@ -287,30 +282,49 @@ private struct WorkspaceTile: View {
         .onHover { isHovered = $0 }
         .animation(.easeOut(duration: 0.12), value: isHovered)
         .help(help)
+        // The name and the number in the corner alone read "1, 2"
+        .accessibilityLabel("Workspace \(workspace.name)")
+        .accessibilityValue(accessibilityValue(isFavorite: isFavorite))
+        .accessibilityAddTraits(workspace.isFocused ? .isSelected : [])
+        .accessibilityAction(named: isFavorite ? "Remove from the Menu Bar" : "Keep in the Menu Bar") {
+            viewModel.toggleFavorite(workspace.name) // The star is there only under the mouse
+        }
         .contextMenu {
             Button(isFavorite ? "Remove from the Menu Bar" : "Keep in the Menu Bar", systemImage: isFavorite ? "star.slash" : "star") {
                 viewModel.toggleFavorite(workspace.name)
             }
         }
-        if isEditingStrip {
-            tile.draggable(PanelDrag.workspace(workspace.name).string) { DragChip(name: workspace.name) }
-        } else {
-            // A window dragged from another workspace moves here
-            tile.dropDestination(for: String.self) { items, _ in
-                guard case .window(let windowId)? = items.first.flatMap(PanelDrag.init),
-                      !workspace.windows.contains(where: { $0.windowId == windowId })
-                else { return false }
-                moveWindowFromPanel(windowId, to: workspace.name)
-                return true
-            } isTargeted: { isTargeted = $0 }
+        // A window dragged from another workspace moves here
+        .dropDestination(for: String.self) { items, _ in
+            guard case .window(let windowId)? = items.first.flatMap(PanelDrag.init),
+                  !workspace.windows.contains(where: { $0.windowId == windowId })
+            else { return false }
+            moveWindowFromPanel(windowId, to: workspace.name)
+            return true
+        } isTargeted: { isTargeted = $0 }
+    }
+
+    private var windowsText: String? {
+        switch workspace.windowCount {
+            case 0: nil
+            case 1: "1 window"
+            default: "\(workspace.windowCount) windows"
         }
     }
 
     private var help: String {
         var lines = [workspace.name + workspace.suffix]
-        let windows = workspace.windowCount == 1 ? "1 window" : "\(workspace.windowCount) windows"
-        lines.append([workspace.windowCount > 0 ? windows : nil, workspace.monitorName.map { "on \($0)" }].compactMap(\.self).joined(separator: " "))
+        lines.append([windowsText, workspace.monitorName.map { "on \($0)" }].compactMap(\.self).joined(separator: " "))
         return lines.filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    private func accessibilityValue(isFavorite: Bool) -> String {
+        [
+            windowsText ?? "empty",
+            workspace.monitorName.map { "on \($0)" },
+            workspace.hasFullscreenWindows ? "fullscreen" : nil,
+            isFavorite ? "kept in the menu bar" : nil,
+        ].compactMap(\.self).joined(separator: ", ")
     }
 
     private var background: Color {
@@ -331,139 +345,83 @@ private struct TileButtonStyle: ButtonStyle {
     }
 }
 
-/// The styles of the menu bar item, each one as it would look now
+/// The styles of the menu bar item, each one as it would look now, and the details of the one under the mouse (the menu
+/// bar shows it then), or of the chosen one. Only how the item looks: its workspaces and what a click on them does are
+/// with the strip (``StripEditorView``)
 @MainActor
 private struct MenuBarStylePicker: View {
     @EnvironmentObject var viewModel: TrayMenuModel
     @Environment(\.colorScheme) private var colorScheme: ColorScheme
+    @State private var previews = MenuBarStylePreviews()
 
     var body: some View {
         let state = viewModel.menuBarState
         let selected = viewModel.experimentalUISettings.displayStyle // Not the one that is previewed
-        VStack(alignment: .leading, spacing: 12) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
+        let detailed = viewModel.previewStyle ?? selected
+        let isDark = colorScheme == .dark
+        VStack(alignment: .leading, spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 2), spacing: 6) {
                 ForEach(MenuBarStyle.allCases) { style in
-                    let preview = MenuBarStylePreview(state: state.with(style: style), isDark: colorScheme == .dark)
-                    MenuBarStyleCard(style: style, isSelected: style == selected, preview: preview) {
+                    let image = previews.image(state.with(style: style), isDark: isDark)
+                    MenuBarStyleCard(style: style, isSelected: style == selected, image: image) {
                         viewModel.setMenuBarStyle(style)
                     }
                 }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Toggle(isOn: $viewModel.experimentalUISettings.switchesWorkspaceOnClick) {
-                    Text("Click to switch workspace").font(.callout)
-                }
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                Text("A right click opens this panel")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-                Toggle(isOn: Binding(
-                    get: { viewModel.experimentalUISettings.groupsWorkspacesByMonitor },
-                    set: { viewModel.setGroupsWorkspacesByMonitor($0) },
-                )) {
-                    Text("Group by monitor").font(.callout)
-                }
-                .toggleStyle(.switch)
-                .controlSize(.mini)
-                .padding(.top, 6)
-                Text("With more than one monitor: the pills are in a bay for each monitor")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .opacity(selected.showsStrip ? 1 : 0.5)
-            .help(selected.showsStrip ? "" : "For the styles that show a row of workspaces: Pills, Dots, i3")
-            FavoriteWorkspacesPicker(state: state, isForTheStyle: selected.showsStrip)
+            MenuBarStyleDetails(style: detailed, image: previews.image(state.with(style: detailed), isDark: isDark))
         }
         // The mouse leaves the cards with the picker: the menu bar shows the chosen style again
         .onDisappear { viewModel.previewMenuBarStyle(nil) }
     }
 }
 
-/// The workspaces that the strips of the menu bar item show (see ``ExperimentalUISettings/favoriteWorkspaces``)
+/// The menu bar item in every style, for the cards. The picker is evaluated whenever the mouse goes to another card: a
+/// style is drawn again only when what it shows changes
 @MainActor
-private struct FavoriteWorkspacesPicker: View {
-    let state: MenuBarState
-    /// The chosen style shows a row of workspaces
-    let isForTheStyle: Bool
-    @EnvironmentObject var viewModel: TrayMenuModel
+private final class MenuBarStylePreviews {
+    private var drawn: [MenuBarStyle: (state: MenuBarState, isDark: Bool, image: CGImage?)] = [:]
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Workspaces in the menu bar")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if !state.favorites.isEmpty {
-                    Button("Show all with windows") { viewModel.clearFavorites() }
-                        .buttonStyle(.link)
-                        .font(.caption)
-                }
-            }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 27, maximum: 44), spacing: 5)], spacing: 5) {
-                ForEach(state.workspaces, id: \.name) { workspace in
-                    FavoriteWorkspaceChip(
-                        name: workspace.name,
-                        isFavorite: state.favorites.contains(workspace.name),
-                        isShown: state.isInStrip(workspace),
-                    ) { viewModel.toggleFavorite(workspace.name) }
-                }
-            }
-            Text(state.favorites.isEmpty
-                ? "Every workspace with windows. Pick the ones to keep there, also when they're empty."
-                : "The picked ones, and the workspace that you're on.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .opacity(isForTheStyle ? 1 : 0.5)
-        .help(isForTheStyle ? "" : "For the styles that show a row of workspaces: Pills, Dots, i3")
+    /// - Returns: the item at twice its size in points
+    func image(_ state: MenuBarState, isDark: Bool) -> CGImage? {
+        if let drawn = drawn[state.style], drawn.state == state, drawn.isDark == isDark { return drawn.image }
+        let image = MenuBarItemContent(state: state, transition: nil, color: isDark ? .white : .black).cgImage
+        drawn[state.style] = (state, isDark, image)
+        return image
     }
 }
 
-@MainActor
-private struct FavoriteWorkspaceChip: View {
-    let name: String
-    let isFavorite: Bool
-    /// In the menu bar right now: picked, or (without favorites) a workspace with windows
-    let isShown: Bool
-    let toggle: () -> Void
-
-    private static let shape = RoundedRectangle(cornerRadius: 7, style: .continuous)
-
-    var body: some View {
-        Button(action: toggle) {
-            Text(name)
-                .font(.system(.callout, design: .rounded).weight(.semibold))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, minHeight: 24)
-                .foregroundStyle(isFavorite ? Color.white : isShown ? .primary : .secondary)
-                .background(isFavorite ? Color.accentColor : Color.primary.opacity(isShown ? 0.12 : 0.05), in: Self.shape)
-                .contentShape(Self.shape)
-        }
-        .buttonStyle(TileButtonStyle())
-        .animation(.snappy(duration: 0.2), value: isFavorite)
-        .help(isFavorite ? "Picked: always in the menu bar. Click to remove" : "Click to keep \(name) in the menu bar")
-        .accessibilityAddTraits(isFavorite ? .isSelected : [])
-    }
+extension CGImage {
+    /// Of a menu bar item (see ``MenuBarStylePreviews``): its width in the menu bar
+    fileprivate var menuBarItemWidth: Int { width / 2 }
 }
 
+/// A style: the menu bar item as it would look now, scaled down if it's wider than the card, and its name. The rest is
+/// told once, under the cards (``MenuBarStyleDetails``)
 @MainActor
 private struct MenuBarStyleCard: View {
     let style: MenuBarStyle
     let isSelected: Bool
-    let preview: MenuBarStylePreview
+    let image: CGImage?
     let select: () -> Void
     @EnvironmentObject private var viewModel: TrayMenuModel
     @State private var isHovered = false
 
     private static let shape = RoundedRectangle(cornerRadius: 9, style: .continuous)
+    private static let maxPreviewWidth: CGFloat = 120
 
     var body: some View {
         Button(action: select) {
-            VStack(spacing: 5) {
-                preview.equatable()
+            VStack(spacing: 3) {
+                Group {
+                    if let image {
+                        let size = CGSize(width: CGFloat(image.width) / 2, height: CGFloat(image.height) / 2)
+                        let scale = min(1, Self.maxPreviewWidth / max(size.width, 1))
+                        Image(image, scale: 2, label: Text(style.title))
+                            .resizable()
+                            .frame(width: size.width * scale, height: size.height * scale)
+                    }
+                }
+                .frame(height: MenuBarItemContent.height / 2)
                 HStack(spacing: 3) {
                     if isSelected { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)) }
                     Text(style.title).lineLimit(1)
@@ -471,9 +429,10 @@ private struct MenuBarStyleCard: View {
                 .font(.caption)
                 .foregroundStyle(isSelected ? .primary : .secondary)
             }
+            .frame(maxWidth: .infinity)
             .padding(6)
             .background(
-                isSelected ? Color.accentColor.opacity(0.18) : Color.primary.opacity(isHovered ? 0.08 : 0.03),
+                isSelected ? Color.accentColor.opacity(0.18) : Color.primary.opacity(isHovered ? 0.10 : 0.05),
                 in: Self.shape,
             )
             .overlay { Self.shape.strokeBorder(isSelected ? Color.accentColor : .clear, lineWidth: 1.5) }
@@ -490,47 +449,42 @@ private struct MenuBarStyleCard: View {
             }
         }
         .animation(.easeOut(duration: 0.12), value: isHovered)
-        .help(style.explanation)
+        // What the details under the cards show for the style under the mouse: VoiceOver has no mouse
+        .accessibilityLabel(style.title)
+        .accessibilityValue(["shows \(style.encodingsText)", image.map { "\($0.menuBarItemWidth) points wide" }].compactMap(\.self).joined(separator: ", "))
+        .accessibilityHint(Text(style.explanation))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
-/// The menu bar item in a style, scaled down if it's wider than the card, with what the style shows and how wide it is in
-/// the menu bar. Drawn again only when what it shows changes
+/// What a style shows of the workspaces, how wide it is in the menu bar now, and what it is: for one style, not on
+/// every card. As high as two lines for the last, also when it takes one: the window of the panel doesn't change its
+/// height under the mouse
 @MainActor
-private struct MenuBarStylePreview: View, Equatable {
-    let state: MenuBarState
-    let isDark: Bool
-
-    private static let maxWidth: CGFloat = 120
+private struct MenuBarStyleDetails: View {
+    let style: MenuBarStyle
+    let image: CGImage?
 
     var body: some View {
-        let cgImage = MenuBarItemContent(state: state, transition: nil, color: isDark ? .white : .black).cgImage
-        VStack(spacing: 3) {
-            Group {
-                if let cgImage {
-                    let size = CGSize(width: CGFloat(cgImage.width) / 2, height: CGFloat(cgImage.height) / 2)
-                    let scale = min(1, Self.maxWidth / max(size.width, 1))
-                    Image(cgImage, scale: 2, label: Text(state.style.title))
-                        .resizable()
-                        .frame(width: size.width * scale, height: size.height * scale)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(style.title).fontWeight(.semibold).foregroundStyle(.primary)
+                Text("shows \(style.encodingsText)")
+                Spacer(minLength: 4)
+                if let image {
+                    Text("\(image.menuBarItemWidth) pt").monospacedDigit().help("Its width in the menu bar now")
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 26)
-            .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            HStack(spacing: 4) {
-                ForEach(state.style.encodings, id: \.self) { encoding in
-                    Image(systemName: encoding.symbol).help(encoding.help)
-                }
-                Spacer(minLength: 2)
-                if let cgImage {
-                    Text("\(cgImage.width / 2) pt").monospacedDigit().help("Its width in the menu bar now")
-                }
-            }
-            .font(.system(size: 8, weight: .medium))
-            .foregroundStyle(.tertiary)
-            .padding(.horizontal, 2)
+            .lineLimit(1)
+            // Two lines of text, whatever the text: the room that `lineLimit` reserves is a point less than they take
+            Text(" \n ")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .hidden()
+                .overlay(alignment: .topLeading) { Text(style.explanation).lineLimit(2) }
         }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .accessibilityHidden(true) // The cards tell it
     }
 }
 

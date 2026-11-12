@@ -43,18 +43,25 @@ enum StripWell {
     }
 }
 
-/// What is dragged in the panel: a workspace (into the strip, within it, out of it) or a window (to another workspace).
-/// A string: a type of its own would have to be declared in the Info.plist
+/// What is dragged in the panel: a workspace (from the palette of all workspaces into the strip, or one of the strip
+/// within it and out of it) or a window (to another workspace). A string: a type of its own would have to be declared
+/// in the Info.plist
 enum PanelDrag: Equatable {
+    /// From the palette: into the strip
     case workspace(String)
+    /// From the strip: to another place in it, or out of it (dropped on the palette, it isn't in the menu bar any
+    /// more: a workspace of the palette that is dropped back there changes nothing)
+    case stripWorkspace(String)
     case window(OpaqueWindowId)
 
     private static let workspacePrefix = "marspace-workspace:"
+    private static let stripWorkspacePrefix = "marspace-strip-workspace:"
     private static let windowPrefix = "marspace-window:"
 
     var string: String {
         switch self {
             case .workspace(let name): Self.workspacePrefix + name
+            case .stripWorkspace(let name): Self.stripWorkspacePrefix + name
             case .window(let id): Self.windowPrefix + id.description
         }
     }
@@ -62,10 +69,20 @@ enum PanelDrag: Equatable {
     init?(_ string: String) {
         if string.hasPrefix(Self.workspacePrefix) {
             self = .workspace(String(string.dropFirst(Self.workspacePrefix.count)))
+        } else if string.hasPrefix(Self.stripWorkspacePrefix) {
+            self = .stripWorkspace(String(string.dropFirst(Self.stripWorkspacePrefix.count)))
         } else if string.hasPrefix(Self.windowPrefix), let id = UInt64(string.dropFirst(Self.windowPrefix.count)) {
             self = .window(OpaqueWindowId(id))
         } else {
             return nil
+        }
+    }
+
+    /// The workspace that is dropped on the strip, wherever it comes from
+    var droppedWorkspace: String? {
+        switch self {
+            case .workspace(let name), .stripWorkspace(let name): name
+            case .window: nil
         }
     }
 }
@@ -114,28 +131,19 @@ enum PaneMap {
     }
 }
 
-/// What a style of the menu bar item tells about the workspaces, for the chips of the style cards in the panel
+/// What a style of the menu bar item tells about the workspaces, for the details of the style in the panel
 enum MenuBarStyleEncoding: CaseIterable, Hashable {
     case names
     case windowCount
     case apps
     case monitors
 
-    var symbol: String {
+    var title: String {
         switch self {
-            case .names: "textformat"
-            case .windowCount: "rectangle.split.2x1"
-            case .apps: "app.dashed"
-            case .monitors: "display.2"
-        }
-    }
-
-    var help: String {
-        switch self {
-            case .names: "The names of the workspaces"
-            case .windowCount: "How many windows a workspace has"
-            case .apps: "The apps of the workspaces"
-            case .monitors: "What every monitor shows"
+            case .names: "names"
+            case .windowCount: "windows"
+            case .apps: "apps"
+            case .monitors: "monitors"
         }
     }
 }
@@ -149,4 +157,7 @@ extension MenuBarStyle {
             case .workspaceApps: [.names, .apps]
         }
     }
+
+    /// "names, windows, monitors"
+    var encodingsText: String { encodings.map(\.title).joined(separator: ", ") }
 }

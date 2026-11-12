@@ -50,10 +50,19 @@ struct MenuBarPanelTest {
     }
 
     /// The workspaces of the owner: nine of them with windows, T focused, the other ones empty (and persistent)
-    private func withWorkspaces<T>(_ body: () -> T) -> T {
+    /// - Parameter style: the chosen style. "Workspace and apps" shows no row of workspaces: the strip says so while
+    ///   it's edited, which makes the panel higher
+    private func withWorkspaces<T>(style: MenuBarStyle = .workspaceApps, _ body: () -> T) -> T {
         let model = TrayMenuModel.shared
-        let before = (model.workspaces, model.trayText, model.trayItems, model.isEnabled, model.axPermissionStatus)
-        defer { (model.workspaces, model.trayText, model.trayItems, model.isEnabled, model.axPermissionStatus) = before }
+        let before = (model.workspaces, model.trayText, model.trayItems, model.isEnabled, model.axPermissionStatus, model.experimentalUISettings)
+        defer { (model.workspaces, model.trayText, model.trayItems, model.isEnabled, model.axPermissionStatus, model.experimentalUISettings) = before }
+        // Read from defaults of its own, and nothing is written: the settings are saved only when one of them is set
+        let suite = "MenuBarPanelTest"
+        let defaults = UserDefaults(suiteName: suite).orDie()
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(style.rawValue, forKey: ExperimentalUISettingsItems.displayStyle.rawValue)
+        model.experimentalUISettings = ExperimentalUISettings(defaults)
+        defaults.removePersistentDomain(forName: suite)
         let windows = ["1": 2, "C": 1, "F": 4, "G": 1, "I": 1, "M": 1, "P": 1, "T": 4, "X": 1]
         model.workspaces = "123456789ABCDEFGIMNOPQRSTUVWXYZ".map { name in
             let count = windows[String(name)] ?? 0
@@ -77,25 +86,52 @@ struct MenuBarPanelTest {
         return body()
     }
 
-    /// The height that the window of the panel gets: what its content asks for
+    /// The height that the window of the panel gets: what its content asks for, once it's laid out (a switch is higher
+    /// before)
     private func panelHeight(maxHeight: CGFloat, isStylePickerShown: Bool = false, isEditingStrip: Bool = false) -> CGFloat {
         let content = MenuBarPanelWindow.content(maxHeight: maxHeight, isStylePickerShown: isStylePickerShown, isEditingStrip: isEditingStrip)
-        return NSHostingView(rootView: content).fittingSize.height
+        let host = NSHostingView(rootView: content)
+        host.frame = CGRect(origin: .zero, size: host.fittingSize)
+        host.layoutSubtreeIfNeeded()
+        return host.fittingSize.height
     }
 
-    /// "The view is now too tall": with the styles open, the panel is higher than the built-in display has under the
-    /// item. It takes what there is (and scrolls under its header), in every state
+    /// "The view is now too tall": with the styles open, the panel was 1235 points high, on a display that has 1029
+    /// under the item. Every state fits it now without scrolling, with room for more workspaces (a row of tiles is 72
+    /// points), and the panel as it opens isn't higher than it was (423)
+    @Test func testThePanelFitsTheBuiltInDisplay() {
+        withWorkspaces {
+            let closed = panelHeight(maxHeight: .infinity)
+            let editing = panelHeight(maxHeight: .infinity, isEditingStrip: true)
+            let styles = panelHeight(maxHeight: .infinity, isStylePickerShown: true)
+            let both = panelHeight(maxHeight: .infinity, isStylePickerShown: true, isEditingStrip: true)
+            #expect(closed <= 424, "\(closed)")
+            #expect(editing <= 520, "\(editing)") // 500, with the note that the chosen style shows no row
+            #expect(styles <= 900, "\(styles)") // 855
+            #expect(both <= 950, "\(both)") // 931
+        }
+    }
+
+    /// The details under the cards are of the style under the mouse: the panel is as high for one as for the other, its
+    /// window doesn't move under the mouse
+    @Test func testThePanelIsAsHighForEveryStyle() {
+        let heights = MenuBarStyle.allCases.map { style in
+            withWorkspaces(style: style) { panelHeight(maxHeight: .infinity, isStylePickerShown: true) }
+        }
+        #expect(Set(heights).count == 1, "\(heights)")
+    }
+
+    /// A screen that has less than the panel wants: the panel takes what there is (and scrolls under its header), in
+    /// every state
     @Test func testThePanelIsNeverHigherThanItsMaxHeight() {
         withWorkspaces {
-            let maxHeight = MenuBarPanelFrame.maxHeight(top: builtIn.top, visibleFrame: builtIn.visibleFrame)
-            #expect(panelHeight(maxHeight: .infinity, isStylePickerShown: true) > maxHeight)
-            #expect(panelHeight(maxHeight: maxHeight, isStylePickerShown: true) == maxHeight)
             #expect(panelHeight(maxHeight: 400) == 400)
             #expect(panelHeight(maxHeight: 400, isEditingStrip: true) == 400)
+            #expect(panelHeight(maxHeight: 400, isStylePickerShown: true) == 400)
             #expect(panelHeight(maxHeight: 400, isStylePickerShown: true, isEditingStrip: true) == 400)
             // And not higher than its content on a screen that has more
-            #expect(panelHeight(maxHeight: maxHeight) < 500)
-            #expect(panelHeight(maxHeight: maxHeight) == panelHeight(maxHeight: .infinity))
+            #expect(panelHeight(maxHeight: 3000) == panelHeight(maxHeight: .infinity))
+            #expect(panelHeight(maxHeight: 3000, isStylePickerShown: true) == panelHeight(maxHeight: .infinity, isStylePickerShown: true))
         }
     }
 
@@ -119,9 +155,19 @@ struct MenuBarPanelTest {
 
     @Test func testWhatIsDraggedSurvivesTheString() {
         #expect(PanelDrag(PanelDrag.workspace("T").string) == .workspace("T"))
+        #expect(PanelDrag(PanelDrag.stripWorkspace("T").string) == .stripWorkspace("T"))
         #expect(PanelDrag(PanelDrag.window(OpaqueWindowId(42)).string) == .window(OpaqueWindowId(42)))
         #expect(PanelDrag("T") == nil) // Text dropped from another app
         #expect(PanelDrag("marspace-window:x") == nil)
+    }
+
+    /// The strip takes a workspace of the palette and one of its own (to another place). Only one of its own leaves it,
+    /// dropped on the palette: a workspace of the palette that is dropped back there changes nothing
+    @Test func testTheStripTakesAWorkspaceFromThePaletteAndFromItself() {
+        #expect(PanelDrag.workspace("T").droppedWorkspace == "T")
+        #expect(PanelDrag.stripWorkspace("T").droppedWorkspace == "T")
+        #expect(PanelDrag.window(OpaqueWindowId(42)).droppedWorkspace == nil)
+        #expect(PanelDrag.workspace("T") != PanelDrag.stripWorkspace("T"))
     }
 
     // MARK: - The keys
@@ -176,10 +222,12 @@ struct MenuBarPanelTest {
     // MARK: - The styles
 
     /// Every style shows names, the ones that draw the windows or the apps say so
-    @Test func testTheChipsTellWhatAStyleShows() {
+    @Test func testTheDetailsTellWhatAStyleShows() {
         for style in MenuBarStyle.allCases {
             #expect(style.encodings.contains(.names))
         }
+        #expect(MenuBarStyle.panes.encodingsText == "names, windows, monitors")
+        #expect(MenuBarStyle.workspaceApps.encodingsText == "names, apps")
         #expect(MenuBarStyle.panes.encodings.contains(.windowCount))
         #expect(MenuBarStyle.skyline.encodings.contains(.windowCount))
         #expect(!MenuBarStyle.pills.encodings.contains(.windowCount))
