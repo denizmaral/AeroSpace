@@ -136,6 +136,30 @@ struct ScrollingLayoutTest {
         assertEquals(result.stdout, ["h_scrolling"])
     }
 
+    /// The screen slides along the strip: the windows move in steps, and end where the layout puts them
+    @Test func testTheScreenSlides() async throws {
+        config.animatesScrolling = true
+        let (workspace, root) = scrollingWorkspace()
+        let windows = (1 ... 3).map { TestWindow.new(id: OpaqueWindowId(UInt64($0)), parent: root) }
+        #expect(windows[0].focusWindow())
+        try await workspace.layoutWorkspace() // The first layout puts them in place
+        let sentBefore = windows[2].sentFrames.count
+
+        #expect(windows[2].focusWindow())
+        try await workspace.layoutWorkspace()
+        // It comes from where the previous offset put it: off the screen on the right
+        assertEquals(windows[2].sentFrames.last?.topLeft, CGPoint(x: 1920, y: 0))
+        try await workspace.layoutWorkspace() // A session that follows doesn't make it jump
+        assertEquals(windows[2].sentFrames.last?.topLeft, CGPoint(x: 1920, y: 0))
+
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(windows[2].sentFrames.count - sentBefore > 3, "\(windows[2].sentFrames.count - sentBefore)") // Steps between
+        assertEquals(windows[2].axRectForTest, rect(960, 960))
+        assertEquals(windows[1].axRectForTest, rect(0, 960))
+        // It slid off the screen to the left, and waits in the corner then
+        assertEquals(windows[0].axRectForTest, Rect(topLeftX: corner.x, topLeftY: corner.y, width: 960, height: 1079))
+    }
+
     /// While MarSpace is disabled, every window is on the screen: no column waits in the corner
     @Test func testDisabledShowsEveryColumn() async throws {
         let (workspace, root) = scrollingWorkspace()

@@ -33,6 +33,8 @@ struct Settings: Codable, Sendable, Equatable {
         var defaultRootLayout: Layout = .tiles
         /// The length of a column of a scrolling workspace, in percent of the screen
         var scrollingColumnWidth = 50
+        /// The screen of a scrolling workspace slides along the columns
+        var animateScrolling = true
         /// Two fingers sideways on the trackpad move through the columns of a scrolling workspace
         var trackpadScrollsColumns = true
         /// Held while the fingers move through the columns. nil: no modifier

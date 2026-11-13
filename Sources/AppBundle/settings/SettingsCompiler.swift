@@ -29,6 +29,7 @@ extension Settings {
         config.defaultWorkspaceLayout = general.defaultWorkspaceLayout
         config.defaultRootContainerLayout = general.defaultRootLayout == .scrolling ? .tiles : general.defaultRootLayout
         config.scrollingColumnWidth = CGFloat(min(max(general.scrollingColumnWidth, 10), 100)) / 100
+        config.animatesScrolling = general.animateScrolling
         config.trackpadScrollsColumns = general.trackpadScrollsColumns
         config.trackpadScrollModifiers = switch general.trackpadScrollModifier {
             case nil: []

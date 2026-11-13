@@ -192,6 +192,10 @@ private struct GeneralPane: View {
                 LabeledContent("Scrolling column width") {
                     ValueSlider(value: $general.scrollingColumnWidth, range: 20 ... 100, unit: "%")
                 }
+                Toggle(isOn: $general.animateScrolling) {
+                    Text("Animate scrolling")
+                    Text("The columns slide when the screen moves along them")
+                }
                 Toggle(isOn: $general.trackpadScrollsColumns) {
                     Text("Two fingers move through the columns")
                     Text("On a scrolling workspace, two fingers sideways on the trackpad go to the next column. Scrolling up and down stays with the apps")

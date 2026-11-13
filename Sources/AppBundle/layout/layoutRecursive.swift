@@ -65,14 +65,22 @@ extension TreeNode {
                 lastAppliedLayoutVirtualRect = virtual
                 var frames: [TiledWindowFrame] = []
                 _ = workspace.rootTilingContainer.layoutTiling(point, width: width, height: height, virtual: virtual, context, &frames)
+                var slides: [ScrollAnimation.Slide] = []
                 for frame in frames {
-                    if frame.isParked, let screen = context.scrollingScreen {
-                        let width = frame.window.size(inTile: frame.size).width
-                        frame.window.setAxFrame(frame.window.topLeftHidden(in: screen.hideCorner, width: width, of: screen.visibleRect), frame.size)
+                    let tile = frame.shift == .zero ? frame.topLeft : frame.topLeft + frame.shift
+                    let topLeft = if frame.isParked, let screen = context.scrollingScreen {
+                        frame.window.topLeftHidden(in: screen.hideCorner, width: frame.window.size(inTile: frame.size).width, of: screen.visibleRect)
                     } else {
-                        frame.window.setAxFrame(frame.shift == .zero ? frame.topLeft : frame.topLeft + frame.shift, frame.size)
+                        tile
+                    }
+                    if let delta = frame.animationDelta {
+                        slides.append(ScrollAnimation.Slide(window: frame.window, from: tile + delta, to: tile, size: frame.size, final: topLeft))
+                    } else if !ScrollAnimation.isSliding(frame.window, to: topLeft, size: frame.size) {
+                        ScrollAnimation.stop(frame.window) // Somewhere else now
+                        frame.window.setAxFrame(topLeft, frame.size)
                     }
                 }
+                if !slides.isEmpty { ScrollAnimation.start(slides) }
                 try await workspace.floatingWindowsContainer.layoutRecursive(point, width: width, height: height, virtual: virtual, context)
             case .floatingWindowsContainer(let container):
                 let windows = container.children.filterIsInstance(of: Window.self)
@@ -154,6 +162,9 @@ private struct TiledWindowFrame {
     /// The window is in a column of a scrolling workspace that is off the screen: it waits in a corner of the screen with
     /// the size of its tile (see ``Layout/scrolling``)
     var isParked = false
+    /// The screen slides along the strip of a scrolling workspace: the window comes from its frame moved by this (see
+    /// ``ScrollAnimation``)
+    var animationDelta: CGPoint? = nil
 }
 
 /// A child of a tiles container, along the orientation of the container
@@ -461,19 +472,31 @@ extension TilingContainer {
         let screenLength = orientation == .h ? width : height
         let gap = context.gaps.inner.get(orientation).toDouble()
         let stripLength = scrollingStripLength(screen: screenLength)
+        let wasLaidOut = lastLayoutLength != nil // The windows are where the previous offset put them
         lastLayoutLength = stripLength
         let strip = ScrollingStrip(lengths: childLengths(columns, total: stripLength), screen: screenLength, gap: gap)
         let focused = mostRecentInhabitedChild.flatMap { columns.firstIndex(of: $0) } ?? 0
+        let previousOffset = scrollOffset
         scrollOffset = strip.offset(showing: focused, from: scrollOffset)
         let placements = strip.placements(offset: scrollOffset, isStartEdgeFree: screen.isStartEdgeFree, isEndEdgeFree: screen.isEndEdgeFree)
+        // The screen slides along the strip (see ScrollAnimation). Not where another monitor is behind an edge: the
+        // windows that slide off the screen would be seen there
+        let previousPlacements = wasLaidOut && !context.isInCorner && config.animatesScrolling && abs(scrollOffset - previousOffset) >= 1 &&
+            screen.isStartEdgeFree && screen.isEndEdgeFree
+            ? strip.placements(offset: previousOffset, isStartEdgeFree: true, isEndEdgeFree: true)
+            : nil
 
         var excessAcross = -CGFloat.infinity
-        for (column, placement) in zip(columns, placements) {
-            let (start, length, isParked) = switch placement {
-                case .tile(let start, let length): (start, length, false)
-                case .parked(let start, let length): (start, length, true)
-            }
+        for (i, (column, placement)) in zip(columns, placements).enumerated() {
+            let (start, length, isParked) = placement.span
             let firstFrame = frames.count
+            defer {
+                // From where the previous offset put it. A column that is off the screen before and after stays there
+                if let previous = previousPlacements?[i].span, !(previous.isParked && isParked) {
+                    let delta = CGPoint(x: 0, y: 0).addingOffset(orientation, previous.start - start)
+                    for frame in firstFrame ..< frames.count { frames[frame].animationDelta = delta }
+                }
+            }
             let excess = column.layoutTiling(
                 point.addingOffset(orientation, start),
                 width: orientation == .h ? length : width,
@@ -514,6 +537,13 @@ enum ScrollingColumnPlacement: Equatable {
     case tile(start: CGFloat, length: CGFloat)
     /// Off the screen: it waits in a corner of the screen, with the size of its tile
     case parked(start: CGFloat, length: CGFloat)
+
+    fileprivate var span: (start: CGFloat, length: CGFloat, isParked: Bool) {
+        switch self {
+            case .tile(let start, let length): (start, length, false)
+            case .parked(let start, let length): (start, length, true)
+        }
+    }
 }
 
 /// The columns of a scrolling container on their strip (see ``Layout/scrolling``). A column is its tile and half a gap on

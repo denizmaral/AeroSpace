@@ -50,6 +50,7 @@ func setUpWorkspacesForTests() {
     config.enableNormalizationOppositeOrientationForNestedContainers = false // Make layout tests more predictable
     config.defaultRootContainerOrientation = .horizontal // Make default layout predictable
     config.newWindowPlacement = .i3 // Make new windows placement predictable
+    config.animatesScrolling = false // The frames are where they go right away
 
     workspaceLayoutMemories = [:]
 
