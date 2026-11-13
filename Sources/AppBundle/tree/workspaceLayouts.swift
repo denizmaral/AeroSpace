@@ -60,6 +60,13 @@ extension Workspace {
         let current = workspaceLayout
         guard current != target else { return }
         let windowId: (Window) -> OpaqueWindowId? = { $0.windowId }
+        // The window that is the most recent one now stays it: not the one of the remembered tree (the focus may have
+        // moved since the workspace left that layout)
+        let focused = globalFocus.windowOrNil.flatMap { $0.nodeWorkspace === self ? $0 : nil }
+        let mostRecent = [focused, rootTilingContainer.mostRecentWindowRecursive]
+        defer {
+            mostRecent.lazy.compactMap { $0 }.first { $0.nodeWorkspace === self && $0.parent is TilingContainer }?.markAsMostRecentChild()
+        }
         switch current {
             case .tiling, .scrolling:
                 layoutMemory.trees[current] = tilingTreeSnapshot(windowId: windowId)

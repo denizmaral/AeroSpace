@@ -103,6 +103,73 @@ struct WorkspaceLayoutCommandTest {
         assertEquals(workspace.rootTilingContainer.layoutDescription, .h_scrolling([.window(2), .window(1), .window(3)]))
     }
 
+    /// The focus moved while the workspace was in another layout: the screen shows the focused column
+    @Test func testTheFocusedColumnIsShown() async throws {
+        let workspace = Workspace.get(byName: name)
+        let windows = (1 ... 4).map { TestWindow.new(id: OpaqueWindowId(UInt64($0)), parent: workspace.rootTilingContainer) }
+        #expect(windows[0].focusWindow())
+        await run("workspace-layout scrolling")
+        try await workspace.layoutWorkspace()
+
+        await run("workspace-layout tiling")
+        #expect(windows[3].focusWindow())
+        await run("workspace-layout scrolling")
+        try await workspace.layoutWorkspace()
+        #expect(windows[3].lastAppliedLayoutPhysicalRect != nil) // On the screen, not in the corner
+        assertEquals(workspace.rootTilingContainer.mostRecentWindowRecursive?.windowId, 4)
+
+        await run("workspace-layout floating")
+        #expect(windows[1].focusWindow())
+        await run("workspace-layout scrolling")
+        try await workspace.layoutWorkspace()
+        #expect(windows[1].lastAppliedLayoutPhysicalRect != nil)
+        assertEquals(workspace.rootTilingContainer.mostRecentWindowRecursive?.windowId, 2)
+    }
+
+    /// A window in macOS fullscreen while the workspace goes through all its layouts comes back as a tile or floating,
+    /// like the other windows
+    @Test func testAWindowAwayInMacosFullscreen() async throws {
+        config.enableNormalizationFlattenContainers = true
+        config.enableNormalizationOppositeOrientationForNestedContainers = true
+        config.automaticallyUnhideMacosHiddenApps = true // The hidden app check needs MacApp
+        let workspace = Workspace.get(byName: name)
+        var away: TestWindow!
+        workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                TestWindow.new(id: 2, parent: $0)
+                away = TestWindow.new(id: 3, parent: $0)
+            }
+        }
+        #expect(workspace.rootTilingContainer.allLeafWindowsRecursive[0].focusWindow())
+        away.isMacosFullscreenForTest = true
+        try await normalizeLayoutReason()
+        #expect(away.parent === workspace.macOsNativeFullscreenWindowsContainer)
+
+        for layout in ["scrolling", "floating", "tiling", "scrolling"] {
+            await run("workspace-layout \(layout)")
+            session(workspace)
+        }
+        away.isMacosFullscreenForTest = false
+        try await normalizeLayoutReason()
+        session(workspace)
+        // Next to its neighbor, below it like in the tiles: a column with window 2
+        assertEquals(workspace.rootTilingContainer.layoutDescription, .h_scrolling([.window(1), .v_tiles([.window(2), .window(3)])]))
+
+        // Back while the workspace floats: it floats, and it's a tile again when the workspace tiles
+        away.isMacosFullscreenForTest = true
+        try await normalizeLayoutReason()
+        await run("workspace-layout floating")
+        session(workspace)
+        away.isMacosFullscreenForTest = false
+        try await normalizeLayoutReason()
+        session(workspace)
+        assertEquals(away.isFloatedByWorkspaceLayout, true)
+        await run("workspace-layout tiling")
+        session(workspace)
+        assertEquals(workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId.rawId).sorted(), [1, 2, 3])
+    }
+
     /// The screen shows the columns that it showed: the focused column isn't moved to an edge
     @Test func testTheScreenShowsTheSameColumns() async throws {
         let workspace = Workspace.get(byName: name)

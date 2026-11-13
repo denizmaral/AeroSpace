@@ -79,7 +79,8 @@ Async functions take a `CancellationMode` (`.cancellable` / `.nonCancellable`). 
   - a `rootTilingContainer`;
   - a `floatingWindowsContainer`;
   - containers for macOS-minimized, fullscreen, hidden-app and popup windows.
-- A `TilingContainer` has an `orientation` (`.h`/`.v`) and a `layout` (`.tiles`/`.accordion`).
+- A `TilingContainer` has an `orientation` (`.h`/`.v`) and a `layout` (`.tiles`/`.accordion`, and `.scrolling` for the root only: columns on a strip longer than the screen, see `Layout.scrolling` and `layoutScrolling`).
+- A workspace tiles, scrolls or floats (`WorkspaceLayout`, `workspace-layout`, `tree/workspaceLayouts.swift`). It remembers the tree of each layout it leaves (`WorkspaceLayoutMemory`, by workspace name). The windows that a floating workspace floated are marked (`isFloatedByWorkspaceLayout`). `Workspace.applyFloatingLayouts()` runs in the refresh sessions, after the window rules: it floats the tiles that come to floating workspaces, and tiles the marked windows that left them.
 - `TreeNode` (`TreeNode.swift`) owns binding and unbinding, per-child `adaptiveWeight` (sizes inside `tiles` containers), and a most-recently-used child stack that drives focus and new-window placement.
 - Windows and containers carry a life status (`tombstones.swift`): dead or invisible nodes can stay in the tree, so prefer `inhabitedChildren` over `children` when counting.
 - **Normalizations** (`normalizeContainers.swift`, both on by default and controlled by config):
@@ -96,7 +97,7 @@ Async functions take a `CancellationMode` (`.cancellable` / `.nonCancellable`). 
 
 A tiling window that leaves for a macOS native state (fullscreen, minimized, hidden app) records its `TilingSlot` (`tree/TilingSlot.swift`) and returns to it. Only if the slot is gone is it placed as a new window.
 
-Across restarts of MarSpace, `WindowPlacementStore` persists the workspace of every window and the tiling tree of every workspace (`tree/TilingTreeSnapshot.swift`, by native window id). The startup session registers the windows in an arbitrary order as new windows, then puts them back into the persisted trees.
+Across restarts of MarSpace, `WindowPlacementStore` persists the workspace of every window and the tiling tree of every workspace (`tree/TilingTreeSnapshot.swift`, by native window id), and the workspace layouts with their remembered trees (file version 4). The startup session registers the windows in an arbitrary order as new windows, then puts them back into the persisted trees.
 
 ### Layout (`AppBundle/layout/`)
 `layoutRecursive.swift` turns the tree and weights into rectangles, records `lastAppliedLayoutPhysicalRect`/`VirtualRect` on each node (also used by mouse resize and moves), and applies frames through the accessibility API.
