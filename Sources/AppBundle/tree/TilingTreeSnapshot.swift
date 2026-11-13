@@ -1,13 +1,13 @@
 import AppKit
 import Common
 
-/// The tiling tree of a workspace, persisted across restarts of MarSpace (see ``WindowPlacementStore``): where every
-/// window was in the layout, and how big. The windows are identified by their native window ids, which survive a restart
-/// of MarSpace (not a reboot)
-struct TilingTreeSnapshot: Equatable, Sendable {
+/// The tiling tree of a workspace: where every window was in the layout, and how big. Persisted across restarts of
+/// MarSpace (``PersistedTilingTree``), and remembered by a workspace for the layouts that it isn't in (see
+/// ``WorkspaceLayout``)
+struct TilingTreeSnapshot<WindowId: Hashable & Sendable>: Equatable, Sendable {
     let workspace: String
     /// The window that gets the focus when the workspace is shown
-    let mostRecentWindow: UInt32?
+    let mostRecentWindow: WindowId?
     let root: Container
 
     struct Container: Equatable, Sendable {
@@ -18,20 +18,23 @@ struct TilingTreeSnapshot: Equatable, Sendable {
     }
 
     indirect enum Node: Equatable, Sendable {
-        case window(nativeWindowId: UInt32, weight: CGFloat)
+        case window(id: WindowId, weight: CGFloat)
         case container(Container)
     }
 }
 
+/// The windows are identified by their native window ids, which survive a restart of MarSpace (not a reboot)
+typealias PersistedTilingTree = TilingTreeSnapshot<UInt32>
+
 extension Workspace {
-    /// - Parameter nativeWindowId: the native id of a window. A window without one is left out
+    /// - Parameter windowId: the id of a window in the snapshot. A window without one is left out
     /// - Returns: nil if the workspace has no tiling windows
     @MainActor
-    func tilingTreeSnapshot(nativeWindowId: (Window) -> UInt32?) -> TilingTreeSnapshot? {
-        guard let root = rootTilingContainer.snapshot(nativeWindowId) else { return nil }
+    func tilingTreeSnapshot<WindowId>(windowId: (Window) -> WindowId?) -> TilingTreeSnapshot<WindowId>? {
+        guard let root = rootTilingContainer.snapshot(windowId) else { return nil }
         return TilingTreeSnapshot(
             workspace: name,
-            mostRecentWindow: rootTilingContainer.mostRecentWindowRecursive.flatMap(nativeWindowId),
+            mostRecentWindow: rootTilingContainer.mostRecentWindowRecursive.flatMap(windowId),
             root: root,
         )
     }
@@ -43,24 +46,24 @@ extension Workspace {
     /// flattens what remains), and the tiling windows that the snapshot doesn't know are placed like new windows, after the
     /// others
     ///
-    /// - Parameter nativeWindowId: the native id of a window
+    /// - Parameter windowId: the id of a window in the snapshot
     @MainActor
-    func restoreTilingTree(_ snapshot: TilingTreeSnapshot, nativeWindowId: (Window) -> UInt32?) {
+    func restoreTilingTree<WindowId>(_ snapshot: TilingTreeSnapshot<WindowId>, windowId: (Window) -> WindowId?) {
         let previousRoot = rootTilingContainer
         let tilingWindows = previousRoot.allLeafWindowsRecursive
-        var known: [UInt32: Window] = [:]
+        var known: [WindowId: Window] = [:]
         for window in tilingWindows {
-            if let id = nativeWindowId(window) { known[id] = window }
+            if let id = windowId(window) { known[id] = window }
         }
         guard snapshot.root.contains(anyOf: known) else { return } // Nothing to restore: the tree stays as it is
 
         previousRoot.unbindFromParent() // A workspace has one root. The windows that aren't restored are still in it
         let root = TilingContainer(parent: self, adaptiveWeight: 1, snapshot.root.orientation, snapshot.root.layout, index: INDEX_BIND_LAST)
-        var restored: Set<UInt32> = []
+        var restored: Set<WindowId> = []
         root.restoreChildren(of: snapshot.root, known, &restored)
         snapshot.mostRecentWindow.flatMap { known[$0] }?.markAsMostRecentChild()
         // Opened while MarSpace wasn't running: next to the window that was the most recent one, like any new window
-        for window in tilingWindows where nativeWindowId(window).map(restored.contains) != true {
+        for window in tilingWindows where windowId(window).map(restored.contains) != true {
             window.bindAsNewTilingWindow(to: self)
         }
     }
@@ -68,23 +71,23 @@ extension Workspace {
 
 extension TilingContainer {
     @MainActor
-    fileprivate func snapshot(_ nativeWindowId: (Window) -> UInt32?) -> TilingTreeSnapshot.Container? {
+    fileprivate func snapshot<WindowId>(_ windowId: (Window) -> WindowId?) -> TilingTreeSnapshot<WindowId>.Container? {
         let orientation = orientation
-        let children: [TilingTreeSnapshot.Node] = children.compactMap { child in
+        let children: [TilingTreeSnapshot<WindowId>.Node] = children.compactMap { child in
             switch child.tilingTreeNodeCasesOrDie() {
                 case .window(let window):
-                    nativeWindowId(window).map { .window(nativeWindowId: $0, weight: child.getWeight(orientation)) }
+                    windowId(window).map { .window(id: $0, weight: child.getWeight(orientation)) }
                 case .tilingContainer(let container):
-                    container.snapshot(nativeWindowId).map { .container($0) }
+                    container.snapshot(windowId).map { .container($0) }
             }
         }
         if children.isEmpty { return nil }
         let weight = (parent as? TilingContainer).map { getWeight($0.orientation) } ?? 1
-        return TilingTreeSnapshot.Container(orientation: orientation, layout: layout, weight: weight, children: children)
+        return TilingTreeSnapshot<WindowId>.Container(orientation: orientation, layout: layout, weight: weight, children: children)
     }
 
     @MainActor
-    fileprivate func restoreChildren(of snapshot: TilingTreeSnapshot.Container, _ known: [UInt32: Window], _ restored: inout Set<UInt32>) {
+    fileprivate func restoreChildren<WindowId>(of snapshot: TilingTreeSnapshot<WindowId>.Container, _ known: [WindowId: Window], _ restored: inout Set<WindowId>) {
         for child in snapshot.children {
             switch child {
                 case .window(let id, let weight):
@@ -102,7 +105,7 @@ extension TilingContainer {
 }
 
 extension TilingTreeSnapshot.Container {
-    fileprivate func contains(anyOf known: [UInt32: Window]) -> Bool {
+    fileprivate func contains(anyOf known: [WindowId: Window]) -> Bool {
         children.contains { child in
             switch child {
                 case .window(let id, _): known[id] != nil
@@ -134,7 +137,7 @@ extension TilingTreeSnapshot.Container {
 ///   childCount:       UInt16
 ///   children:         Node...
 /// ```
-extension [TilingTreeSnapshot] {
+extension [PersistedTilingTree] {
     func encoded() -> Data {
         var data = Data()
         data.appendLE(UInt16(clamping: count))
@@ -152,21 +155,21 @@ extension [TilingTreeSnapshot] {
     init?(decoding data: Data) {
         var reader = DataReader(data)
         guard let count = reader.read(UInt16.self) else { return nil }
-        var trees: [TilingTreeSnapshot] = []
+        var trees: [PersistedTilingTree] = []
         for _ in 0 ..< count {
             guard let nameLength = reader.read(UInt16.self),
                   let name = reader.readString(length: Int(nameLength)),
                   let mostRecentWindow = reader.read(UInt32.self),
                   let root = TilingTreeSnapshot.Container(&reader, depth: 0)
             else { return nil }
-            trees.append(TilingTreeSnapshot(workspace: name, mostRecentWindow: mostRecentWindow == 0 ? nil : mostRecentWindow, root: root))
+            trees.append(PersistedTilingTree(workspace: name, mostRecentWindow: mostRecentWindow == 0 ? nil : mostRecentWindow, root: root))
         }
         guard reader.isAtEnd else { return nil }
         self = trees
     }
 }
 
-extension TilingTreeSnapshot.Container {
+extension PersistedTilingTree.Container {
     /// Deeper trees aren't made by hand. A damaged file must not overflow the stack
     private static let maxDepth = 64
 
@@ -195,12 +198,12 @@ extension TilingTreeSnapshot.Container {
               let weight = reader.readWeight(),
               let childCount = reader.read(UInt16.self)
         else { return nil }
-        var children: [TilingTreeSnapshot.Node] = []
+        var children: [PersistedTilingTree.Node] = []
         for _ in 0 ..< childCount {
             switch reader.read(UInt8.self) {
                 case 0:
                     guard let id = reader.read(UInt32.self), let weight = reader.readWeight() else { return nil }
-                    children.append(.window(nativeWindowId: id, weight: weight))
+                    children.append(.window(id: id, weight: weight))
                 case 1:
                     guard let container = Self(&reader, depth: depth + 1) else { return nil }
                     children.append(.container(container))

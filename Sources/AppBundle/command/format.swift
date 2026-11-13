@@ -169,6 +169,7 @@ extension FormatVar {
                     case .workspaceVisible: .success(.bool(w.isVisible))
                     case .workspaceFocused: .success(.bool(globalFocus.workspace == w))
                     case .workspaceRootContainerLayout: .success(.string(toLayoutString(tc: w.rootTilingContainer)))
+                    case .workspaceLayout: .success(.string(w.workspaceLayout.rawValue))
                 }
             case (.monitor(let m), .monitor(let f)):
                 return switch f {

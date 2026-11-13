@@ -40,6 +40,12 @@ struct LayoutCommand: Command {
 
         let targetDescription = args.toggleBetween.val.first(where: { !node.matchesDescription($0) })
             ?? args.toggleBetween.val.first.orDie()
+        // A window that its floating workspace floats floats on its own account from now on: it stays floating when the
+        // workspace stops floating (see WorkspaceLayout.floating)
+        if targetDescription == .floating, let window = target.windowOrNil, window.isFloatedByWorkspaceLayout {
+            window.stopFloatingByWorkspaceLayout()
+            return .succ
+        }
         if node.matchesDescription(targetDescription) {
             switch args.failIfNoop {
                 case true: return .fail
@@ -83,6 +89,7 @@ struct LayoutCommand: Command {
             case .floating:
                 guard let window = target.windowOrNil else { return .fail(io.err(noWindowIsFocused)) }
                 let workspace = target.workspace
+                window.tiledOnFloatingWorkspace = nil
                 window.bindAsFloatingWindowRememberingTilingSlot(to: workspace)
                 if let size = window.lastFloatingSize { window.setAxFrame(nil, size) }
                 return .succ

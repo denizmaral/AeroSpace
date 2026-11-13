@@ -181,11 +181,11 @@ struct ScrollingLayoutTest {
     }
 
     @Test func testTheScrollingLayoutIsPersisted() {
-        let snapshot = TilingTreeSnapshot(
+        let snapshot = PersistedTilingTree(
             workspace: "S",
             mostRecentWindow: 1,
-            root: .init(orientation: .h, layout: .scrolling, weight: 1, children: [.window(nativeWindowId: 1, weight: 1.5)]),
+            root: .init(orientation: .h, layout: .scrolling, weight: 1, children: [.window(id: 1, weight: 1.5)]),
         )
-        assertEquals([TilingTreeSnapshot](decoding: [snapshot].encoded()), [snapshot])
+        assertEquals([PersistedTilingTree](decoding: [snapshot].encoded()), [snapshot])
     }
 }

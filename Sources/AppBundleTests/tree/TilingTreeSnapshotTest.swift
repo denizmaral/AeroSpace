@@ -44,7 +44,7 @@ struct TilingTreeSnapshotTest {
         let original = makeTree(workspace)
         let windows = original.allLeafWindowsRecursive
         #expect(windows[1].focusWindow()) // Window 2 is the most recent one
-        let snapshot = try #require(workspace.tilingTreeSnapshot(nativeWindowId: nativeId))
+        let snapshot = try #require(workspace.tilingTreeSnapshot(windowId: nativeId))
         let expected = original.layoutDescription
         let expectedWeights = weights(original)
 
@@ -52,7 +52,7 @@ struct TilingTreeSnapshotTest {
         assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(4), .window(1), .window(3), .window(2)]))
         #expect(windows[3].focusWindow())
 
-        workspace.restoreTilingTree(snapshot, nativeWindowId: nativeId)
+        workspace.restoreTilingTree(snapshot, windowId: nativeId)
         assertEquals(workspace.rootTilingContainer.layoutDescription, expected)
         assertEquals(weights(workspace.rootTilingContainer), expectedWeights)
         assertEquals(workspace.rootTilingContainer.mostRecentWindowRecursive?.windowId, 2)
@@ -66,10 +66,10 @@ struct TilingTreeSnapshotTest {
         }
         root.changeOrientation(.v)
         root.layout = .accordion
-        let snapshot = try #require(workspace.tilingTreeSnapshot(nativeWindowId: nativeId))
+        let snapshot = try #require(workspace.tilingTreeSnapshot(windowId: nativeId))
 
         scramble(workspace, order: root.allLeafWindowsRecursive.reversed())
-        workspace.restoreTilingTree(snapshot, nativeWindowId: nativeId)
+        workspace.restoreTilingTree(snapshot, windowId: nativeId)
         assertEquals(workspace.rootTilingContainer.layoutDescription, .v_accordion([.window(1), .window(2)]))
     }
 
@@ -80,13 +80,13 @@ struct TilingTreeSnapshotTest {
         let workspace = Workspace.get(byName: name)
         let windows = makeTree(workspace).allLeafWindowsRecursive
         #expect(windows[1].focusWindow()) // Window 2 is the most recent one
-        let snapshot = try #require(workspace.tilingTreeSnapshot(nativeWindowId: nativeId))
+        let snapshot = try #require(workspace.tilingTreeSnapshot(windowId: nativeId))
 
         windows[3].unbindFromParent() // Window 4 is gone
         scramble(workspace, order: [windows[2], windows[1], windows[0]])
         TestWindow.new(id: 5, parent: workspace.rootTilingContainer)
 
-        workspace.restoreTilingTree(snapshot, nativeWindowId: nativeId)
+        workspace.restoreTilingTree(snapshot, windowId: nativeId)
         workspace.normalizeContainers()
         // The container of 3 and 4 is flattened, the new window is placed like a new window: after the most recent one
         assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2), .window(5), .window(3)])]))
@@ -97,13 +97,13 @@ struct TilingTreeSnapshotTest {
         let workspace = Workspace.get(byName: name)
         let other = Workspace.get(byName: "other")
         let windows = makeTree(workspace).allLeafWindowsRecursive
-        let snapshot = try #require(workspace.tilingTreeSnapshot(nativeWindowId: nativeId))
+        let snapshot = try #require(workspace.tilingTreeSnapshot(windowId: nativeId))
 
         scramble(workspace, order: [windows[1], windows[0]])
         windows[2].bindAsFloatingWindow(to: workspace)
         windows[3].bind(to: other.rootTilingContainer, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST)
 
-        workspace.restoreTilingTree(snapshot, nativeWindowId: nativeId)
+        workspace.restoreTilingTree(snapshot, windowId: nativeId)
         assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(1), .v_tiles([.window(2)])]))
         assertEquals(workspace.floatingWindows.map(\.windowId), [3])
         assertEquals(other.rootTilingContainer.layoutDescription, .h_tiles([.window(4)]))
@@ -113,14 +113,14 @@ struct TilingTreeSnapshotTest {
     @Test func testNothingToRestore() throws {
         let workspace = Workspace.get(byName: name)
         makeTree(workspace)
-        let snapshot = try #require(workspace.tilingTreeSnapshot(nativeWindowId: nativeId))
+        let snapshot = try #require(workspace.tilingTreeSnapshot(windowId: nativeId))
         scramble(workspace, order: [])
         let root = workspace.rootTilingContainer.apply {
             TestWindow.new(id: 7, parent: $0)
             TestWindow.new(id: 8, parent: $0)
         }
 
-        workspace.restoreTilingTree(snapshot, nativeWindowId: nativeId)
+        workspace.restoreTilingTree(snapshot, windowId: nativeId)
         #expect(workspace.rootTilingContainer === root)
         assertEquals(root.layoutDescription, .h_tiles([.window(7), .window(8)]))
     }
@@ -128,18 +128,18 @@ struct TilingTreeSnapshotTest {
     @Test func testNoTilingWindowsNoSnapshot() {
         let workspace = Workspace.get(byName: name)
         TestWindow.new(id: 1, parent: workspace.floatingWindowsContainer)
-        assertNil(workspace.tilingTreeSnapshot(nativeWindowId: nativeId))
+        assertNil(workspace.tilingTreeSnapshot(windowId: nativeId))
     }
 
     @Test func testFileRoundTrip() throws {
         let workspace = Workspace.get(byName: name)
         makeTree(workspace)
         let trees = [
-            try #require(workspace.tilingTreeSnapshot(nativeWindowId: nativeId)),
-            TilingTreeSnapshot(
+            try #require(workspace.tilingTreeSnapshot(windowId: nativeId)),
+            PersistedTilingTree(
                 workspace: "Übersicht 📋",
                 mostRecentWindow: nil,
-                root: .init(orientation: .v, layout: .accordion, weight: 1, children: [.window(nativeWindowId: 0xFFFF_FFFF, weight: 0.25)]),
+                root: .init(orientation: .v, layout: .accordion, weight: 1, children: [.window(id: 0xFFFF_FFFF, weight: 0.25)]),
             ),
         ]
         let placements = [WindowPlacement(nativeWindowId: 7, pid: 100, workspace: "1", isFloating: false)]
@@ -165,20 +165,20 @@ struct TilingTreeSnapshotTest {
     @Test func testDamagedTrees() throws {
         let workspace = Workspace.get(byName: name)
         makeTree(workspace)
-        let encoded = [try #require(workspace.tilingTreeSnapshot(nativeWindowId: nativeId))].encoded()
-        assertEquals([TilingTreeSnapshot](decoding: encoded)?.count, 1)
+        let encoded = [try #require(workspace.tilingTreeSnapshot(windowId: nativeId))].encoded()
+        assertEquals([PersistedTilingTree](decoding: encoded)?.count, 1)
         for length in 0 ..< encoded.count {
-            #expect([TilingTreeSnapshot](decoding: encoded.prefix(length)) == nil)
+            #expect([PersistedTilingTree](decoding: encoded.prefix(length)) == nil)
         }
-        #expect([TilingTreeSnapshot](decoding: encoded + [0]) == nil)
+        #expect([PersistedTilingTree](decoding: encoded + [0]) == nil)
         for index in encoded.indices { // Any byte changed: decoded or refused
             var damaged = encoded
             damaged[index] ^= 0xFF
-            _ = [TilingTreeSnapshot](decoding: damaged)
+            _ = [PersistedTilingTree](decoding: damaged)
         }
         // Containers nested deeper than any real tree
         var deep = Data([1, 0, 1, 0, 65, 0, 0, 0, 0]) // One workspace "A", no most recent window
         for _ in 0 ..< 10000 { deep.append(contentsOf: [0, 0] + [0, 0, 0, 0, 0, 0, 0xF0, 0x3F] + [1, 0] + [1]) }
-        #expect([TilingTreeSnapshot](decoding: deep) == nil)
+        #expect([PersistedTilingTree](decoding: deep) == nil)
     }
 }

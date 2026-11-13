@@ -74,8 +74,8 @@ struct WindowPlacementSnapshot: Sendable {
     }
 
     /// The tiling trees of the workspaces. Empty if there are none, or if they can't be read
-    var trees: [TilingTreeSnapshot] {
-        treesStart == data.count ? [] : [TilingTreeSnapshot](decoding: data[(data.startIndex + treesStart)...]) ?? []
+    var trees: [PersistedTilingTree] {
+        treesStart == data.count ? [] : [PersistedTilingTree](decoding: data[(data.startIndex + treesStart)...]) ?? []
     }
 
     /// Binary search by the native window id. The pid protects against window ids of terminated apps
@@ -117,7 +117,7 @@ struct WindowPlacementSnapshot: Sendable {
     }
 
     /// `placements` must be sorted by nativeWindowId and must not contain duplicate ids
-    static func encode(_ placements: [WindowPlacement], trees: [TilingTreeSnapshot] = [], bootSession: UInt64) -> Data {
+    static func encode(_ placements: [WindowPlacement], trees: [PersistedTilingTree] = [], bootSession: UInt64) -> Data {
         let trees = trees.isEmpty ? Data() : trees.encoded()
         var records = Data(capacity: placements.count * recordSize)
         var blob = Data()
@@ -180,7 +180,7 @@ enum WindowPlacementStore {
     /// Windows of the previous run that were detected in this run
     private static var restoredWindowIds: Set<UInt32> = []
     private static var lastPersisted: [WindowPlacement] = []
-    private static var lastPersistedTrees: [TilingTreeSnapshot] = []
+    private static var lastPersistedTrees: [PersistedTilingTree] = []
     private static var didRestoreTilingTrees = false
 
     /// Puts the tiling windows back where they were in the layout of the previous run. Done once, when the windows that
@@ -205,7 +205,7 @@ enum WindowPlacementStore {
         guard isAnyWindowOfPreviousRunThere else { return }
         didRestoreTilingTrees = true
         for tree in previousRun.trees {
-            Workspace.get(byName: tree.workspace).restoreTilingTree(tree, nativeWindowId: nativeWindowId(of:))
+            Workspace.get(byName: tree.workspace).restoreTilingTree(tree, windowId: nativeWindowId(of:))
         }
         // The focus was taken from macOS before: the focused window stays the most recent one of its workspace
         globalFocus.windowOrNil?.markAsMostRecentChild()
@@ -264,7 +264,7 @@ enum WindowPlacementStore {
         // While a window is resized with the mouse, every mouse move changes the weights: the trees are persisted when
         // the button is released (a refresh session follows)
         let trees = currentlyManipulatedWithMouseWindowId == nil
-            ? Workspace.all.compactMap { $0.tilingTreeSnapshot(nativeWindowId: nativeWindowId(of:)) }
+            ? Workspace.all.compactMap { $0.tilingTreeSnapshot(windowId: nativeWindowId(of:)) }
             : lastPersistedTrees
         if placements == lastPersisted && trees == lastPersistedTrees { return }
         lastPersisted = placements

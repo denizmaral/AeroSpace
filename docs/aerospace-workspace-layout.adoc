@@ -1,0 +1,62 @@
+= aerospace-workspace-layout(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-workspace-layout
+// tag::purpose[]
+:manpurpose: Switch the focused workspace between tiling, scrolling and floating
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace workspace-layout [-h|--help] [--workspace <workspace>] (tiling|scrolling|floating)...
+aerospace workspace-layout [-h|--help] [--workspace <workspace>] [--fail-if-noop] (tiling|scrolling|floating)
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}.
+
+* `tiling`: the windows are tiles of the tiling tree, new windows are placed by the "New windows" setting.
+* `scrolling`: every window is a column, on a strip that can be longer than the screen.
+A column is half of the screen ("Column width" in the settings), columns that fit share the screen, one column fills it.
+The screen shows the part of the strip with the focused column: `focus left` and `focus right` scroll.
+A new window is a column after the focused one.
+`join-with` stacks windows in a column, `resize width` makes a column longer or shorter (the others stay as they are).
+A column that is off the screen waits in a corner of the screen, like the windows of the workspaces that aren't shown.
+* `floating`: every window floats, a window that was a tile is put in the middle of the screen at a comfortable size.
+Windows that are opened on the workspace or moved to it float too.
+A window that is moved to a workspace that isn't floating is a tile again there.
+
+With several layouts, the command cycles through them: the workspace takes the layout after its layout, the first one if its layout isn't listed.
+E.g. `workspace-layout tiling scrolling floating` cycles forward, `workspace-layout floating scrolling tiling` cycles back.
+
+Switching never loses the layout: the workspace remembers the tiles and the columns as they were, and they come back when it's tiling or scrolling again.
+Windows that were opened meanwhile are placed like new windows, closed windows are left out.
+A window that was floating before the workspace floated (e.g. a dialog, or one made floating with `layout floating`) stays floating.
+
+`list-workspaces --format %{workspace-layout}` tells the layout of a workspace.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+--workspace <workspace>::
+include::./util/workspace-flag-desc.adoc[]
+
+--fail-if-noop:: Exit with non-zero exit code if the workspace already has the layout
+
+// =========================================================== Examples
+include::util/conditional-examples-header.adoc[]
+
+* Cycle the focused workspace through the layouts, like Omarchy does: +
+`aerospace workspace-layout tiling scrolling floating`
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

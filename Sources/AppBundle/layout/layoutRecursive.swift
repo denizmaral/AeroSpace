@@ -82,7 +82,12 @@ extension TreeNode {
                     window.lastAppliedLayoutPhysicalRect = nil
                     window.lastAppliedLayoutVirtualRect = nil
                     if let windowRect { window.observeFrame(windowRect) }
-                    window.layoutFloatingWindow(context, windowRect)
+                    if let frame = window.floatingFrameToApply { // The workspace floats it, see Window.floatByWorkspaceLayout
+                        window.floatingFrameToApply = nil
+                        window.setAxFrame(frame.topLeftCorner, frame.size)
+                    } else {
+                        window.layoutFloatingWindow(context, windowRect)
+                    }
                 }
             case .window, .tilingContainer: die("The tiling tree is laid out by layoutTiling")
             case .macosMinimizedWindowsContainer, .macosFullscreenWindowsContainer,

@@ -70,6 +70,9 @@ func runHeavyCompleteRefreshSession(
             updateTrayText()
             SecureInputPanel.shared.refresh()
             try await normalizeLayoutReason()
+            // New windows (after the window rules) and windows back from macOS native states
+            Workspace.applyFloatingLayouts()
+            normalizeContainers()
             if shouldLayoutWorkspaces { try await layoutWorkspaces() }
             FocusBorderController.shared.update()
             WindowPlacementStore.persistIfChanged()
@@ -157,6 +160,7 @@ func refreshModel_nonCancellable() async {
         Workspace.forceAssignWorkspaces()
         Workspace.movePinnedWindowsToVisibleWorkspaces()
         await checkOnFocusChangedCallbacks_nonCancellable()
+        Workspace.applyFloatingLayouts() // E.g. a command moved a window to a floating workspace
         normalizeContainers()
     }
 }

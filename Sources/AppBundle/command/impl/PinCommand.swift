@@ -20,6 +20,8 @@ struct PinCommand: Command {
             return .fail(io.err("Only a floating window can be pinned. 'layout floating' makes the window floating"))
         }
         window.isPinned = newState
+        // It goes with the monitor from workspace to workspace: it floats on its own account (see WorkspaceLayout.floating)
+        if newState { window.stopFloatingByWorkspaceLayout() }
         return .succ
     }
 }

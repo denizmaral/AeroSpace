@@ -116,6 +116,9 @@ extension Window {
     /// window if it has none (e.g. a dialog), or if the place is gone
     @MainActor
     func tileFloatingWindow(on workspace: Workspace) async throws {
+        // The user wants it as a tile: on a floating workspace too (see WorkspaceLayout.floating)
+        stopFloatingByWorkspaceLayout()
+        if workspace.isFloatingLayout { tiledOnFloatingWorkspace = workspace }
         // The size to go back to when the window is made floating again
         lastFloatingSize = (try? await getAxSize(.nonCancellable)) ?? lastFloatingSize
         if !bindBackToTilingSlot(on: workspace) {

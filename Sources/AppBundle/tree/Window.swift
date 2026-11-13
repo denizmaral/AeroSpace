@@ -37,6 +37,16 @@ open class Window: TreeNode, Hashable {
     var isNativeStateCheckRequested: Bool = false
     /// The place in the tiling tree before a macOS native state. See ``enterMacosNativeState(_:prevParentKind:adaptiveWeight:)``
     var tilingSlot: TilingSlot? = nil
+    /// The window floats because its workspace floats (see ``WorkspaceLayout/floating``): it's a tile again when the
+    /// workspace tiles or scrolls, or when it's moved to a workspace that does. Not a window that floats on its own
+    /// account (a dialog, `layout floating`)
+    var isFloatedByWorkspaceLayout = false
+    /// The user made the window a tile on this floating workspace (`layout tiling`): it stays a tile there
+    weak var tiledOnFloatingWorkspace: Workspace? = nil
+    /// The frame that the floating layout gives the window when its workspace is shown, see ``floatByWorkspaceLayout(on:)``
+    var floatingFrameToApply: Rect? = nil
+    /// Where the window was when its workspace stopped floating: it goes back there when the workspace floats again
+    var floatingFrameOfWorkspaceLayout: Rect? = nil
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
