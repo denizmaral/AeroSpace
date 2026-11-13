@@ -79,6 +79,23 @@ struct PopOutCommandTest {
         assertEquals(window.getWeight(.v), 2)
     }
 
+    /// MarSpace puts the floating windows in the middle of the screen with their sizes when it quits (see
+    /// frameForTermination): a popped out window is still popped out after a restart, with its size
+    @Test func testItKeepsItsSizeWhenMarSpaceQuits() async throws {
+        let workspace = Workspace.get(byName: name)
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        TestWindow.new(id: 2, parent: workspace.rootTilingContainer)
+        #expect(window.focusWindow())
+        try await workspace.layoutWorkspace()
+        await run("pop-out")
+        try await workspace.layoutWorkspace()
+        assertEquals(window.lastFloatingSize, popped.size)
+
+        window.axRectForTest = Rect(topLeftX: 100, topLeftY: 200, width: 800, height: 600) // The user resized it
+        try await workspace.layoutWorkspace()
+        assertEquals(window.lastFloatingSize, CGSize(width: 800, height: 600))
+    }
+
     /// Moved and resized while it was popped out: it pops out there again
     @Test func testItPopsOutWhereItWas() async throws {
         let workspace = Workspace.get(byName: name)

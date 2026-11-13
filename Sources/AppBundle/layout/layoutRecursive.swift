@@ -89,10 +89,13 @@ extension TreeNode {
                     window.lastAppliedLayoutPhysicalRect = nil
                     window.lastAppliedLayoutVirtualRect = nil
                     if let windowRect { window.observeFrame(windowRect) }
+                    // The size that it goes back to when it's made floating again, and when MarSpace quits
                     if let frame = window.floatingFrameToApply { // The workspace floats it, see Window.floatByWorkspaceLayout
                         window.floatingFrameToApply = nil
+                        window.lastFloatingSize = frame.size
                         window.setAxFrame(frame.topLeftCorner, frame.size)
                     } else {
+                        if let windowRect { window.lastFloatingSize = windowRect.size }
                         window.layoutFloatingWindow(context, windowRect)
                     }
                 }
