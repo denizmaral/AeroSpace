@@ -19,6 +19,7 @@ struct WorkspaceLayoutCommand: Command {
                 : .succ(io.err("The workspace is \(current.rawValue) already. Tip: use --fail-if-noop to exit with non-zero exit code"))
         }
         workspace.setWorkspaceLayout(next)
+        if workspace.isVisible && !isUnitTest { WorkspaceLayoutHud.shared.show(next, of: workspace) }
         return .succ
     }
 }
