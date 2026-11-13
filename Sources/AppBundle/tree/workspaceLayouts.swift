@@ -18,6 +18,8 @@ struct WorkspaceLayoutMemory {
     var chosen: WorkspaceLayout? = nil
     /// The trees of the layouts that the workspace left, as it left them
     var trees: [WorkspaceLayout: TilingTreeSnapshot<OpaqueWindowId>] = [:]
+    /// The part of the strip that the screen showed when the workspace stopped scrolling (see ``Layout/scrolling``)
+    var scrollOffset: CGFloat = 0
     /// The windows that the floating layout puts in the middle of the screen are stepped from each other
     var cascadeStep = 0
 }
@@ -61,6 +63,7 @@ extension Workspace {
         switch current {
             case .tiling, .scrolling:
                 layoutMemory.trees[current] = tilingTreeSnapshot(windowId: windowId)
+                if current == .scrolling { layoutMemory.scrollOffset = rootTilingContainer.scrollOffset }
             case .floating:
                 layoutMemory.chosen = target // Not floating anymore: the windows are tiles again
                 for window in floatingWindows where window.isFloatedByWorkspaceLayout {
@@ -81,6 +84,10 @@ extension Workspace {
                 // The tree of the other layout gives the order of the windows if the workspace wasn't in this one yet
                 if let tree = layoutMemory.trees[target] ?? layoutMemory.trees[target == .tiling ? .scrolling : .tiling] {
                     restoreTilingTree(tree, windowId: windowId)
+                }
+                // The screen shows the columns that it showed (the layout moves it only if the focused column isn't there)
+                if target == .scrolling, layoutMemory.trees[.scrolling] != nil, rootTilingContainer.layout == .scrolling {
+                    rootTilingContainer.scrollOffset = layoutMemory.scrollOffset
                 }
                 let root = rootTilingContainer
                 switch target {

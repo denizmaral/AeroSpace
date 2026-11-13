@@ -103,6 +103,24 @@ struct WorkspaceLayoutCommandTest {
         assertEquals(workspace.rootTilingContainer.layoutDescription, .h_scrolling([.window(2), .window(1), .window(3)]))
     }
 
+    /// The screen shows the columns that it showed: the focused column isn't moved to an edge
+    @Test func testTheScreenShowsTheSameColumns() async throws {
+        let workspace = Workspace.get(byName: name)
+        let windows = (1 ... 4).map { TestWindow.new(id: OpaqueWindowId(UInt64($0)), parent: workspace.rootTilingContainer) }
+        #expect(windows[3].focusWindow())
+        await run("workspace-layout scrolling")
+        try await workspace.layoutWorkspace()
+        #expect(windows[2].focusWindow()) // On the screen already: it stays where it is, on the left
+        try await workspace.layoutWorkspace()
+        assertEquals(windows[2].lastAppliedLayoutPhysicalRect?.topLeftX, 0)
+
+        await run("workspace-layout tiling")
+        await run("workspace-layout scrolling")
+        try await workspace.layoutWorkspace()
+        assertEquals(windows[2].lastAppliedLayoutPhysicalRect?.topLeftX, 0)
+        assertEquals(windows[3].lastAppliedLayoutPhysicalRect?.topLeftX, 960)
+    }
+
     @Test func testFloatingPutsTheTilesInTheMiddle() async throws {
         let workspace = Workspace.get(byName: name)
         let first = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
