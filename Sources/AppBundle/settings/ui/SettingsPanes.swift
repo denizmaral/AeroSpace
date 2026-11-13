@@ -395,6 +395,7 @@ struct ActionIcon: View {
             case .fullscreen, .enterFullscreen: "arrow.up.left.and.arrow.down.right"
             case .exitFullscreen: "arrow.down.right.and.arrow.up.left"
             case .pin(let state): state == .off ? "pin.slash" : "pin"
+            case .popOut(let state): state == .off ? "pip.enter" : "pip.exit"
             case .tileFloatingWindows: "rectangle.split.2x1"
             case .flattenWorkspaceTree: "arrow.triangle.2.circlepath"
             case .balanceSizes: "equal"
@@ -469,7 +470,7 @@ private enum ShortcutGroup: CaseIterable, Identifiable {
 
     init(action: Action) {
         self = switch ActionKind(action) {
-            case .focus, .cycleFocus, .focusBackAndForth, .move, .swap, .joinWith, .resize, .fullscreen, .pin, .closeWindow,
+            case .focus, .cycleFocus, .focusBackAndForth, .move, .swap, .joinWith, .resize, .fullscreen, .pin, .popOut, .closeWindow,
                  .closeAllWindowsButCurrent: .windows
             case .workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor: .workspaces
             case .workspaceLayout, .layout, .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes: .layout
@@ -521,6 +522,9 @@ extension Action {
             case .pin(.toggle): "Pin or unpin the floating window"
             case .pin(.on): "Pin the floating window: on every workspace"
             case .pin(.off): "Unpin the window"
+            case .popOut(.toggle): "Pop the window out or back in"
+            case .popOut(.on): "Pop the window out: floating, on every workspace"
+            case .popOut(.off): "Pop the window back into its tile"
             case .tileFloatingWindows: "Tile all floating windows"
             case .flattenWorkspaceTree: "Reset the layout"
             case .balanceSizes: "Balance the sizes"

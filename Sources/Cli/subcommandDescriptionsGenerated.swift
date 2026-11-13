@@ -33,6 +33,7 @@ let subcommandDescriptions = [
     ["  move-workspace-to-monitor", "Move workspace to monitor targeted by relative direction, by order, or by pattern."],
     ["  move", "Move the focused window in the given direction"],
     ["  pin", "Show the floating window on every workspace"],
+    ["  pop-out", "Pop the window out of the layout: floating, pinned, in the middle of its monitor"],
     ["  reload-config", "Reload currently active config"],
     ["  resize", "Resize the focused window"],
     ["  run-callback", "Run AeroSpace config callbacks on demand"],

@@ -1,0 +1,44 @@
+= aerospace-pop-out(1)
+include::util/man-attributes.adoc[]
+:manname: aerospace-pop-out
+// tag::purpose[]
+:manpurpose: Pop the window out of the layout: floating, pinned, in the middle of its monitor
+// end::purpose[]
+
+// =========================================================== Synopsis
+== Synopsis
+[verse]
+// tag::synopsis[]
+aerospace pop-out [-h|--help] [on|off] [--window-id <window-id>]
+
+// end::synopsis[]
+
+// =========================================================== Description
+== Description
+
+// tag::body[]
+{manpurpose}.
+
+A popped out window floats above the others in the middle of its monitor, 1300 by 900 points (at most nine tenths of the
+screen), and it's pinned: it stays on the screen when another workspace is shown, like a video or a chat that you want
+everywhere for a while. Move it and resize it as you like: it pops out there again the next time.
+
+Popped back in, it goes back to its tile, with its size. If it came along to another workspace meanwhile, it's a new tile
+there. A window that was floating before goes back to where it was, a window on a floating workspace floats like the
+others.
+
+Without `on` or `off`, the command toggles. Like Omarchy's "pop window out" (Super + O). Popped out windows are
+remembered when MarSpace is restarted.
+
+// =========================================================== Options
+include::./util/conditional-options-header.adoc[]
+
+-h, --help:: Print help
+
+--window-id <window-id>::
+include::./util/window-id-flag-desc.adoc[]
+
+// end::body[]
+
+// =========================================================== Footer
+include::util/man-footer.adoc[]

@@ -60,6 +60,8 @@ extension CmdArgs {
                 command = ModeCommand(args: self as! ModeCmdArgs)
             case .pin:
                 command = PinCommand(args: self as! PinCmdArgs)
+            case .popOut:
+                command = PopOutCommand(args: self as! PopOutCmdArgs)
             case .move:
                 command = MoveCommand(args: self as! MoveCmdArgs)
             case .moveMouse:

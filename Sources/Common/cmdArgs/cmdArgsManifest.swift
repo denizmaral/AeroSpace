@@ -35,6 +35,7 @@ public enum CmdKind: String, CaseIterable, Equatable, Sendable {
     case moveNodeToWorkspace = "move-node-to-workspace"
     case moveWorkspaceToMonitor = "move-workspace-to-monitor"
     case pin
+    case popOut = "pop-out"
     case reloadConfig = "reload-config"
     case resize
     case runCallback = "run-callback"
@@ -113,6 +114,8 @@ func initSubcommands() -> [String: any SubCommandParserProtocol] {
                 result[kind.rawValue] = SubCommandParser(ModeCmdArgs.init)
             case .pin:
                 result[kind.rawValue] = SubCommandParser(parsePinCmdArgs)
+            case .popOut:
+                result[kind.rawValue] = SubCommandParser(parsePopOutCmdArgs)
             case .move:
                 result[kind.rawValue] = SubCommandParser(parseMoveCmdArgs)
                 // deprecated

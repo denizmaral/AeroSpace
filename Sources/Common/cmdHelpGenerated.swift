@@ -137,6 +137,9 @@ let move_help_generated = """
 let pin_help_generated = """
     USAGE: pin [-h|--help] [on|off] [--window-id <window-id>]
     """
+let pop_out_help_generated = """
+    USAGE: pop-out [-h|--help] [on|off] [--window-id <window-id>]
+    """
 let reload_config_help_generated = """
     USAGE: reload-config [-h|--help] [--no-gui] [--dry-run] [--warnings-as-errors]
     """

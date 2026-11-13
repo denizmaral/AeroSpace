@@ -25,6 +25,7 @@ struct SettingsTest {
             .workspaceLayout([.tiling, .scrolling, .floating]), .workspaceLayout([.floating, .scrolling, .tiling]), .workspaceLayout([.scrolling]),
             .fullscreen(.marSpace), .fullscreen(.macOSNative), .enterFullscreen(.marSpace), .enterFullscreen(.macOSNative),
             .exitFullscreen(.marSpace), .exitFullscreen(.macOSNative), .pin(.toggle), .pin(.on), .pin(.off),
+            .popOut(.toggle), .popOut(.on), .popOut(.off),
             .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent,
             .enterMode("service"), .enterMode("main"),
             .reloadSettings,

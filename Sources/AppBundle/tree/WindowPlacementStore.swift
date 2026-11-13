@@ -11,6 +11,8 @@ struct WindowPlacement: Equatable, Sendable {
     var isPinned = false
     /// See ``Window/isFloatedByWorkspaceLayout``
     var isFloatedByWorkspaceLayout = false
+    /// See ``Window/poppedOut``: true if it was a tile, false if it was floating, nil if it isn't popped out
+    var poppedOutOfTile: Bool? = nil
 }
 
 /// Immutable, memory-mapped set of window placements, and the tiling trees of the workspaces.
@@ -31,7 +33,8 @@ struct WindowPlacement: Equatable, Sendable {
 ///   pid:            Int32
 ///   nameOffset:     UInt32  (into the blob)
 ///   nameLength:     UInt16
-///   flags:          UInt8   (bit 0: floating, bit 1: pinned, bit 2: floated by the workspace layout)
+///   flags:          UInt8   (bit 0: floating, bit 1: pinned, bit 2: floated by the workspace layout, bit 3: popped out,
+///                            bit 4: popped out of a tile)
 ///   padding:        UInt8
 /// Blob:
 ///   UTF-8 workspace names
@@ -131,6 +134,7 @@ struct WindowPlacementSnapshot: Sendable {
             isFloating: data.loadLE(UInt8.self, at: offset + 14) & 1 != 0,
             isPinned: data.loadLE(UInt8.self, at: offset + 14) & 2 != 0,
             isFloatedByWorkspaceLayout: data.loadLE(UInt8.self, at: offset + 14) & 4 != 0,
+            poppedOutOfTile: data.loadLE(UInt8.self, at: offset + 14) & 8 != 0 ? data.loadLE(UInt8.self, at: offset + 14) & 16 != 0 : nil,
         )
     }
 
@@ -151,7 +155,12 @@ struct WindowPlacementSnapshot: Sendable {
             records.appendLE(UInt32(bitPattern: placement.pid))
             records.appendLE(UInt32(blob.count))
             records.appendLE(UInt16(clamping: name.count))
-            records.appendLE(UInt8((placement.isFloating ? 1 : 0) | (placement.isPinned ? 2 : 0) | (placement.isFloatedByWorkspaceLayout ? 4 : 0)))
+            let poppedOut: UInt8 = switch placement.poppedOutOfTile {
+                case nil: 0
+                case false?: 8
+                case true?: 8 | 16
+            }
+            records.appendLE(UInt8((placement.isFloating ? 1 : 0) | (placement.isPinned ? 2 : 0) | (placement.isFloatedByWorkspaceLayout ? 4 : 0)) | poppedOut)
             records.appendLE(UInt8(0))
             blob.append(name.prefix(Int(UInt16.max)))
         }
@@ -304,6 +313,7 @@ enum WindowPlacementStore {
                 isFloating: window.isFloating,
                 isPinned: window.isPinned,
                 isFloatedByWorkspaceLayout: window.isFloatedByWorkspaceLayout,
+                poppedOutOfTile: window.isPoppedOut ? window.poppedOut == .tile : nil,
             ))
         }
         // E.g. the lock screen: all windows are temporarily invisible. Keep the last persisted placement

@@ -46,6 +46,8 @@ final class MacWindow: Window {
             }
             window.isPinned = previousPlacement.isPinned && window.isFloating
             window.isFloatedByWorkspaceLayout = previousPlacement.isFloatedByWorkspaceLayout && window.isFloating
+            // Popped back into a tile, it's placed like a new window: its place in the tree is of the previous run
+            window.poppedOut = window.isPinned ? previousPlacement.poppedOutOfTile.map { $0 ? .tile : .floating(nil) } : nil
         }
         window.lifeStatus = lifeStatus // Invisible windows (e.g. on other macOS Spaces) must not split other windows
         allWindowsMap[windowId] = window

@@ -37,6 +37,8 @@ enum Action: Codable, Sendable, Equatable {
     case exitFullscreen(FullscreenKind)
     /// Shows the floating window on every workspace (Hyprland's `pin`)
     case pin(PinState)
+    /// Floating, pinned, in the middle of the screen, and back into its tile (Omarchy's "pop window out")
+    case popOut(PinState)
     case flattenWorkspaceTree
     /// Makes all floating windows of the workspace tiling
     case tileFloatingWindows
@@ -108,6 +110,7 @@ enum Action: Codable, Sendable, Equatable {
             case .enterFullscreen(let kind): [kind.command, "on"]
             case .exitFullscreen(let kind): [kind.command, "off"]
             case .pin(let state): state == .toggle ? ["pin"] : ["pin", state.rawValue]
+            case .popOut(let state): state == .toggle ? ["pop-out"] : ["pop-out", state.rawValue]
             case .flattenWorkspaceTree: ["flatten-workspace-tree"]
             case .tileFloatingWindows: ["tile-floating-windows"]
             case .balanceSizes: ["balance-sizes"]
@@ -177,6 +180,7 @@ enum Action: Codable, Sendable, Equatable {
             case .enterFullscreen(let kind): args = kind.args(rawArgs, .on)
             case .exitFullscreen(let kind): args = kind.args(rawArgs, .off)
             case .pin(let state): args = PinCmdArgs(rawArgs: rawArgs, toggle: state == .toggle ? .toggle : state == .on ? .on : .off)
+            case .popOut(let state): args = PopOutCmdArgs(rawArgs: rawArgs, toggle: state == .toggle ? .toggle : state == .on ? .on : .off)
             case .flattenWorkspaceTree: args = FlattenWorkspaceTreeCmdArgs(rawArgs: rawArgs.slice)
             case .tileFloatingWindows: args = TileFloatingWindowsCmdArgs(rawArgs: rawArgs.slice)
             case .balanceSizes: args = BalanceSizesCmdArgs(rawArgs: rawArgs.slice)

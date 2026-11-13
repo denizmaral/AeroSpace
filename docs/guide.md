@@ -99,6 +99,12 @@ when you go to another workspace, like a small video or a note that you want eve
 the focus. A window rule can pin the windows of an app: make them floating first (Change the layout › Floating), then
 pin them.
 
+**Pop the window out** (the action "Pop the window out", `aerospace pop-out`, Omarchy's Super + O): the window floats
+above the others in the middle of the screen, 1300 by 900 points, and it's pinned, so it stays with you on every
+workspace (a video call, a chat, a document you copy from). Move it and resize it as you like: it pops out there again
+next time. The same shortcut pops it back in: into its tile, with its size, or as a new tile on the workspace you're on
+if it came along. A window that was floating goes back to where it was.
+
 When windows were made floating by mistake, the action "Tile all floating windows" (`aerospace tile-floating-windows`)
 makes every floating window of the workspace tiling again. A window that you made
 floating goes back to its place in the layout, with its size (also when you tile it alone, with Change the layout ›

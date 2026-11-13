@@ -47,6 +47,10 @@ open class Window: TreeNode, Hashable {
     var floatingFrameToApply: Rect? = nil
     /// Where the window was when its workspace stopped floating: it goes back there when the workspace floats again
     var floatingFrameOfWorkspaceLayout: Rect? = nil
+    /// The window is popped out (`pop-out`): what it was before
+    var poppedOut: PoppedOutOrigin? = nil
+    /// Where the window was the last time it was popped out: it pops out there again
+    var lastPoppedOutFrame: Rect? = nil
 
     @MainActor
     init(id: OpaqueWindowId, _ app: any AbstractApp, lastFloatingSize: CGSize?, parent: NonLeafTreeNodeObject, adaptiveWeight: CGFloat, index: Int) {
