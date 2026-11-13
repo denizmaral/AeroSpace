@@ -17,8 +17,8 @@ settings:
     TOOLCHAINS: ${XCODEGEN_TOOLCHAINS}
     SWIFT_VERSION: ${XCODEGEN_SWIFT_VERSION}
     GENERATE_INFOPLIST_FILE: YES
-    MARKETING_VERSION: 0.0.2
-    CURRENT_PROJECT_VERSION: 2
+    MARKETING_VERSION: 0.0.3
+    CURRENT_PROJECT_VERSION: 3
     # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/LaunchServicesKeys.html#//apple_ref/doc/uid/20001431-108256
     # Specifies whether the app runs as an agent app. If this key is set to YES, Launch Services runs the app as an agent app.
     # Agent apps do not appear in the Dock or in the Force Quit window (cmd-opt-esc)
