@@ -82,8 +82,16 @@ extension Workspace {
         }
         guard snapshot.root.contains(anyOf: known) else { return } // Nothing to restore: the tree stays as it is
         var away: [WindowId: Window] = [:]
-        for window in Workspace.all.flatMap(\.floatingWindowsIfAny) where window.tilingSlot == nil && !window.isFloatedByWorkspaceLayout {
-            if let id = windowId(window) { away[id] = window }
+        // They go back to the floating containers of their workspaces: they don't take the focus of the other ones
+        var mostRecentElsewhere: [Window] = []
+        for workspace in Workspace.all {
+            let floating = workspace.floatingWindowsIfAny.filter { $0.tilingSlot == nil && !$0.isFloatedByWorkspaceLayout }
+            for window in floating {
+                if let id = windowId(window) { away[id] = window }
+            }
+            if workspace !== self, !floating.isEmpty, let mostRecent = workspace.mostRecentWindowRecursive {
+                mostRecentElsewhere.append(mostRecent)
+            }
         }
 
         previousRoot.unbindFromParent() // A workspace has one root. The windows that aren't restored are still in it
@@ -95,6 +103,7 @@ extension Workspace {
         for window in returning {
             window.window.leaveTilingTreeRememberingSlot(for: window.floatingContainer, isPinned: window.isPinned)
         }
+        for window in mostRecentElsewhere { window.markAsMostRecentChild() }
         snapshot.mostRecentWindow.flatMap { known[$0] }?.markAsMostRecentChild()
         // Opened while MarSpace wasn't running: next to the window that was the most recent one, like any new window
         for window in tilingWindows where windowId(window).map(restored.contains) != true {

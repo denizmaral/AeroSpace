@@ -179,23 +179,27 @@ struct RememberedTileAcrossRestartTest {
         assertEquals(workspace.rootTilingContainer.layoutDescription, tiles)
     }
 
-    /// Popped out, it came along to another workspace: it stays there after the restart, and remembers its tile
+    /// Popped out, it came along to another workspace: it stays there after the restart, and remembers its tile. It
+    /// doesn't take the focus of that workspace
     @Test func testItCameAlongToAnotherWorkspace() async throws {
         _ = setUpWithNormalizations()
         let first = Workspace.get(byName: "A") // The name of the test isn't a command line argument
         TestWindow.new(id: 1, parent: first.rootTilingContainer)
         TestWindow.new(id: 2, parent: first.rootTilingContainer)
+        let tile = TestWindow.new(id: 3, parent: Workspace.get(byName: "B").rootTilingContainer)
         let tiles = first.rootTilingContainer.layoutDescription
         #expect(window(1).focusWindow())
         await run("pop-out")
         await run("workspace B")
         Workspace.movePinnedWindowsToVisibleWorkspaces()
         let second = Workspace.get(byName: "B")
+        assertEquals(second.mostRecentWindowRecursive, tile)
 
-        try restart([first, second])
+        try restart([second, first]) // The tree of B first: nothing marks its most recent window afterwards
         assertEquals(window(1).nodeWorkspace, second)
         assertEquals(window(1).isPoppedOut, true)
         #expect(window(1).tilingSlot != nil)
+        assertEquals(second.mostRecentWindowRecursive, tile)
 
         await run("workspace A")
         Workspace.movePinnedWindowsToVisibleWorkspaces()
