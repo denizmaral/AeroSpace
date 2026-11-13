@@ -192,6 +192,20 @@ private struct GeneralPane: View {
                 LabeledContent("Scrolling column width") {
                     ValueSlider(value: $general.scrollingColumnWidth, range: 20 ... 100, unit: "%")
                 }
+                Toggle(isOn: $general.trackpadScrollsColumns) {
+                    Text("Two fingers move through the columns")
+                    Text("On a scrolling workspace, two fingers sideways on the trackpad go to the next column. Scrolling up and down stays with the apps")
+                }
+                if general.trackpadScrollsColumns {
+                    Picker("While holding", selection: $general.trackpadScrollModifier) {
+                        Text("No key").tag(Settings.TrackpadScrollModifier?.none)
+                        Text("⌥ Option").tag(Settings.TrackpadScrollModifier?.some(.option))
+                        Text("⌘ Command").tag(Settings.TrackpadScrollModifier?.some(.command))
+                        Text("⌃ Control").tag(Settings.TrackpadScrollModifier?.some(.control))
+                        Text("⇧ Shift").tag(Settings.TrackpadScrollModifier?.some(.shift))
+                    }
+                    .help("With a key, the apps keep two fingers sideways without it (e.g. back and forward in a browser)")
+                }
                 Picker("Orientation", selection: $general.defaultRootOrientation) {
                     Text("Automatic").tag(DefaultContainerOrientation.auto)
                     Text("Horizontal").tag(DefaultContainerOrientation.horizontal)

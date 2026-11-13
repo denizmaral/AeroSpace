@@ -235,6 +235,7 @@ private func layoutWorkspaces() async throws {
             try await (window as! MacWindow).hideInCorner(corner, tile: tiles[window]) // todo as!
         }
     }
+    TrackpadColumnScrolling.update() // The monitors that show a scrolling workspace
 }
 
 /// The corner of the monitor where the windows that aren't shown wait: the one that no other monitor is next to (the

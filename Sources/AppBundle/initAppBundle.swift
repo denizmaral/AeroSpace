@@ -18,6 +18,7 @@ import Foundation
         startObservingKeyboardLayout()
 
         WindowPlacementStore.restoreWorkspaceLayoutsOfPreviousRun() // Before the first window and the first command
+        TrackpadColumnScrolling.start()
         startUnixSocketServer()
         GlobalObserver.initObserver()
         MissionControl.observe()

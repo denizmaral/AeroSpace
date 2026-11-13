@@ -33,11 +33,20 @@ struct Settings: Codable, Sendable, Equatable {
         var defaultRootLayout: Layout = .tiles
         /// The length of a column of a scrolling workspace, in percent of the screen
         var scrollingColumnWidth = 50
+        /// Two fingers sideways on the trackpad move through the columns of a scrolling workspace
+        var trackpadScrollsColumns = true
+        /// Held while the fingers move through the columns. nil: no modifier
+        var trackpadScrollModifier: TrackpadScrollModifier? = nil
         var defaultRootOrientation: DefaultContainerOrientation = .auto
         var flattenContainers = true
         var oppositeOrientationForNestedContainers = true
         var accordionPadding = 30
         var automaticallyUnhideMacosHiddenApps = false
+    }
+
+    /// See ``General/trackpadScrollModifier``
+    enum TrackpadScrollModifier: String, Codable, Sendable, CaseIterable {
+        case option, command, control, shift
     }
 
     @DecodableWithDefaults

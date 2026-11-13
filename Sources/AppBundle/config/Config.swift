@@ -23,6 +23,10 @@ struct Config: Withable {
     var accordionPadding: Int = 30
     /// The length of a column of a scrolling workspace with weight 1, a share of the screen (see ``Layout/scrolling``)
     var scrollingColumnWidth: CGFloat = 0.5
+    /// Two fingers sideways on the trackpad move through the columns of a scrolling workspace (see TrackpadColumnScrolling)
+    var trackpadScrollsColumns: Bool = true
+    /// Held while the fingers move through the columns: none, or e.g. Option (the gestures without it go to the apps)
+    var trackpadScrollModifiers: CGEventFlags = []
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
     var focusFollowsMouse: Bool = false

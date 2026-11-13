@@ -29,6 +29,14 @@ extension Settings {
         config.defaultWorkspaceLayout = general.defaultWorkspaceLayout
         config.defaultRootContainerLayout = general.defaultRootLayout == .scrolling ? .tiles : general.defaultRootLayout
         config.scrollingColumnWidth = CGFloat(min(max(general.scrollingColumnWidth, 10), 100)) / 100
+        config.trackpadScrollsColumns = general.trackpadScrollsColumns
+        config.trackpadScrollModifiers = switch general.trackpadScrollModifier {
+            case nil: []
+            case .option: .maskAlternate
+            case .command: .maskCommand
+            case .control: .maskControl
+            case .shift: .maskShift
+        }
         config.defaultRootContainerOrientation = general.defaultRootOrientation
         config.enableNormalizationFlattenContainers = general.flattenContainers
         config.enableNormalizationOppositeOrientationForNestedContainers = general.oppositeOrientationForNestedContainers
