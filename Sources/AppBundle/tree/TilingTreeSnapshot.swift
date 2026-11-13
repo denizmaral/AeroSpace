@@ -141,13 +141,7 @@ extension [PersistedTilingTree] {
     func encoded() -> Data {
         var data = Data()
         data.appendLE(UInt16(clamping: count))
-        for tree in prefix(Int(UInt16.max)) {
-            let name = Data(tree.workspace.utf8).prefix(Int(UInt16.max))
-            data.appendLE(UInt16(name.count))
-            data.append(name)
-            data.appendLE(tree.mostRecentWindow ?? 0)
-            tree.root.encode(into: &data)
-        }
+        for tree in prefix(Int(UInt16.max)) { tree.encode(into: &data) }
         return data
     }
 
@@ -157,15 +151,137 @@ extension [PersistedTilingTree] {
         guard let count = reader.read(UInt16.self) else { return nil }
         var trees: [PersistedTilingTree] = []
         for _ in 0 ..< count {
-            guard let nameLength = reader.read(UInt16.self),
-                  let name = reader.readString(length: Int(nameLength)),
-                  let mostRecentWindow = reader.read(UInt32.self),
-                  let root = TilingTreeSnapshot.Container(&reader, depth: 0)
-            else { return nil }
-            trees.append(PersistedTilingTree(workspace: name, mostRecentWindow: mostRecentWindow == 0 ? nil : mostRecentWindow, root: root))
+            guard let tree = PersistedTilingTree(&reader) else { return nil }
+            trees.append(tree)
         }
         guard reader.isAtEnd else { return nil }
         self = trees
+    }
+}
+
+extension PersistedTilingTree {
+    fileprivate func encode(into data: inout Data) {
+        let name = Data(workspace.utf8).prefix(Int(UInt16.max))
+        data.appendLE(UInt16(name.count))
+        data.append(name)
+        data.appendLE(mostRecentWindow ?? 0)
+        root.encode(into: &data)
+    }
+
+    fileprivate init?(_ reader: inout DataReader) {
+        guard let nameLength = reader.read(UInt16.self),
+              let name = reader.readString(length: Int(nameLength)),
+              let mostRecentWindow = reader.read(UInt32.self),
+              let root = TilingTreeSnapshot.Container(&reader, depth: 0)
+        else { return nil }
+        self.init(workspace: name, mostRecentWindow: mostRecentWindow == 0 ? nil : mostRecentWindow, root: root)
+    }
+}
+
+extension TilingTreeSnapshot {
+    /// The same tree with other window ids: the windows without one are left out, and the containers that are empty
+    /// then. nil if no window is left
+    func mapWindowIds<Other>(_ transform: (WindowId) -> Other?) -> TilingTreeSnapshot<Other>? {
+        guard let root = root.mapWindowIds(transform) else { return nil }
+        return TilingTreeSnapshot<Other>(workspace: workspace, mostRecentWindow: mostRecentWindow.flatMap(transform), root: root)
+    }
+}
+
+extension TilingTreeSnapshot.Container {
+    fileprivate func mapWindowIds<Other>(_ transform: (WindowId) -> Other?) -> TilingTreeSnapshot<Other>.Container? {
+        let children: [TilingTreeSnapshot<Other>.Node] = children.compactMap { child in
+            switch child {
+                case .window(let id, let weight): transform(id).map { .window(id: $0, weight: weight) }
+                case .container(let container): container.mapWindowIds(transform).map { .container($0) }
+            }
+        }
+        return children.isEmpty ? nil : .init(orientation: orientation, layout: layout, weight: weight, children: children)
+    }
+}
+
+/// The layout that `workspace-layout` gave a workspace, and the trees that it remembers (see ``WorkspaceLayoutMemory``),
+/// persisted across restarts of MarSpace with native window ids
+struct WorkspaceLayoutRecord: Equatable, Sendable {
+    let workspace: String
+    let chosen: WorkspaceLayout?
+    /// Of the layouts that the workspace isn't in: tiling, scrolling
+    let trees: [WorkspaceLayout: PersistedTilingTree]
+}
+
+/// The workspace layouts section of the window placement file (little-endian):
+/// ```
+/// workspaceCount: UInt16
+/// Per workspace:
+///   nameLength:   UInt16
+///   name:         UTF-8
+///   chosen:       UInt8 (0: none, 1: tiling, 2: scrolling, 3: floating)
+///   treeCount:    UInt8
+///   Per tree:
+///     layout:     UInt8 (1: tiling, 2: scrolling)
+///     tree:       a tree of the trees section
+/// ```
+extension [WorkspaceLayoutRecord] {
+    func encoded() -> Data {
+        var data = Data()
+        data.appendLE(UInt16(clamping: count))
+        for record in prefix(Int(UInt16.max)) {
+            let name = Data(record.workspace.utf8).prefix(Int(UInt16.max))
+            data.appendLE(UInt16(name.count))
+            data.append(name)
+            data.appendLE(record.chosen?.byte ?? 0)
+            let trees = record.trees.sorted { $0.key.byte < $1.key.byte }
+            data.appendLE(UInt8(trees.count))
+            for (layout, tree) in trees {
+                data.appendLE(layout.byte)
+                tree.encode(into: &data)
+            }
+        }
+        return data
+    }
+
+    /// nil if the data isn't a workspace layouts section (e.g. it's damaged)
+    init?(decoding data: Data) {
+        var reader = DataReader(data)
+        guard let count = reader.read(UInt16.self) else { return nil }
+        var records: [WorkspaceLayoutRecord] = []
+        for _ in 0 ..< count {
+            guard let nameLength = reader.read(UInt16.self),
+                  let name = reader.readString(length: Int(nameLength)),
+                  let chosenByte = reader.read(UInt8.self),
+                  let treeCount = reader.read(UInt8.self)
+            else { return nil }
+            let chosen = WorkspaceLayout(byte: chosenByte)
+            guard chosenByte == 0 || chosen != nil else { return nil }
+            var trees: [WorkspaceLayout: PersistedTilingTree] = [:]
+            for _ in 0 ..< treeCount {
+                guard let layout = reader.read(UInt8.self).flatMap(WorkspaceLayout.init(byte:)), layout != .floating,
+                      let tree = PersistedTilingTree(&reader)
+                else { return nil }
+                trees[layout] = tree
+            }
+            records.append(WorkspaceLayoutRecord(workspace: name, chosen: chosen, trees: trees))
+        }
+        guard reader.isAtEnd else { return nil }
+        self = records
+    }
+}
+
+extension WorkspaceLayout {
+    fileprivate var byte: UInt8 {
+        switch self {
+            case .tiling: 1
+            case .scrolling: 2
+            case .floating: 3
+        }
+    }
+
+    fileprivate init?(byte: UInt8) {
+        switch byte {
+            case 1: self = .tiling
+            case 2: self = .scrolling
+            case 3: self = .floating
+            default: return nil
+        }
     }
 }
 

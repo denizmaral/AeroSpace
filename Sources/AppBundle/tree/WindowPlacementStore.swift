@@ -9,30 +9,34 @@ struct WindowPlacement: Equatable, Sendable {
     let isFloating: Bool
     /// See ``PinCommand``
     var isPinned = false
+    /// See ``Window/isFloatedByWorkspaceLayout``
+    var isFloatedByWorkspaceLayout = false
 }
 
 /// Immutable, memory-mapped set of window placements, and the tiling trees of the workspaces.
 ///
 /// Binary format (little-endian):
 /// ```
-/// Header (28 bytes; 24 bytes in version 2, which has no trees):
-///   magic:       UInt32 "MSWP"
-///   version:     UInt16 (3)
-///   reserved:    UInt16
-///   count:       UInt32
-///   blobLength:  UInt32
-///   bootSession: UInt64  (FNV-1a of kern.bootsessionuuid. Window ids and pids are reused after a reboot)
-///   treesLength: UInt32
+/// Header (32 bytes; 28 bytes in version 3, which has no workspace layouts; 24 bytes in version 2, which has no trees):
+///   magic:         UInt32 "MSWP"
+///   version:       UInt16 (4)
+///   reserved:      UInt16
+///   count:         UInt32
+///   blobLength:    UInt32
+///   bootSession:   UInt64  (FNV-1a of kern.bootsessionuuid. Window ids and pids are reused after a reboot)
+///   treesLength:   UInt32
+///   layoutsLength: UInt32
 /// Records (16 bytes each, sorted by nativeWindowId for binary search):
 ///   nativeWindowId: UInt32
 ///   pid:            Int32
 ///   nameOffset:     UInt32  (into the blob)
 ///   nameLength:     UInt16
-///   flags:          UInt8   (bit 0: floating, bit 1: pinned)
+///   flags:          UInt8   (bit 0: floating, bit 1: pinned, bit 2: floated by the workspace layout)
 ///   padding:        UInt8
 /// Blob:
 ///   UTF-8 workspace names
 /// Trees (see ``TilingTreeSnapshot``)
+/// Workspace layouts (see ``WorkspaceLayoutRecord``)
 /// ```
 struct WindowPlacementSnapshot: Sendable {
     private let data: Data
@@ -41,12 +45,15 @@ struct WindowPlacementSnapshot: Sendable {
     private let headerSize: Int
     private let blobStart: Int
     private let treesStart: Int
+    private let layoutsStart: Int
 
     private static let magic: UInt32 = 0x5057_534D // "MSWP" little-endian
-    private static let version: UInt16 = 3
-    /// Still read: the file that the previous version of MarSpace wrote, when MarSpace is updated
+    private static let version: UInt16 = 4
+    /// Still read: the files that the previous versions of MarSpace wrote, when MarSpace is updated
+    private static let versionWithoutLayouts: UInt16 = 3
     private static let versionWithoutTrees: UInt16 = 2
-    private static let headerSize = 28
+    private static let headerSize = 32
+    private static let headerSizeWithoutLayouts = 28
     private static let headerSizeWithoutTrees = 24
     private static let recordSize = 16
 
@@ -56,26 +63,36 @@ struct WindowPlacementSnapshot: Sendable {
         let headerSize: Int
         switch data.loadLE(UInt16.self, at: 4) {
             case Self.version: headerSize = Self.headerSize
+            case Self.versionWithoutLayouts: headerSize = Self.headerSizeWithoutLayouts
             case Self.versionWithoutTrees: headerSize = Self.headerSizeWithoutTrees
             default: return nil
         }
         guard data.count >= headerSize else { return nil }
         let count = Int(data.loadLE(UInt32.self, at: 8))
         let blobLength = Int(data.loadLE(UInt32.self, at: 12))
-        let treesLength = headerSize == Self.headerSize ? Int(data.loadLE(UInt32.self, at: 24)) : 0
+        let treesLength = headerSize >= Self.headerSizeWithoutLayouts ? Int(data.loadLE(UInt32.self, at: 24)) : 0
+        let layoutsLength = headerSize >= Self.headerSize ? Int(data.loadLE(UInt32.self, at: 28)) : 0
         let blobStart = headerSize + count * Self.recordSize
-        guard data.count == blobStart + blobLength + treesLength else { return nil }
+        guard data.count == blobStart + blobLength + treesLength + layoutsLength else { return nil }
         self.data = data
         self.count = count
         self.bootSession = data.loadLE(UInt64.self, at: 16)
         self.headerSize = headerSize
         self.blobStart = blobStart
         self.treesStart = blobStart + blobLength
+        self.layoutsStart = blobStart + blobLength + treesLength
     }
 
     /// The tiling trees of the workspaces. Empty if there are none, or if they can't be read
     var trees: [PersistedTilingTree] {
-        treesStart == data.count ? [] : [PersistedTilingTree](decoding: data[(data.startIndex + treesStart)...]) ?? []
+        treesStart == layoutsStart
+            ? []
+            : [PersistedTilingTree](decoding: data[(data.startIndex + treesStart) ..< (data.startIndex + layoutsStart)]) ?? []
+    }
+
+    /// The layouts that `workspace-layout` gave the workspaces. Empty if there are none, or if they can't be read
+    var workspaceLayouts: [WorkspaceLayoutRecord] {
+        layoutsStart == data.count ? [] : [WorkspaceLayoutRecord](decoding: data[(data.startIndex + layoutsStart)...]) ?? []
     }
 
     /// Binary search by the native window id. The pid protects against window ids of terminated apps
@@ -113,12 +130,19 @@ struct WindowPlacementSnapshot: Sendable {
             workspace: name,
             isFloating: data.loadLE(UInt8.self, at: offset + 14) & 1 != 0,
             isPinned: data.loadLE(UInt8.self, at: offset + 14) & 2 != 0,
+            isFloatedByWorkspaceLayout: data.loadLE(UInt8.self, at: offset + 14) & 4 != 0,
         )
     }
 
     /// `placements` must be sorted by nativeWindowId and must not contain duplicate ids
-    static func encode(_ placements: [WindowPlacement], trees: [PersistedTilingTree] = [], bootSession: UInt64) -> Data {
+    static func encode(
+        _ placements: [WindowPlacement],
+        trees: [PersistedTilingTree] = [],
+        layouts: [WorkspaceLayoutRecord] = [],
+        bootSession: UInt64,
+    ) -> Data {
         let trees = trees.isEmpty ? Data() : trees.encoded()
+        let layouts = layouts.isEmpty ? Data() : layouts.encoded()
         var records = Data(capacity: placements.count * recordSize)
         var blob = Data()
         for placement in placements {
@@ -127,11 +151,11 @@ struct WindowPlacementSnapshot: Sendable {
             records.appendLE(UInt32(bitPattern: placement.pid))
             records.appendLE(UInt32(blob.count))
             records.appendLE(UInt16(clamping: name.count))
-            records.appendLE(UInt8((placement.isFloating ? 1 : 0) | (placement.isPinned ? 2 : 0)))
+            records.appendLE(UInt8((placement.isFloating ? 1 : 0) | (placement.isPinned ? 2 : 0) | (placement.isFloatedByWorkspaceLayout ? 4 : 0)))
             records.appendLE(UInt8(0))
             blob.append(name.prefix(Int(UInt16.max)))
         }
-        var result = Data(capacity: headerSize + records.count + blob.count + trees.count)
+        var result = Data(capacity: headerSize + records.count + blob.count + trees.count + layouts.count)
         result.appendLE(magic)
         result.appendLE(version)
         result.appendLE(UInt16(0))
@@ -139,9 +163,11 @@ struct WindowPlacementSnapshot: Sendable {
         result.appendLE(UInt32(blob.count))
         result.appendLE(bootSession)
         result.appendLE(UInt32(trees.count))
+        result.appendLE(UInt32(layouts.count))
         result.append(records)
         result.append(blob)
         result.append(trees)
+        result.append(layouts)
         return result
     }
 }
@@ -181,6 +207,7 @@ enum WindowPlacementStore {
     private static var restoredWindowIds: Set<UInt32> = []
     private static var lastPersisted: [WindowPlacement] = []
     private static var lastPersistedTrees: [PersistedTilingTree] = []
+    private static var lastPersistedLayouts: [WorkspaceLayoutRecord] = []
     private static var didRestoreTilingTrees = false
 
     /// Puts the tiling windows back where they were in the layout of the previous run. Done once, when the windows that
@@ -207,12 +234,43 @@ enum WindowPlacementStore {
         for tree in previousRun.trees {
             Workspace.get(byName: tree.workspace).restoreTilingTree(tree, windowId: nativeWindowId(of:))
         }
+        // The trees that the workspaces remember for their other layouts, with the windows that are there
+        var windowIds: [UInt32: OpaqueWindowId] = [:]
+        for window in MacWindow.allWindowsMap.values {
+            if let nativeWindowId = nativeWindowId(of: window) { windowIds[nativeWindowId] = window.windowId }
+        }
+        for record in previousRun.workspaceLayouts {
+            for (layout, tree) in record.trees {
+                workspaceLayoutMemories[record.workspace, default: WorkspaceLayoutMemory()].trees[layout] = tree.mapWindowIds { windowIds[$0] }
+            }
+        }
         // The focus was taken from macOS before: the focused window stays the most recent one of its workspace
         globalFocus.windowOrNil?.markAsMostRecentChild()
     }
 
+    /// The layouts that `workspace-layout` gave the workspaces in the previous run. Before the first window is registered
+    /// and before the first command runs: a window that a floating workspace floated must not be tiled because its
+    /// workspace doesn't float yet (see ``Workspace/applyFloatingLayouts()``)
+    static func restoreWorkspaceLayoutsOfPreviousRun() {
+        for record in previousRun?.workspaceLayouts ?? [] where record.chosen != nil {
+            workspaceLayoutMemories[record.workspace, default: WorkspaceLayoutMemory()].chosen = record.chosen
+        }
+    }
+
     private static func nativeWindowId(of window: Window) -> UInt32? {
         (window as? MacWindow).flatMap { $0.macApp.nativeWindowId(of: $0.windowId) }
+    }
+
+    /// The layouts that `workspace-layout` gave the workspaces, and the trees that they remember, with native ids. In
+    /// the order of the names: the file changes only when they change
+    private static func workspaceLayoutRecords() -> [WorkspaceLayoutRecord] {
+        workspaceLayoutMemories.sorted { $0.key < $1.key }.compactMap { name, memory in
+            var trees: [WorkspaceLayout: PersistedTilingTree] = [:]
+            for (layout, tree) in memory.trees {
+                trees[layout] = tree.mapWindowIds { Window.get(byId: $0).flatMap(nativeWindowId(of:)) }
+            }
+            return memory.chosen == nil && trees.isEmpty ? nil : WorkspaceLayoutRecord(workspace: name, chosen: memory.chosen, trees: trees)
+        }
     }
 
     /// The placement of the window in the previous run. Only the first registration of the window in this run is
@@ -245,6 +303,7 @@ enum WindowPlacementStore {
                 workspace: workspace,
                 isFloating: window.isFloating,
                 isPinned: window.isPinned,
+                isFloatedByWorkspaceLayout: window.isFloatedByWorkspaceLayout,
             ))
         }
         // E.g. the lock screen: all windows are temporarily invisible. Keep the last persisted placement
@@ -266,12 +325,14 @@ enum WindowPlacementStore {
         let trees = currentlyManipulatedWithMouseWindowId == nil
             ? Workspace.all.compactMap { $0.tilingTreeSnapshot(windowId: nativeWindowId(of:)) }
             : lastPersistedTrees
-        if placements == lastPersisted && trees == lastPersistedTrees { return }
+        let layouts = workspaceLayoutRecords()
+        if placements == lastPersisted && trees == lastPersistedTrees && layouts == lastPersistedLayouts { return }
         lastPersisted = placements
         lastPersistedTrees = trees
+        lastPersistedLayouts = layouts
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try WindowPlacementSnapshot.encode(placements, trees: trees, bootSession: bootSession).write(to: url, options: .atomic)
+            try WindowPlacementSnapshot.encode(placements, trees: trees, layouts: layouts, bootSession: bootSession).write(to: url, options: .atomic)
         } catch {
             perfLogger.error("Can't persist window placement: \(error.localizedDescription, privacy: .public)")
         }

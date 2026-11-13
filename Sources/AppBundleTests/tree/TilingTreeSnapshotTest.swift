@@ -155,10 +155,74 @@ struct TilingTreeSnapshotTest {
         let placements = [WindowPlacement(nativeWindowId: 7, pid: 100, workspace: "T", isFloating: true)]
         var version2 = WindowPlacementSnapshot.encode(placements, bootSession: 1)
         version2[4] = 2
-        version2.removeSubrange(24 ..< 28) // The length of the trees
+        version2.removeSubrange(24 ..< 32) // The lengths of the trees and of the workspace layouts
         let snapshot = try #require(WindowPlacementSnapshot(data: version2))
         assertEquals(snapshot.all, placements)
         assertEquals(snapshot.trees, [])
+    }
+
+    /// The file of the MarSpace version before the workspace layouts: the windows go back to their places
+    @Test func testFileWithoutWorkspaceLayouts() throws {
+        let trees = [PersistedTilingTree(workspace: "1", mostRecentWindow: 7, root: .init(orientation: .h, layout: .tiles, weight: 1, children: [.window(id: 7, weight: 1)]))]
+        let placements = [WindowPlacement(nativeWindowId: 7, pid: 100, workspace: "1", isFloating: false)]
+        var version3 = WindowPlacementSnapshot.encode(placements, trees: trees, bootSession: 1)
+        version3[4] = 3
+        version3.removeSubrange(28 ..< 32) // The length of the workspace layouts
+        let snapshot = try #require(WindowPlacementSnapshot(data: version3))
+        assertEquals(snapshot.all, placements)
+        assertEquals(snapshot.trees, trees)
+        assertEquals(snapshot.workspaceLayouts, [])
+    }
+
+    /// A floating workspace floats its windows again after a restart, and the tiles and columns that the workspaces
+    /// remember come back (see WorkspaceLayout)
+    @Test func testWorkspaceLayoutsRoundTrip() throws {
+        let tiles = PersistedTilingTree(
+            workspace: "F",
+            mostRecentWindow: 8,
+            root: .init(orientation: .h, layout: .tiles, weight: 1, children: [
+                .window(id: 7, weight: 1),
+                .container(.init(orientation: .v, layout: .accordion, weight: 2, children: [.window(id: 8, weight: 1), .window(id: 9, weight: 3)])),
+            ]),
+        )
+        let columns = PersistedTilingTree(
+            workspace: "F",
+            mostRecentWindow: nil,
+            root: .init(orientation: .h, layout: .scrolling, weight: 1, children: [.window(id: 9, weight: 1.5), .window(id: 7, weight: 1)]),
+        )
+        let layouts = [
+            WorkspaceLayoutRecord(workspace: "F", chosen: .floating, trees: [.tiling: tiles, .scrolling: columns]),
+            WorkspaceLayoutRecord(workspace: "S", chosen: .scrolling, trees: [:]),
+        ]
+        let placements = [
+            WindowPlacement(nativeWindowId: 7, pid: 100, workspace: "F", isFloating: true, isFloatedByWorkspaceLayout: true),
+            WindowPlacement(nativeWindowId: 8, pid: 100, workspace: "F", isFloating: true, isPinned: true),
+        ]
+        let snapshot = try #require(WindowPlacementSnapshot(data: WindowPlacementSnapshot.encode(placements, layouts: layouts, bootSession: 1)))
+        assertEquals(snapshot.all, placements)
+        assertEquals(snapshot.trees, [])
+        assertEquals(snapshot.workspaceLayouts, layouts)
+        // A damaged section is left out, the rest of the file is read
+        var damaged = WindowPlacementSnapshot.encode(placements, layouts: layouts, bootSession: 1)
+        damaged[damaged.count - 1] ^= 0xFF
+        assertEquals(WindowPlacementSnapshot(data: damaged)?.all, placements)
+    }
+
+    @Test func testTreesWithOtherWindowIds() {
+        let tree = PersistedTilingTree(
+            workspace: "1",
+            mostRecentWindow: 8,
+            root: .init(orientation: .h, layout: .tiles, weight: 1, children: [
+                .window(id: 7, weight: 1),
+                .container(.init(orientation: .v, layout: .tiles, weight: 2, children: [.window(id: 8, weight: 1)])),
+            ]),
+        )
+        // Window 8 is gone: its container is left out too
+        assertEquals(
+            tree.mapWindowIds { $0 == 7 ? OpaqueWindowId(70) : nil },
+            TilingTreeSnapshot(workspace: "1", mostRecentWindow: nil, root: .init(orientation: .h, layout: .tiles, weight: 1, children: [.window(id: 70, weight: 1)])),
+        )
+        assertNil(tree.mapWindowIds { _ -> OpaqueWindowId? in nil })
     }
 
     /// Damaged trees restore nothing, and never crash

@@ -17,6 +17,7 @@ import Foundation
         _ = await reloadConfig_nonCancellable()
         startObservingKeyboardLayout()
 
+        WindowPlacementStore.restoreWorkspaceLayoutsOfPreviousRun() // Before the first window and the first command
         startUnixSocketServer()
         GlobalObserver.initObserver()
         MissionControl.observe()
