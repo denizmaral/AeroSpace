@@ -293,7 +293,7 @@ extension TilingSlot {
             isAfterNeighbor: isAfterNeighbor,
             orientation: parent.orientation,
             layout: parent.layout,
-            isRootFlattened: parent.isRootContainer && parent.children.count == 1 && neighbor is TilingContainer,
+            isRootFlattened: parent.isRootContainer && parent.layout != .scrolling && parent.children.count == 1 && neighbor is TilingContainer,
             neighborAdaptiveWeight: neighbor?.getWeight(parent.orientation) ?? WEIGHT_AUTO,
             emptiedContainer: emptiedContainer,
         )

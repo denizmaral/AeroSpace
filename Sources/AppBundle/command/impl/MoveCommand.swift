@@ -60,6 +60,8 @@ struct MoveCommand: Command {
                 case .stop: return .succ
                 case .fail: return .fail
                 case .createImplicitContainer:
+                    // The columns of a scrolling workspace stay its root container
+                    if workspace.rootTilingContainer.layout == .scrolling { return .succ }
                     createImplicitContainerAndMoveWindow(window, workspace, direction)
                     return .succ
             }

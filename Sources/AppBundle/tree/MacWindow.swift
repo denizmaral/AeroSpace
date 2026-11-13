@@ -169,25 +169,27 @@ final class MacWindow: Window {
                 }
             }
         }
-        let p: CGPoint
-        switch corner {
-            case .bottomLeftCorner:
-                // Its right edge at the left edge of the monitor: the width that it's going to have
-                let width: CGFloat? = if let tile { size(inTile: tile).width } else { try await getAxSize(.cancellable)?.width }
-                guard let width else { fallthrough }
-                // Zoom will jump off if you do one pixel offset AeroSpace issue #527
-                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
-                let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: -1)
-                p = nodeMonitorInfo.visibleRect.bottomLeftCorner + onePixelOffset + CGPoint(x: -width, y: 0)
-            case .bottomRightCorner:
-                // Zoom will jump off if you do one pixel offset AeroSpace issue #527
-                // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
-                let onePixelOffset = macApp.appId == .zoom ? .zero : CGPoint(x: 1, y: 1)
-                p = nodeMonitorInfo.visibleRect.bottomRightCorner - onePixelOffset
+        // Its right edge at the left edge of the monitor in the bottom left corner: the width that it's going to have
+        let width: CGFloat? = switch corner {
+            case .bottomLeftCorner: if let tile { size(inTile: tile).width } else { try await getAxSize(.cancellable)?.width }
+            case .bottomRightCorner: 0
         }
+        let p = topLeftHidden(in: width == nil ? .bottomRightCorner : corner, width: width ?? 0, of: nodeMonitorInfo.visibleRect)
         // Nothing on the screen deals with it until it's shown again. What it makes of the size of its tile is read back:
         // the layout knows it when the workspace is shown (App Store refuses to be narrower than 1000)
         setAxFrame(p, tile, readBack: tile != nil)
+    }
+
+    /// Where the top left corner of the window goes to hide it in `corner` of `visibleRect`, one pixel of it on the screen
+    /// - Parameter width: of the window, for the bottom left corner: its right edge is at the left edge of the screen
+    override func topLeftHidden(in corner: OptimalHideCorner, width: CGFloat, of visibleRect: Rect) -> CGPoint {
+        // Zoom will jump off if you do one pixel offset AeroSpace issue #527
+        // todo this ad hoc won't be necessary once I implement optimization suggested by Zalim
+        let isZoom = macApp.appId == .zoom
+        return switch corner {
+            case .bottomLeftCorner: visibleRect.bottomLeftCorner + (isZoom ? .zero : CGPoint(x: 1, y: -1)) + CGPoint(x: -width, y: 0)
+            case .bottomRightCorner: visibleRect.bottomRightCorner - (isZoom ? .zero : CGPoint(x: 1, y: 1))
+        }
     }
 
     @MainActor

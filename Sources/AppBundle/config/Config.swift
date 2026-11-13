@@ -18,6 +18,8 @@ struct Config: Withable {
     var startAtLogin: Bool = false
     var automaticallyUnhideMacosHiddenApps: Bool = false
     var accordionPadding: Int = 30
+    /// The length of a column of a scrolling workspace with weight 1, a share of the screen (see ``Layout/scrolling``)
+    var scrollingColumnWidth: CGFloat = 0.5
     var enableNormalizationOppositeOrientationForNestedContainers: Bool = true
     var persistentWorkspaces: OrderedSet<String> = []
     var focusFollowsMouse: Bool = false

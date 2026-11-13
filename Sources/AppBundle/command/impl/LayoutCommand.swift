@@ -101,6 +101,8 @@ struct LayoutCommand: Command {
     switch node {
         case .floatingWindowsContainer:
             return .fail(io.err("The window is non-tiling"))
+        case .tilingContainer(let parent) where parent.layout == .scrolling:
+            return .fail(io.err("The workspace scrolls, its columns are its root container. Use 'workspace-layout tiling' to tile it"))
         case .tilingContainer(let parent):
             let targetOrientation = targetOrientation ?? parent.orientation
             let targetLayout = targetLayout ?? parent.layout

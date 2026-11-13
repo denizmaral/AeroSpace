@@ -96,6 +96,15 @@ open class Window: TreeNode, Hashable {
     }
 
     var isHiddenInCorner: Bool { die("Not implemented") }
+
+    /// Where the top left corner of the window goes to hide it in `corner` of `visibleRect` (see `MacWindow.hideInCorner`)
+    /// - Parameter width: of the window, for the bottom left corner: its right edge is at the left edge of the screen
+    func topLeftHidden(in corner: OptimalHideCorner, width: CGFloat, of visibleRect: Rect) -> CGPoint {
+        switch corner {
+            case .bottomLeftCorner: visibleRect.bottomLeftCorner + CGPoint(x: 1 - width, y: -1)
+            case .bottomRightCorner: visibleRect.bottomRightCorner - CGPoint(x: 1, y: 1)
+        }
+    }
     @MainActor func nativeFocus() { die("Not implemented") }
     func getAxRect(_ cm: CancellationMode) async throws -> Rect? { die("Not implemented") }
     func getCenter(_ cm: CancellationMode) async throws -> CGPoint? { try await getAxRect(cm)?.center }

@@ -15,10 +15,19 @@ extension NewWindowPlacement {
 }
 
 extension Workspace {
-    /// The window that a new tiling window is put next to
+    /// New tiling windows split the anchor window (see ``NewWindowPlacement/splitsAnchorWindow``). Not on a scrolling
+    /// workspace: a new window is a column of its own
     @MainActor
-    var newTilingWindowAnchor: Window? {
-        switch config.newWindowPlacement {
+    var newTilingWindowsSplitAnchor: Bool {
+        config.newWindowPlacement.splitsAnchorWindow && rootTilingContainer.layout != .scrolling
+    }
+
+    /// The node that a new tiling window is put next to: a window, or the most recent column of a scrolling workspace
+    @MainActor
+    var newTilingWindowAnchor: TreeNode? {
+        let root = rootTilingContainer
+        if root.layout == .scrolling { return root.mostRecentInhabitedChild }
+        return switch config.newWindowPlacement {
             case .i3: mostRecentWindowRecursive
             // Split the most recent tiling window, even if a floating window was focused after it
             case .dwindle: rootTilingContainer.mostRecentWindowRecursive
@@ -61,13 +70,14 @@ extension TreeNode {
         switch parent.layout {
             case .accordion:
                 return parentRect
-            case .tiles:
+            case .tiles, .scrolling:
                 let siblings = parent.inhabitedChildren.filter { child in !ignored.contains { $0 === child } }
                 guard let index = siblings.firstIndex(of: self) else { return nil }
                 let orientation = parent.orientation
-                // The same math as in layoutTiles
-                let lengths = parent.proportionalLengths(siblings, total: parentRect.getDimension(orientation))
-                let offset = lengths[..<index].reduce(0, +)
+                // The same math as in layoutTiles and layoutScrolling (the columns from the start of the strip)
+                let total = parentRect.getDimension(orientation)
+                let lengths = parent.childLengths(siblings, total: parent.layout == .scrolling ? parent.scrollingStripLength(screen: total) : total)
+                let offset = lengths[..<index].reduce(0, +) - (parent.layout == .scrolling ? parent.scrollOffset : 0)
                 let length = lengths[index]
                 return switch orientation {
                     case .h: Rect(topLeftX: parentRect.topLeftX + offset, topLeftY: parentRect.topLeftY, width: length, height: parentRect.height)
@@ -163,7 +173,7 @@ extension Window {
     /// The caller must apply (``applyDwindleSplit(_:)``) or discard it, later splits wait for it
     @MainActor
     func captureDwindleSplit() -> DwindleSplit? {
-        guard config.newWindowPlacement.splitsAnchorWindow,
+        guard nodeWorkspace?.newTilingWindowsSplitAnchor == true,
               let parent = parent as? TilingContainer,
               let index = ownIndex(in: .all),
               index > 0
@@ -187,7 +197,7 @@ extension Window {
     @MainActor
     fileprivate func split(_ anchor: TreeNode, ignoring later: [Window]) {
         guard lifeStatus.isInhabited,
-              config.newWindowPlacement.splitsAnchorWindow,
+              nodeWorkspace?.newTilingWindowsSplitAnchor == true,
               parent is TilingContainer,
               let parent = anchor.parent as? TilingContainer,
               parent.lifeStatus == .alive,

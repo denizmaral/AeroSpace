@@ -9,7 +9,7 @@ struct ResizeCommand: Command {
         guard let target = args.resolveTargetOrReportError(env, io) else { return .fail }
 
         let candidates = target.windowOrNil?.parentsWithSelf
-            .filter { ($0.parent as? TilingContainer)?.layout == .tiles }
+            .filter { ($0.parent as? TilingContainer)?.layout != .accordion }
             .filter {
                 guard let parent = $0.parent as? TilingContainer else { return false }
                 return switch parent.lifeStatus {
@@ -51,6 +51,12 @@ struct ResizeCommand: Command {
             case .set(let unit): CGFloat(unit) - length
             case .add(let unit): CGFloat(unit)
             case .subtract(let unit): -CGFloat(unit)
+        }
+        if parent.layout == .scrolling { // A column is resized alone, the others keep their lengths
+            guard let unit = parent.scrollingColumnLength, unit > 0, let strip = parent.sharedLength else { return .fail }
+            // From a twentieth of the screen to all of it
+            node.setWeight(orientation, (length + pixels).coerce(in: strip * 0.05 ... strip) / unit)
+            return .succ
         }
         let inhabitedSiblings = parent.inhabitedChildren.filter { $0 != node }
         // Nobody is resized to nothing: a tile keeps a twentieth of the container (half of its equal share, if that's

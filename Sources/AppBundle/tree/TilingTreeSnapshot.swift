@@ -129,7 +129,7 @@ extension TilingTreeSnapshot.Container {
 ///   weight:           Float64
 /// Container:
 ///   orientation:      UInt8 (0: horizontal, 1: vertical)
-///   layout:           UInt8 (0: tiles, 1: accordion)
+///   layout:           UInt8 (0: tiles, 1: accordion, 2: scrolling)
 ///   weight:           Float64
 ///   childCount:       UInt16
 ///   children:         Node...
@@ -172,7 +172,7 @@ extension TilingTreeSnapshot.Container {
 
     fileprivate func encode(into data: inout Data) {
         data.appendLE(UInt8(orientation == .h ? 0 : 1))
-        data.appendLE(UInt8(layout == .tiles ? 0 : 1))
+        data.appendLE(layout.byte)
         data.appendLE(Double(max(weight, 0)).bitPattern)
         data.appendLE(UInt16(clamping: children.count))
         for child in children.prefix(Int(UInt16.max)) {
@@ -191,7 +191,7 @@ extension TilingTreeSnapshot.Container {
     fileprivate init?(_ reader: inout DataReader, depth: Int) {
         guard depth <= Self.maxDepth,
               let orientation = reader.read(UInt8.self), orientation <= 1,
-              let layout = reader.read(UInt8.self), layout <= 1,
+              let layout = reader.read(UInt8.self).flatMap(Layout.init(byte:)),
               let weight = reader.readWeight(),
               let childCount = reader.read(UInt16.self)
         else { return nil }
@@ -208,7 +208,7 @@ extension TilingTreeSnapshot.Container {
                     return nil
             }
         }
-        self.init(orientation: orientation == 0 ? .h : .v, layout: layout == 0 ? .tiles : .accordion, weight: weight, children: children)
+        self.init(orientation: orientation == 0 ? .h : .v, layout: layout, weight: weight, children: children)
     }
 }
 
@@ -238,5 +238,24 @@ private struct DataReader {
         guard offset + length <= data.count else { return nil }
         defer { offset += length }
         return String(decoding: data[(data.startIndex + offset) ..< (data.startIndex + offset + length)], as: UTF8.self)
+    }
+}
+
+extension Layout {
+    fileprivate var byte: UInt8 {
+        switch self {
+            case .tiles: 0
+            case .accordion: 1
+            case .scrolling: 2
+        }
+    }
+
+    fileprivate init?(byte: UInt8) {
+        switch byte {
+            case 0: self = .tiles
+            case 1: self = .accordion
+            case 2: self = .scrolling
+            default: return nil
+        }
     }
 }

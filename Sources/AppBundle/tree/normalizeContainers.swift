@@ -19,7 +19,8 @@ extension TilingContainer {
     ///       Is it O(n^2) complexity?
     @MainActor fileprivate func unbindEmptyAndFlattenContainersRecursive() {
         if isRootContainer { // Special logic for root node to keep it always bound
-            if let child = children.singleOrNil() as? TilingContainer, config.enableNormalizationFlattenContainers {
+            // The single column of a scrolling workspace stays a column: the root would take its orientation
+            if layout != .scrolling, let child = children.singleOrNil() as? TilingContainer, config.enableNormalizationFlattenContainers {
                 child.unbindFromParent()
                 for grandChild in child.children {
                     let data = grandChild.unbindFromParent()
@@ -50,6 +51,7 @@ extension TilingContainer {
             // normalization may be stale (e.g. mustBeFlattened), and binding to not alive containers is illegal.
             // The actual lifeStatus is computed below
             lifeStatus = .alive
+            if layout == .scrolling { layout = .tiles } // Only the root scrolls (e.g. a damaged file restored the tree)
             var inhabitedChildrenCount = 0
             for child in children {
                 (child as? TilingContainer)?.unbindEmptyAndFlattenContainersRecursive()

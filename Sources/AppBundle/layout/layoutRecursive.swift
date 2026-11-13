@@ -66,7 +66,12 @@ extension TreeNode {
                 var frames: [TiledWindowFrame] = []
                 _ = workspace.rootTilingContainer.layoutTiling(point, width: width, height: height, virtual: virtual, context, &frames)
                 for frame in frames {
-                    frame.window.setAxFrame(frame.shift == .zero ? frame.topLeft : frame.topLeft + frame.shift, frame.size)
+                    if frame.isParked, let screen = context.scrollingScreen {
+                        let width = frame.window.size(inTile: frame.size).width
+                        frame.window.setAxFrame(frame.window.topLeftHidden(in: screen.hideCorner, width: width, of: screen.visibleRect), frame.size)
+                    } else {
+                        frame.window.setAxFrame(frame.shift == .zero ? frame.topLeft : frame.topLeft + frame.shift, frame.size)
+                    }
                 }
                 try await workspace.floatingWindowsContainer.layoutRecursive(point, width: width, height: height, virtual: virtual, context)
             case .floatingWindowsContainer(let container):
@@ -127,6 +132,7 @@ extension TreeNode {
                 return switch container.layout {
                     case .tiles: container.layoutTiles(point, width: width, height: height, virtual: virtual, context, &frames)
                     case .accordion: container.layoutAccordion(point, width: width, height: height, virtual: virtual, context, &frames)
+                    case .scrolling: container.layoutScrolling(point, width: width, height: height, virtual: virtual, context, &frames)
                 }
         }
     }
@@ -138,6 +144,9 @@ private struct TiledWindowFrame {
     let topLeft: CGPoint
     let size: CGSize
     var shift: CGPoint = .zero
+    /// The window is in a column of a scrolling workspace that is off the screen: it waits in a corner of the screen with
+    /// the size of its tile (see ``Layout/scrolling``)
+    var isParked = false
 }
 
 /// A child of a tiles container, along the orientation of the container
@@ -179,12 +188,51 @@ private struct LayoutContext {
     /// The workspace isn't shown, its windows are in a corner of the screen: the layout only gives them the sizes of
     /// their tiles, and sends nothing (see ``Workspace/tileSizesWhileHidden()``)
     let isInCorner: Bool
+    /// The screen of a scrolling workspace (see ``Layout/scrolling``), nil for other workspaces
+    let scrollingScreen: ScrollingScreen?
 
     @MainActor
     init(_ workspace: Workspace, isInCorner: Bool) {
         self.workspace = workspace
         self.gaps = config.gaps
         self.isInCorner = isInCorner
+        let root = workspace.rootTilingContainer
+        self.scrollingScreen = root.layout == .scrolling ? ScrollingScreen(workspace.workspaceMonitorInfo, root.orientation) : nil
+    }
+}
+
+/// Where the columns of a scrolling workspace that are off the screen go
+private struct ScrollingScreen {
+    let visibleRect: Rect
+    /// The columns that are off the screen wait in this corner, like the windows of the workspaces that aren't shown
+    let hideCorner: OptimalHideCorner
+    /// A column can reach beyond the edge of the screen where the strip starts (left, top), or ends (right, bottom), when
+    /// no other monitor is behind the edge (it would show the column there). The top edge never: macOS keeps windows
+    /// below the menu bar
+    let isStartEdgeFree: Bool
+    let isEndEdgeFree: Bool
+
+    @MainActor
+    init(_ monitor: MonitorInfo, _ orientation: Orientation) {
+        let monitors = globalUnsortedMonitorInfos
+        let rect = monitor.rect
+        visibleRect = monitor.visibleRect
+        hideCorner = optimalHideCorner(of: monitor, among: monitors)
+        func isFree(_ band: Rect) -> Bool {
+            !monitors.contains { other in
+                other.rect.topLeftCorner != rect.topLeftCorner &&
+                    other.rect.minX < band.maxX && band.minX < other.rect.maxX &&
+                    other.rect.minY < band.maxY && band.minY < other.rect.maxY
+            }
+        }
+        switch orientation {
+            case .h:
+                isStartEdgeFree = isFree(Rect(topLeftX: rect.minX - rect.width, topLeftY: rect.minY, width: rect.width, height: rect.height))
+                isEndEdgeFree = isFree(Rect(topLeftX: rect.maxX, topLeftY: rect.minY, width: rect.width, height: rect.height))
+            case .v:
+                isStartEdgeFree = false
+                isEndEdgeFree = isFree(Rect(topLeftX: rect.minX, topLeftY: rect.maxY, width: rect.width, height: rect.height))
+        }
     }
 }
 
@@ -381,5 +429,136 @@ extension TilingContainer {
             excessAcross = max(excessAcross, excess.along(orientation.opposite))
         }
         return CGSize(along: orientation, excessAlong, across: excessAcross)
+    }
+}
+
+extension TilingContainer {
+    /// The columns of a scrolling workspace (see ``Layout/scrolling``): side by side on a strip, the screen shows the part
+    /// of it with the most recent column. A column that is partly off the screen reaches beyond the edge of the screen
+    /// if no other monitor is behind it, otherwise it's squeezed into the part that is on the screen. A column that is
+    /// off the screen waits in a corner of the screen with its size, like the windows of a workspace that isn't shown
+    @MainActor
+    fileprivate func layoutScrolling(
+        _ point: CGPoint,
+        width: CGFloat,
+        height: CGFloat,
+        virtual: Rect,
+        _ context: LayoutContext,
+        _ frames: inout [TiledWindowFrame],
+    ) -> CGSize {
+        let columns = inhabitedChildren
+        guard !columns.isEmpty, let screen = context.scrollingScreen else { return .zero }
+        let screenLength = orientation == .h ? width : height
+        let gap = context.gaps.inner.get(orientation).toDouble()
+        let stripLength = scrollingStripLength(screen: screenLength)
+        lastLayoutLength = stripLength
+        let strip = ScrollingStrip(lengths: childLengths(columns, total: stripLength), screen: screenLength, gap: gap)
+        let focused = mostRecentInhabitedChild.flatMap { columns.firstIndex(of: $0) } ?? 0
+        scrollOffset = strip.offset(showing: focused, from: scrollOffset)
+        let placements = strip.placements(offset: scrollOffset, isStartEdgeFree: screen.isStartEdgeFree, isEndEdgeFree: screen.isEndEdgeFree)
+
+        var excessAcross = -CGFloat.infinity
+        for (column, placement) in zip(columns, placements) {
+            let (start, length, isParked) = switch placement {
+                case .tile(let start, let length): (start, length, false)
+                case .parked(let start, let length): (start, length, true)
+            }
+            let firstFrame = frames.count
+            let excess = column.layoutTiling(
+                point.addingOffset(orientation, start),
+                width: orientation == .h ? length : width,
+                height: orientation == .v ? length : height,
+                virtual: Rect(
+                    topLeftX: orientation == .h ? point.x + start - gap / 2 : virtual.topLeftX,
+                    topLeftY: orientation == .v ? point.y + start - gap / 2 : virtual.topLeftY,
+                    width: orientation == .h ? length + gap : virtual.width,
+                    height: orientation == .v ? length + gap : virtual.height,
+                ),
+                context,
+                &frames,
+            )
+            if isParked {
+                for frame in firstFrame ..< frames.count { frames[frame].isParked = true }
+                column.forgetAppliedLayoutRecursive() // Nothing of it is on the screen: not a target of the mouse
+            } else {
+                excessAcross = max(excessAcross, excess.along(orientation.opposite))
+            }
+        }
+        // The strip is as long as the columns want, nothing reaches beyond its end
+        return CGSize(along: orientation, 0, across: excessAcross)
+    }
+}
+
+extension TreeNode {
+    @MainActor
+    fileprivate func forgetAppliedLayoutRecursive() {
+        lastAppliedLayoutPhysicalRect = nil
+        lastAppliedLayoutVirtualRect = nil
+        for child in children { child.forgetAppliedLayoutRecursive() }
+    }
+}
+
+/// Where a column of a scrolling container goes along the orientation, from the start of the screen
+enum ScrollingColumnPlacement: Equatable {
+    /// On the screen, or partly beyond an edge of it
+    case tile(start: CGFloat, length: CGFloat)
+    /// Off the screen: it waits in a corner of the screen, with the size of its tile
+    case parked(start: CGFloat, length: CGFloat)
+}
+
+/// The columns of a scrolling container on their strip (see ``Layout/scrolling``). A column is its tile and half a gap on
+/// each side, so the strip shows `screen` and a gap: the gaps at the ends of the strip are off the screen. Columns that
+/// fit on the screen are laid out like tiles
+struct ScrollingStrip {
+    /// Of the columns, with their gaps
+    let lengths: [CGFloat]
+    let screen: CGFloat
+    let gap: CGFloat
+
+    /// The offset that shows the column at `index` whole, as close to `previous` as possible: the screen moves only as
+    /// far as needed, and never beyond the ends of the strip
+    func offset(showing index: Int, from previous: CGFloat) -> CGFloat {
+        let visible = screen + gap
+        let total = lengths.reduce(0, +)
+        var offset = previous
+        if lengths.indices.contains(index) {
+            let start = lengths[..<index].reduce(0, +)
+            let end = start + lengths[index]
+            if start < offset { offset = start }
+            if end > offset + visible { offset = end - visible }
+        }
+        return offset.coerce(in: 0 ... max(0, total - visible))
+    }
+
+    /// - Parameter isStartEdgeFree: a column can reach beyond the edge of the screen where the strip starts: no monitor is
+    ///   behind it. Otherwise a column that is partly off the screen there is squeezed into the part that is on the
+    ///   screen, if that's at least a third of it
+    func placements(offset: CGFloat, isStartEdgeFree: Bool, isEndEdgeFree: Bool) -> [ScrollingColumnPlacement] {
+        var result: [ScrollingColumnPlacement] = []
+        result.reserveCapacity(lengths.count)
+        var position = -offset
+        for length in lengths {
+            let tile = max(length - gap, 0)
+            let start = position
+            let end = start + tile
+            position += length
+            if start >= -0.5 && end <= screen + 0.5 {
+                result.append(.tile(start: start, length: tile))
+                continue
+            }
+            let visibleStart = max(start, 0)
+            let visibleLength = min(end, screen) - visibleStart
+            let isCutAtStart = start < 0
+            if visibleLength <= 0 {
+                result.append(.parked(start: start, length: tile))
+            } else if isCutAtStart ? isStartEdgeFree : isEndEdgeFree {
+                result.append(.tile(start: start, length: tile))
+            } else if visibleLength * 3 >= tile {
+                result.append(.tile(start: visibleStart, length: visibleLength))
+            } else {
+                result.append(.parked(start: start, length: tile))
+            }
+        }
+        return result
     }
 }
