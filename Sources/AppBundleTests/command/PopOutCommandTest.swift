@@ -51,6 +51,34 @@ struct PopOutCommandTest {
         assertEquals(window.isPinned, false)
     }
 
+    /// The focus commands see the floating windows as tiles for a moment: the popped out window stays popped out, and
+    /// remembers its tile
+    @Test func testFocusDoesNotEndIt() async throws {
+        let workspace = Workspace.get(byName: name)
+        var window: TestWindow!
+        let root = workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                window = TestWindow.new(id: 2, parent: $0, adaptiveWeight: 2)
+                TestWindow.new(id: 3, parent: $0, adaptiveWeight: 1)
+            }
+        }
+        let tiles = root.layoutDescription
+        #expect(window.focusWindow())
+        await run("pop-out")
+        try await workspace.layoutWorkspace()
+
+        await run("focus --window-id 1")
+        await run("focus right")
+        await run("focus --window-id 2")
+        assertEquals(window.isPinned, true)
+        assertEquals(window.isFloating, true)
+
+        await run("pop-out")
+        assertEquals(root.layoutDescription, tiles)
+        assertEquals(window.getWeight(.v), 2)
+    }
+
     /// Moved and resized while it was popped out: it pops out there again
     @Test func testItPopsOutWhereItWas() async throws {
         let workspace = Workspace.get(byName: name)

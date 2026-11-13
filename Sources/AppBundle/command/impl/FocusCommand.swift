@@ -162,6 +162,8 @@ struct FocusCommand: Command {
             tilingParent: tilingParent,
             adaptiveWeight: data.adaptiveWeight,
             index: index,
+            isPinned: window.isPinned,
+            tilingSlot: window.tilingSlot,
         )
         _floatingWindows.append(floatingWindowData)
     }
@@ -180,6 +182,9 @@ struct FocusCommand: Command {
     }
     for floating in floatingWindows {
         floating.window.bind(to: workspace.floatingWindowsContainer, adaptiveWeight: floating.adaptiveWeight, index: INDEX_BIND_LAST)
+        // It was a tile only for the command: binding it as one ended its pin and forgot its place in the tree
+        floating.window.isPinned = floating.isPinned
+        floating.window.tilingSlot = floating.tilingSlot
     }
 }
 
@@ -190,6 +195,10 @@ private struct FloatingWindowData {
     let tilingParent: TilingContainer
     let adaptiveWeight: CGFloat
     let index: Int
+
+    /// See ``Window/bind(to:adaptiveWeight:index:)``
+    let isPinned: Bool
+    let tilingSlot: TilingSlot?
 }
 
 extension TreeNode {

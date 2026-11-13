@@ -73,6 +73,21 @@ struct PinCommandTest {
         assertEquals(globalFocus.windowOrNil?.windowId, 3)
     }
 
+    /// The focus commands see the floating windows as tiles for a moment: it doesn't end the pin
+    @Test func testFocusKeepsThePin() async throws {
+        let workspace = Workspace.get(byName: name)
+        let tiling = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        let pinned = TestWindow.new(id: 2, parent: workspace.floatingWindowsContainer, rect: Rect(topLeftX: 1000, topLeftY: 100, width: 400, height: 300))
+        pinned.isPinned = true
+        #expect(tiling.focusWindow())
+        try await workspace.layoutWorkspace() // The pinned window is on the right of the tile
+        await parseCommand("focus right").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(globalFocus.windowOrNil?.windowId, 2)
+        await parseCommand("focus --window-id 1").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        assertEquals(pinned.isPinned, true)
+        assertEquals(pinned.isFloating, true)
+    }
+
     @Test func testPinnedWindowsAreRemembered() throws {
         let placements = [
             WindowPlacement(nativeWindowId: 7, pid: 100, workspace: "1", isFloating: true, isPinned: true),
