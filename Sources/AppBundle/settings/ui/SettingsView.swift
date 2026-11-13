@@ -182,11 +182,16 @@ private struct GeneralPane: View {
             }
 
             Section("Layout") {
-                Picker("Workspace layout", selection: $general.defaultRootLayout) {
-                    Text("Tiles").tag(Layout.tiles)
-                    Text("Accordion").tag(Layout.accordion)
+                Picker(selection: defaultLayout) {
+                    ForEach(DefaultLayout.allCases, id: \.self) { Text($0.title).tag($0) }
+                } label: {
+                    Text("Workspace layout")
+                    Text("A shortcut with “Switch the workspace layout” switches a workspace between tiling, scrolling and floating")
                 }
                 .pickerStyle(.segmented)
+                LabeledContent("Scrolling column width") {
+                    ValueSlider(value: $general.scrollingColumnWidth, range: 20 ... 100, unit: "%")
+                }
                 Picker("Orientation", selection: $general.defaultRootOrientation) {
                     Text("Automatic").tag(DefaultContainerOrientation.auto)
                     Text("Horizontal").tag(DefaultContainerOrientation.horizontal)
@@ -208,6 +213,41 @@ private struct GeneralPane: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// The default layout of the workspaces: a tiling workspace with tiles or an accordion, scrolling, or floating
+    private var defaultLayout: Binding<DefaultLayout> {
+        Binding(
+            get: {
+                switch general.defaultWorkspaceLayout {
+                    case .tiling: general.defaultRootLayout == .accordion ? .accordion : .tiles
+                    case .scrolling: .scrolling
+                    case .floating: .floating
+                }
+            },
+            set: { choice in
+                switch choice {
+                    case .tiles, .accordion:
+                        general.defaultWorkspaceLayout = .tiling
+                        general.defaultRootLayout = choice == .tiles ? .tiles : .accordion
+                    case .scrolling: general.defaultWorkspaceLayout = .scrolling
+                    case .floating: general.defaultWorkspaceLayout = .floating
+                }
+            },
+        )
+    }
+}
+
+private enum DefaultLayout: CaseIterable {
+    case tiles, accordion, scrolling, floating
+
+    var title: String {
+        switch self {
+            case .tiles: "Tiles"
+            case .accordion: "Accordion"
+            case .scrolling: "Scrolling"
+            case .floating: "Floating"
+        }
     }
 }
 

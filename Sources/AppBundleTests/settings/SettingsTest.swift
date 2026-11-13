@@ -22,6 +22,7 @@ struct SettingsTest {
             .moveWindowToWorkspace("B"), .moveWindowToWorkspace("1#main"),
             .moveWorkspaceToMonitor(.next, wrapAround: false), .moveWorkspaceToMonitor(.prev, wrapAround: true),
             .layout([.tiles, .accordion]), .layout([.horizontal, .vertical]), .layout([.floating, .tiling]), .layout([.tiling]),
+            .workspaceLayout([.tiling, .scrolling, .floating]), .workspaceLayout([.floating, .scrolling, .tiling]), .workspaceLayout([.scrolling]),
             .fullscreen(.marSpace), .fullscreen(.macOSNative), .enterFullscreen(.marSpace), .enterFullscreen(.macOSNative),
             .exitFullscreen(.marSpace), .exitFullscreen(.macOSNative), .pin(.toggle), .pin(.on), .pin(.off),
             .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes, .closeWindow, .closeAllWindowsButCurrent,

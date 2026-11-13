@@ -12,6 +12,9 @@ import OrderedCollections
 struct Config: Withable {
     var afterStartupCommand: Shell<any Command> = .empty
     var enableNormalizationFlattenContainers: Bool = true
+    /// The layout of a workspace that `workspace-layout` didn't switch (see ``WorkspaceLayoutMemory/chosen``)
+    var defaultWorkspaceLayout: WorkspaceLayout = .tiling
+    /// The root container of a tiling workspace: tiles or accordion
     var defaultRootContainerLayout: Layout = .tiles
     var defaultRootContainerOrientation: DefaultContainerOrientation = .auto
     var newWindowPlacement: NewWindowPlacement = .dwindle

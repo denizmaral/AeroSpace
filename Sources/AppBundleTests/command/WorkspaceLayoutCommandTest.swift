@@ -174,6 +174,28 @@ struct WorkspaceLayoutCommandTest {
         assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(1)]))
     }
 
+    /// The settings choose the layout of the workspaces that workspace-layout didn't switch
+    @Test func testTheDefaultLayout() {
+        var settings = Settings.defaults
+        settings.general.defaultWorkspaceLayout = .scrolling
+        settings.general.scrollingColumnWidth = 40
+        config = settings.compile().config.with(\.defaultRootContainerOrientation, .horizontal)
+        assertEquals(config.scrollingColumnWidth, 0.4)
+        assertEquals(Workspace.get(byName: "S").workspaceLayout, .scrolling)
+
+        config.defaultWorkspaceLayout = .floating
+        let workspace = Workspace.get(byName: "F")
+        let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)
+        session(workspace)
+        assertEquals(workspace.workspaceLayout, .floating)
+        assertEquals(window.isFloatedByWorkspaceLayout, true)
+
+        // The default tiles again: the windows that it floated are tiles
+        config.defaultWorkspaceLayout = .tiling
+        session(workspace)
+        assertEquals(workspace.rootTilingContainer.layoutDescription, .h_tiles([.window(1)]))
+    }
+
     @Test func testAnEmptyWorkspaceKeepsItsLayout() async {
         await run("workspace-layout --workspace S scrolling")
         Workspace.garbageCollectUnusedWorkspaces()

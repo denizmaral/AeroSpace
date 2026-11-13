@@ -31,7 +31,8 @@ MarSpace arranges the windows of a workspace in a tree, like [i3](https://i3wm.o
 
 - Each workspace has one root container
 - A container holds windows and other containers, as deeply nested as you like
-- Every container has a **layout** (tiles or accordion) and an **orientation** (horizontal or vertical)
+- Every container has a **layout** (tiles or accordion) and an **orientation** (horizontal or vertical). The root
+  container of a scrolling workspace scrolls (see [Tiling, scrolling, floating](#tiling-scrolling-floating))
 
 ![Two windows side by side](./assets/h_tiles.png)
 
@@ -106,6 +107,32 @@ Tiling); a window that never had a place, like a dialog, is placed like a new wi
 With focus follows the mouse, a focused floating window keeps the focus while the mouse is over the tiled windows behind
 it: focusing a window in macOS brings it to the front, and the floating window would disappear behind it. Click the
 tiled window, or use a shortcut, to focus it.
+
+## Tiling, scrolling, floating
+
+Like [Omarchy](https://github.com/omacom/omarchy) does with Super + L, a workspace can switch between three layouts. Add
+a shortcut with the action **Switch the workspace layout** (Settings › Shortcuts): each press takes the next of the
+chosen layouts, in the order you chose them (choose them backwards for a second shortcut that cycles back). From the
+command line: `aerospace workspace-layout tiling scrolling floating`.
+
+- **Tiling**: the tree described above
+- **Scrolling**: every window is a column, side by side on a strip that can be longer than the screen (like Hyprland's
+  and niri's scrolling layout). A column is half of the screen (Settings › General › Scrolling column width); columns
+  that fit share the screen, and a single one fills it. The screen shows the focused column: Focus left and right
+  scroll, a new window opens as a column after the focused one. **Join with** stacks windows in a column, **Move**
+  moves a window along the strip, into a stacked column and out of it again, **Resize** makes a column wider or
+  narrower and leaves the others as they are. A column that is off the screen waits in a corner of it, like the windows of hidden workspaces; a column
+  that is partly off the screen reaches beyond the edge, or is squeezed into the screen where another monitor is
+  behind that edge
+- **Floating**: every window floats. The tiles go to the middle of the screen, a bit apart from each other; windows that
+  open on the workspace, or that you move there, float too. A window that you move to a workspace that tiles is a
+  tile there. Dialogs and windows that you made floating yourself stay floating when the workspace tiles again; Change
+  the layout › Tiling makes a window a tile on the floating workspace
+
+Switching never loses anything: the workspace remembers its tiles and its columns as you left them, and puts the windows
+back when it tiles or scrolls again (windows that you opened meanwhile are placed like new windows). The floating
+windows go back to where you put them the last time the workspace floated. Settings › General › Workspace layout is the
+layout of the workspaces that you didn't switch.
 
 ## Workspaces
 

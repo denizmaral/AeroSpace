@@ -26,7 +26,9 @@ extension Settings {
         config.startAtLogin = general.startAtLogin
         config.focusFollowsMouse = general.focusFollowsMouse
         config.newWindowPlacement = general.newWindowPlacement
-        config.defaultRootContainerLayout = general.defaultRootLayout
+        config.defaultWorkspaceLayout = general.defaultWorkspaceLayout
+        config.defaultRootContainerLayout = general.defaultRootLayout == .scrolling ? .tiles : general.defaultRootLayout
+        config.scrollingColumnWidth = CGFloat(min(max(general.scrollingColumnWidth, 10), 100)) / 100
         config.defaultRootContainerOrientation = general.defaultRootOrientation
         config.enableNormalizationFlattenContainers = general.flattenContainers
         config.enableNormalizationOppositeOrientationForNestedContainers = general.oppositeOrientationForNestedContainers

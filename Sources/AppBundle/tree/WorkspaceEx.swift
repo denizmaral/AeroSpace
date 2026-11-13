@@ -6,7 +6,7 @@ extension Workspace {
         switch containers.count {
             case 0:
                 // A workspace that scrolled keeps scrolling when it's used again (see WorkspaceLayoutMemory)
-                let layout = layoutMemory.chosen == .scrolling ? .scrolling : config.defaultRootContainerLayout
+                let layout = chosenOrDefaultLayout == .scrolling ? .scrolling : config.defaultRootContainerLayout
                 return TilingContainer(parent: self, adaptiveWeight: 1, defaultRootOrientation, layout, index: INDEX_BIND_LAST)
             case 1:
                 return containers.singleOrNil().orDie()

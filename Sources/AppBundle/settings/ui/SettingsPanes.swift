@@ -391,6 +391,7 @@ struct ActionIcon: View {
             case .workspaceBackAndForth: "arrow.uturn.backward"
             case .moveWorkspaceToMonitor: "display.2"
             case .layout: "square.grid.2x2"
+            case .workspaceLayout: "rectangle.split.3x1"
             case .fullscreen, .enterFullscreen: "arrow.up.left.and.arrow.down.right"
             case .exitFullscreen: "arrow.down.right.and.arrow.up.left"
             case .pin(let state): state == .off ? "pin.slash" : "pin"
@@ -471,7 +472,7 @@ private enum ShortcutGroup: CaseIterable, Identifiable {
             case .focus, .cycleFocus, .focusBackAndForth, .move, .swap, .joinWith, .resize, .fullscreen, .pin, .closeWindow,
                  .closeAllWindowsButCurrent: .windows
             case .workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor: .workspaces
-            case .layout, .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes: .layout
+            case .workspaceLayout, .layout, .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes: .layout
             case .enterMode, .reloadSettings, .moveMouse, .custom: .other
         }
     }
@@ -510,6 +511,7 @@ extension Action {
             case .moveWindowToWorkspaceAndFollow(let name): "Move the window to workspace \(name) and go there"
             case .moveWorkspaceToMonitor(let step, _): step == .next ? "Move the workspace to the next monitor" : "Move the workspace to the previous monitor"
             case .layout(let options): "Layout: " + options.map(\.rawValue).joined(separator: " / ")
+            case .workspaceLayout(let layouts): "Workspace layout: " + layouts.map(\.rawValue).joined(separator: " / ")
             case .fullscreen(.marSpace): "Fullscreen"
             case .fullscreen(.macOSNative): "macOS fullscreen"
             case .enterFullscreen(.marSpace): "Enter fullscreen"

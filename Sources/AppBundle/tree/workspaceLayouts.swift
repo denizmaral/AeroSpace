@@ -31,11 +31,15 @@ extension Workspace {
     }
 
     @MainActor var workspaceLayout: WorkspaceLayout {
-        if layoutMemory.chosen == .floating { return .floating }
+        if isFloatingLayout { return .floating }
         return rootTilingContainer.layout == .scrolling ? .scrolling : .tiling
     }
 
-    @MainActor var isFloatingLayout: Bool { layoutMemory.chosen == .floating }
+    /// The layout that `workspace-layout` gave the workspace, the default layout otherwise. A tiling or scrolling
+    /// workspace is what its root container is: the default applies to new root containers
+    @MainActor var chosenOrDefaultLayout: WorkspaceLayout { layoutMemory.chosen ?? config.defaultWorkspaceLayout }
+
+    @MainActor var isFloatingLayout: Bool { chosenOrDefaultLayout == .floating }
 
     /// The orientation of a new root container: horizontal on a landscape monitor by default
     @MainActor var defaultRootOrientation: Orientation {
@@ -58,7 +62,7 @@ extension Workspace {
             case .tiling, .scrolling:
                 layoutMemory.trees[current] = tilingTreeSnapshot(windowId: windowId)
             case .floating:
-                layoutMemory.chosen = nil // Not floating anymore: the windows are tiles again
+                layoutMemory.chosen = target // Not floating anymore: the windows are tiles again
                 for window in floatingWindows where window.isFloatedByWorkspaceLayout {
                     window.stopFloatingByWorkspaceLayout()
                     window.bindAsNewTilingWindow(to: self)

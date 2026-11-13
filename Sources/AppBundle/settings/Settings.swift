@@ -27,7 +27,12 @@ struct Settings: Codable, Sendable, Equatable {
         var startAtLogin = false
         var focusFollowsMouse = false
         var newWindowPlacement: NewWindowPlacement = .dwindle
+        /// The layout of a workspace that `workspace-layout` didn't switch
+        var defaultWorkspaceLayout: WorkspaceLayout = .tiling
+        /// The root container of a tiling workspace: tiles or accordion
         var defaultRootLayout: Layout = .tiles
+        /// The length of a column of a scrolling workspace, in percent of the screen
+        var scrollingColumnWidth = 50
         var defaultRootOrientation: DefaultContainerOrientation = .auto
         var flattenContainers = true
         var oppositeOrientationForNestedContainers = true
@@ -200,6 +205,7 @@ struct KeyChord: Codable, Sendable, Equatable, Hashable {
 
 extension NewWindowPlacement: Codable {}
 extension Layout: Codable {}
+extension WorkspaceLayout: Codable {}
 extension DefaultContainerOrientation: Codable {}
 
 

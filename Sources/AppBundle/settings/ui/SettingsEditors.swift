@@ -50,7 +50,7 @@ struct ActionListEditor: View {
 enum ActionKind: String, CaseIterable, Identifiable {
     case focus, cycleFocus, focusBackAndForth, move, swap, joinWith, resize
     case workspace, workspaceBackAndForth, moveWindowToWorkspace, moveWorkspaceToMonitor
-    case layout, fullscreen, pin, tileFloatingWindows, flattenWorkspaceTree, balanceSizes
+    case workspaceLayout, layout, fullscreen, pin, tileFloatingWindows, flattenWorkspaceTree, balanceSizes
     case closeWindow, closeAllWindowsButCurrent
     case enterMode, reloadSettings, moveMouse, custom
 
@@ -69,6 +69,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .workspaceBackAndForth: "Go to the previous workspace"
             case .moveWindowToWorkspace: "Move the window to a workspace"
             case .moveWorkspaceToMonitor: "Move the workspace to a monitor"
+            case .workspaceLayout: "Switch the workspace layout"
             case .layout: "Change the layout"
             case .fullscreen: "Fullscreen"
             case .pin: "Pin the floating window"
@@ -100,7 +101,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
         [.focus, .cycleFocus, .focusBackAndForth],
         [.move, .swap, .joinWith, .resize],
         [.workspace, .workspaceBackAndForth, .moveWindowToWorkspace, .moveWorkspaceToMonitor],
-        [.layout, .fullscreen, .pin, .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes],
+        [.workspaceLayout, .layout, .fullscreen, .pin, .tileFloatingWindows, .flattenWorkspaceTree, .balanceSizes],
         [.closeWindow, .closeAllWindowsButCurrent],
         [.enterMode, .moveMouse], // Settings apply right away: reloading them is only kept for existing shortcuts
         [.custom],
@@ -119,6 +120,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .workspaceBackAndForth: .workspaceBackAndForth
             case .moveWindowToWorkspace, .moveWindowToWorkspaceAndFollow: .moveWindowToWorkspace
             case .moveWorkspaceToMonitor: .moveWorkspaceToMonitor
+            case .workspaceLayout: .workspaceLayout
             case .layout: .layout
             case .fullscreen, .enterFullscreen, .exitFullscreen: .fullscreen
             case .pin: .pin
@@ -148,6 +150,7 @@ enum ActionKind: String, CaseIterable, Identifiable {
             case .workspaceBackAndForth: .workspaceBackAndForth
             case .moveWindowToWorkspace: .moveWindowToWorkspace(workspace)
             case .moveWorkspaceToMonitor: .moveWorkspaceToMonitor(.next, wrapAround: true)
+            case .workspaceLayout: .workspaceLayout(WorkspaceLayout.allCases)
             case .layout: .layout([.tiles, .accordion])
             case .fullscreen: context == .shortcut ? .fullscreen(.marSpace) : .enterFullscreen(.marSpace)
             case .pin: context == .shortcut ? .pin(.toggle) : .pin(.on) // A rule pins the window that has just appeared
@@ -230,7 +233,8 @@ struct ActionEditor: View {
                 }
                 .labelsHidden().fixedSize()
                 Toggle("Wrap around", isOn: Binding(get: { wrapAround }, set: { action = .moveWorkspaceToMonitor(step, wrapAround: $0) }))
-            case .layout(let options): LayoutOptionsEditor(options: options) { action = .layout($0) }
+            case .layout(let options): OptionsEditor(options: options) { action = .layout($0) }
+            case .workspaceLayout(let layouts): OptionsEditor(options: layouts) { action = .workspaceLayout($0) }
             case .fullscreen(let kind), .enterFullscreen(let kind), .exitFullscreen(let kind):
                 FullscreenEditor(action: $action, kind: kind)
             case .pin(let state):
@@ -363,13 +367,13 @@ private struct ResizeEditor: View {
 }
 
 /// The layouts that the action cycles through, in this order
-private struct LayoutOptionsEditor: View {
-    let options: [Action.LayoutOption]
-    let set: @MainActor ([Action.LayoutOption]) -> Void
+private struct OptionsEditor<Option: CaseIterable & Hashable & RawRepresentable<String>>: View where Option.AllCases: RandomAccessCollection {
+    let options: [Option]
+    let set: @MainActor ([Option]) -> Void
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(Action.LayoutOption.allCases, id: \.self) { option in
+            ForEach(Option.allCases, id: \.self) { option in
                 Toggle(option.rawValue.capitalized, isOn: Binding(
                     get: { options.contains(option) },
                     set: { isOn in set(isOn ? options + [option] : options.filter { $0 != option }) },

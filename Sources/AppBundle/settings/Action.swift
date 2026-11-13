@@ -28,6 +28,8 @@ enum Action: Codable, Sendable, Equatable {
     case moveWorkspaceToMonitor(MonitorStep, wrapAround: Bool)
     /// Cycles through the layouts: e.g. tiles and accordion, horizontal and vertical, floating and tiling
     case layout([LayoutOption])
+    /// Cycles the workspace through its layouts: tiling, scrolling, floating (Omarchy's Super + L)
+    case workspaceLayout([WorkspaceLayout])
     /// Toggles the fullscreen
     case fullscreen(FullscreenKind)
     /// Nothing if the window is already fullscreen: e.g. a window rule for a window that is detected again
@@ -101,6 +103,7 @@ enum Action: Codable, Sendable, Equatable {
             case .moveWorkspaceToMonitor(let step, let wrapAround):
                 wrapAround ? ["move-workspace-to-monitor", "--wrap-around", step.rawValue] : ["move-workspace-to-monitor", step.rawValue]
             case .layout(let options): ["layout"] + options.map(\.rawValue)
+            case .workspaceLayout(let layouts): ["workspace-layout"] + layouts.map(\.rawValue)
             case .fullscreen(let kind): [kind.command]
             case .enterFullscreen(let kind): [kind.command, "on"]
             case .exitFullscreen(let kind): [kind.command, "off"]
@@ -167,6 +170,9 @@ enum Action: Codable, Sendable, Equatable {
             case .layout(let options):
                 if options.isEmpty { return .failure("No layout is chosen", EXIT_CODE_TWO) }
                 args = LayoutCmdArgs(rawArgs: rawArgs, toggleBetween: options.map(\.layoutDescription))
+            case .workspaceLayout(let layouts):
+                if layouts.isEmpty { return .failure("No layout is chosen", EXIT_CODE_TWO) }
+                args = WorkspaceLayoutCmdArgs(rawArgs: rawArgs, cycle: layouts)
             case .fullscreen(let kind): args = kind.args(rawArgs, .toggle)
             case .enterFullscreen(let kind): args = kind.args(rawArgs, .on)
             case .exitFullscreen(let kind): args = kind.args(rawArgs, .off)
