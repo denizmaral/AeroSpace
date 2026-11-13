@@ -132,6 +132,26 @@ struct PopOutCommandTest {
         assertEquals(first.rootTilingContainer.layoutDescription, .h_tiles([.window(2)]))
     }
 
+    /// It came along to another workspace and back: it goes back to its tile
+    @Test func testItComesBackToItsTile() async {
+        let first = Workspace.get(byName: "A")
+        let window = TestWindow.new(id: 1, parent: first.rootTilingContainer)
+        TestWindow.new(id: 2, parent: first.rootTilingContainer, adaptiveWeight: 2)
+        #expect(window.focusWindow())
+        await run("pop-out")
+        await run("workspace B")
+        Workspace.movePinnedWindowsToVisibleWorkspaces()
+        assertEquals(window.nodeWorkspace?.name, "B")
+        await run("workspace A")
+        Workspace.movePinnedWindowsToVisibleWorkspaces()
+        assertEquals(window.nodeWorkspace, first)
+
+        #expect(window.focusWindow())
+        await run("pop-out")
+        assertEquals(first.rootTilingContainer.layoutDescription, .h_tiles([.window(1), .window(2)]))
+        assertEquals(window.getWeight(.h), 1)
+    }
+
     @Test func testOnAFloatingWorkspaceItFloatsLikeTheOthers() async {
         let workspace = Workspace.get(byName: name)
         let window = TestWindow.new(id: 1, parent: workspace.rootTilingContainer)

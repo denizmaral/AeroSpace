@@ -37,7 +37,13 @@ extension Workspace {
             if pinned.isEmpty { continue }
             let visible = workspace.workspaceMonitorInfo.visibleWorkspace
             let mostRecent = visible.mostRecentWindowRecursive
-            for window in pinned { window.bindAsFloatingWindow(to: visible) }
+            for window in pinned {
+                // The user didn't move it: it keeps its place in the tree of its workspace (a popped out window goes back
+                // to it, if it's popped back in there, see TilingSlot)
+                let tilingSlot = window.tilingSlot
+                window.bindAsFloatingWindow(to: visible)
+                window.tilingSlot = tilingSlot
+            }
             mostRecent?.markAsMostRecentChild()
         }
     }
