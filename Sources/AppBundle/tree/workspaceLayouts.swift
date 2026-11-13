@@ -112,7 +112,8 @@ extension Workspace {
         let windows = previousRoot.allLeafWindowsRecursive
         let mostRecent = previousRoot.mostRecentWindowRecursive
         previousRoot.unbindFromParent()
-        let root = TilingContainer(parent: self, adaptiveWeight: 1, defaultRootOrientation, .scrolling, index: INDEX_BIND_LAST)
+        // The columns go sideways: the trackpad and `focus left` and `focus right` move through them
+        let root = TilingContainer(parent: self, adaptiveWeight: 1, .h, .scrolling, index: INDEX_BIND_LAST)
         for window in windows {
             window.dwindleSplitAnchor = nil // The windows are columns, nobody gives its weight back
             window.bind(to: root, adaptiveWeight: 1, index: INDEX_BIND_LAST)

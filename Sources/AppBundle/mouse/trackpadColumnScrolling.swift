@@ -45,41 +45,59 @@ struct ColumnScrollGesture: Sendable, Equatable {
         case none
     }
 
+    /// What becomes of a scroll event
+    enum Verdict: Sendable, Equatable {
+        /// The app gets it
+        case pass
+        /// The app doesn't get it
+        case take
+        /// The gesture is taken from now on: the app gets this event as the end of a canceled gesture (without its
+        /// distance), it saw the beginning and must not wait for the rest (a scroll view, the back gesture of a browser)
+        case cancelForApp
+    }
+
     private(set) var state: State = .idle
     private var distance: CGFloat = 0
+    /// The columns that the gesture moved so far
+    private var moved = 0
 
     /// - Parameter isWanted: a gesture that begins now may move columns: over a scrolling workspace, from a trackpad, with
     ///   the modifiers of the settings
     /// - Parameter dx: the scrolling sideways, as apps get it (positive: the content follows fingers that go right)
-    /// - Returns: whether the event is taken from the app, and how many columns the screen moves (negative: to the left)
-    mutating func handle(_ phase: Phase, dx: CGFloat, dy: CGFloat, isWanted: @autoclosure () -> Bool) -> (isTaken: Bool, columns: Int) {
+    /// - Returns: what becomes of the event, and how many columns the screen moves (negative: to the left)
+    mutating func handle(_ phase: Phase, dx: CGFloat, dy: CGFloat, isWanted: @autoclosure () -> Bool) -> (verdict: Verdict, columns: Int) {
         switch phase {
-            case .none: return (false, 0)
-            case .momentum: return (state == .taken, 0) // Its momentum doesn't reach the app, it doesn't move columns
+            case .none: return (.pass, 0)
+            case .momentum: return (state == .taken ? .take : .pass, 0) // Its momentum doesn't reach the app, nor moves columns
             case .ended:
-                let isTaken = state == .taken
                 if case .undecided = state { state = .left }
-                return (isTaken, 0)
+                guard state == .taken else { return (.pass, 0) }
+                // A quick flick that didn't reach the distance of a column moves one: it was meant to
+                let flick = moved == 0 && abs(distance) >= Self.decisionDistance ? (distance > 0 ? -1 : 1) : 0
+                return (.take, flick)
             case .began:
                 state = isWanted() ? .undecided(dx: 0, dy: 0) : .left
-                distance = 0
+                (distance, moved) = (0, 0)
             case .changed:
-                if state == .idle { state = isWanted() ? .undecided(dx: 0, dy: 0) : .left } // The beginning was missed
+                if state == .idle { // The beginning was missed
+                    state = isWanted() ? .undecided(dx: 0, dy: 0) : .left
+                    (distance, moved) = (0, 0)
+                }
         }
         switch state {
-            case .idle, .left: return (false, 0)
+            case .idle, .left: return (.pass, 0)
             case .undecided(let sumX, let sumY):
                 let (sumX, sumY) = (sumX + abs(dx), sumY + abs(dy))
                 distance += dx
                 if sumX + sumY < Self.decisionDistance {
                     state = .undecided(dx: sumX, dy: sumY)
-                    return (false, 0)
+                    return (.pass, 0)
                 }
                 state = sumX > sumY * 1.5 ? .taken : .left
-                return state == .taken ? (true, step()) : (false, 0)
+                return state == .taken ? (.cancelForApp, step()) : (.pass, 0)
             case .taken:
                 distance += dx
-                return (true, step())
+                return (.take, step())
         }
     }
 
@@ -87,6 +105,7 @@ struct ColumnScrollGesture: Sendable, Equatable {
     private mutating func step() -> Int {
         let columns = Int(distance / Self.columnDistance)
         distance -= CGFloat(columns) * Self.columnDistance
+        moved += abs(columns)
         return -columns
     }
 }
@@ -96,6 +115,8 @@ enum TrackpadColumnScrolling {
     struct Shared: Sendable {
         /// The monitors (top left origin) that show a scrolling workspace
         var screens: [Rect] = []
+        /// Windows over the columns that keep their gestures: floating windows, the windows of MarSpace
+        var excluded: [Rect] = []
         /// Exactly these modifiers are held during a gesture that moves columns: e.g. none, or Option
         var modifiers: CGEventFlags = []
         var gesture = ColumnScrollGesture()
@@ -137,24 +158,29 @@ enum TrackpadColumnScrolling {
         update()
     }
 
-    /// After every layout and settings change: which monitors show a scrolling workspace. The tap is enabled only while
-    /// one does, the scroll events of the other workspaces don't go through MarSpace
+    /// After every layout: which monitors show a scrolling workspace. The tap is enabled only while one does, the scroll
+    /// events of the other workspaces don't go through MarSpace. Nothing is taken while MarSpace is disabled, or while a
+    /// window in macOS fullscreen has the focus (its own Space is shown: a column that got the focus would leave it)
     @MainActor
     static func update() {
         guard let port = unsafe tap else { return }
-        let screens = config.trackpadScrollsColumns
-            ? globalUnsortedMonitorInfos.filter { $0.visibleWorkspace.rootTilingContainer.layout == .scrolling }.map(\.rect)
+        let isFullscreenShown = globalFocus.windowOrNil?.parent is MacosFullscreenWindowsContainer
+        let workspaces = config.trackpadScrollsColumns && TrayMenuModel.shared.isEnabled && !isFullscreenShown
+            ? globalUnsortedMonitorInfos.map(\.visibleWorkspace).filter { $0.rootTilingContainer.layout == .scrolling }
             : []
+        let screens = workspaces.map(\.workspaceMonitorInfo.rect)
+        let excluded = workspaces.flatMap { $0.floatingWindows.compactMap(\.observedFrame) } +
+            NSApp.windows.filter(\.isVisible).map(\.frame.withYAxisFlipped)
         let modifiers = config.trackpadScrollModifiers
         let changed = shared.withLock { shared in
-            defer { (shared.screens, shared.modifiers) = (screens, modifiers) }
+            defer { (shared.screens, shared.excluded, shared.modifiers) = (screens, excluded, modifiers) }
             return shared.screens.isEmpty != screens.isEmpty
         }
         if changed { CGEvent.tapEnable(tap: port, enable: !screens.isEmpty) }
     }
 
     /// On the thread of the tap
-    fileprivate static func handle(_ event: CGEvent) -> (isTaken: Bool, columns: Int) {
+    fileprivate static func handle(_ event: CGEvent) -> (verdict: ColumnScrollGesture.Verdict, columns: Int) {
         let scrollPhase = event.getIntegerValueField(.scrollWheelEventScrollPhase)
         let momentumPhase = event.getIntegerValueField(.scrollWheelEventMomentumPhase)
         let phase: ColumnScrollGesture.Phase = switch (scrollPhase, momentumPhase) {
@@ -171,7 +197,7 @@ enum TrackpadColumnScrolling {
         let modifiers = event.flags.intersection([.maskAlternate, .maskCommand, .maskControl, .maskShift])
         return shared.withLock { shared in
             shared.gesture.handle(phase, dx: dx, dy: dy, isWanted: isContinuous && modifiers == shared.modifiers &&
-                shared.screens.contains { $0.contains(location) })
+                shared.screens.contains { $0.contains(location) } && !shared.excluded.contains { $0.contains(location) })
         }
     }
 
@@ -199,12 +225,26 @@ private func scrollEventTapCallback(
 ) -> Unmanaged<CGEvent>? {
     switch type {
         case .scrollWheel:
-            let (isTaken, columns) = TrackpadColumnScrolling.handle(event)
+            let (verdict, columns) = TrackpadColumnScrolling.handle(event)
             if columns != 0 {
                 let location = event.location
                 Task.startUnstructured { @MainActor in await TrackpadColumnScrolling.moveColumns(columns, at: location) }
             }
-            return isTaken ? nil : unsafe Unmanaged.passUnretained(event)
+            switch verdict {
+                case .pass: return unsafe Unmanaged.passUnretained(event)
+                case .take: return nil
+                case .cancelForApp:
+                    event.setIntegerValueField(.scrollWheelEventScrollPhase, value: 8) // kCGScrollPhaseCancelled
+                    for field: CGEventField in [
+                        .scrollWheelEventPointDeltaAxis1, .scrollWheelEventPointDeltaAxis2,
+                        .scrollWheelEventFixedPtDeltaAxis1, .scrollWheelEventFixedPtDeltaAxis2,
+                    ] {
+                        event.setDoubleValueField(field, value: 0)
+                    }
+                    event.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: 0)
+                    event.setIntegerValueField(.scrollWheelEventDeltaAxis2, value: 0)
+                    return unsafe Unmanaged.passUnretained(event)
+            }
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             // macOS disables a tap that was too slow. It's enabled again if a monitor still shows a scrolling workspace
             let isWanted = TrackpadColumnScrolling.shared.withLock { !$0.screens.isEmpty }

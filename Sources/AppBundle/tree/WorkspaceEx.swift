@@ -6,8 +6,9 @@ extension Workspace {
         switch containers.count {
             case 0:
                 // A workspace that scrolled keeps scrolling when it's used again (see WorkspaceLayoutMemory)
-                let layout = chosenOrDefaultLayout == .scrolling ? .scrolling : config.defaultRootContainerLayout
-                return TilingContainer(parent: self, adaptiveWeight: 1, defaultRootOrientation, layout, index: INDEX_BIND_LAST)
+                return chosenOrDefaultLayout == .scrolling
+                    ? TilingContainer(parent: self, adaptiveWeight: 1, .h, .scrolling, index: INDEX_BIND_LAST) // Columns go sideways
+                    : TilingContainer(parent: self, adaptiveWeight: 1, defaultRootOrientation, config.defaultRootContainerLayout, index: INDEX_BIND_LAST)
             case 1:
                 return containers.singleOrNil().orDie()
             default:

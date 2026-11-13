@@ -111,6 +111,7 @@ The tiles depend only on the weights. A window can refuse the size of its tile (
 - The user's real settings compile to a recorded result (`SettingsCharacterizationTest`, `test-fixtures/user-settings.*`): a change of the compiled result must be deliberate.
 - A new option: a field in `Settings`, the compiler, a control in the settings window, and `docs/guide.md` if users need to know about it.
 - Hotkeys (`HotkeyBinding.swift`) use the HotKey library (Carbon `RegisterEventHotKey`). It consumes the key event and can't tell left from right modifiers. Binding modes enable and disable groups of hotkeys.
+- The only event tap (`mouse/trackpadColumnScrolling.swift`) takes two-finger sideways scroll gestures over scrolling workspaces. It runs on its own thread and reads its state under a `Mutex`, and it's disabled while no monitor shows a scrolling workspace. Keep its callback trivial: every scroll event of every app passes through it.
 
 ## Tests
 

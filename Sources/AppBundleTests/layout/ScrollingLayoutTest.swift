@@ -136,6 +136,16 @@ struct ScrollingLayoutTest {
         assertEquals(result.stdout, ["h_scrolling"])
     }
 
+    /// While MarSpace is disabled, every window is on the screen: no column waits in the corner
+    @Test func testDisabledShowsEveryColumn() async throws {
+        let (workspace, root) = scrollingWorkspace()
+        let windows = (1 ... 3).map { TestWindow.new(id: OpaqueWindowId(UInt64($0)), parent: root) }
+        TrayMenuModel.shared.isEnabled = false
+        defer { TrayMenuModel.shared.isEnabled = true }
+        try await workspace.layoutWorkspace()
+        assertEquals(windows.map(\.lastAppliedLayoutPhysicalRect?.width), [640, 640, 640])
+    }
+
     // MARK: - The strip
 
     /// Columns of 960 and a screen of 1920, without gaps

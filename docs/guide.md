@@ -129,6 +129,14 @@ command line: `aerospace workspace-layout tiling scrolling floating`.
   tile there. Dialogs and windows that you made floating yourself stay floating when the workspace tiles again; Change
   the layout › Tiling makes a window a tile on the floating workspace
 
+After a switch, a small hint on the screen shows which layout the workspace is in.
+
+On a scrolling workspace, **two fingers sideways on the trackpad** move through the columns, a column for every short
+swipe (Settings › General › Two fingers move through the columns). Scrolling up and down, and scrolling inside a floating
+window, stays with the apps. If you miss swiping sideways in your apps there (back and forward in a browser), choose a
+key to hold while swiping. The direction follows macOS: with natural scrolling, the fingers going left bring the columns
+on the right.
+
 Switching never loses anything: the workspace remembers its tiles and its columns as you left them, and puts the windows
 back when it tiles or scrolls again (windows that you opened meanwhile are placed like new windows). The floating
 windows go back to where you put them the last time the workspace floated. Settings › General › Workspace layout is the

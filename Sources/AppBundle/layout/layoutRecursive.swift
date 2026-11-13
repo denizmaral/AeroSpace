@@ -137,6 +137,8 @@ extension TreeNode {
                 return switch container.layout {
                     case .tiles: container.layoutTiles(point, width: width, height: height, virtual: virtual, context, &frames)
                     case .accordion: container.layoutAccordion(point, width: width, height: height, virtual: virtual, context, &frames)
+                    case .scrolling where context.scrollingScreen == nil: // MarSpace is disabled
+                        container.layoutTiles(point, width: width, height: height, virtual: virtual, context, &frames)
                     case .scrolling: container.layoutScrolling(point, width: width, height: height, virtual: virtual, context, &frames)
                 }
         }
@@ -202,7 +204,10 @@ private struct LayoutContext {
         self.gaps = config.gaps
         self.isInCorner = isInCorner
         let root = workspace.rootTilingContainer
-        self.scrollingScreen = root.layout == .scrolling ? ScrollingScreen(workspace.workspaceMonitorInfo, root.orientation) : nil
+        // While MarSpace is disabled, every window is on the screen: the columns share it like tiles
+        self.scrollingScreen = root.layout == .scrolling && TrayMenuModel.shared.isEnabled
+            ? ScrollingScreen(workspace.workspaceMonitorInfo, root.orientation)
+            : nil
     }
 }
 

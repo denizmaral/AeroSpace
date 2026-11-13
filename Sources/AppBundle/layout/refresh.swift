@@ -209,6 +209,7 @@ enum OptimalHideCorner {
 
 @MainActor
 private func layoutWorkspaces() async throws {
+    defer { TrackpadColumnScrolling.update() } // The monitors that show a scrolling workspace, also while disabled
     if !TrayMenuModel.shared.isEnabled {
         for workspace in Workspace.all {
             workspace.allLeafWindowsRecursive.forEach { ($0 as! MacWindow).unhideFromCorner() } // todo as!
@@ -235,7 +236,6 @@ private func layoutWorkspaces() async throws {
             try await (window as! MacWindow).hideInCorner(corner, tile: tiles[window]) // todo as!
         }
     }
-    TrackpadColumnScrolling.update() // The monitors that show a scrolling workspace
 }
 
 /// The corner of the monitor where the windows that aren't shown wait: the one that no other monitor is next to (the
