@@ -131,6 +131,10 @@ command line: `aerospace workspace-layout tiling scrolling floating`.
 
 After a switch, a small hint on the screen shows which layout the workspace is in.
 
+When the screen of a scrolling workspace moves along the columns, they slide (Settings › General › Animate scrolling).
+The windows only move while they slide, they aren't resized, so even a busy app keeps up. There is no slide where another
+monitor is next to the screen: the windows that slide off it would show up there.
+
 On a scrolling workspace, **two fingers sideways on the trackpad** move through the columns, a column for every short
 swipe (Settings › General › Two fingers move through the columns). Scrolling up and down, and scrolling inside a floating
 window, stays with the apps. If you miss swiping sideways in your apps there (back and forward in a browser), choose a

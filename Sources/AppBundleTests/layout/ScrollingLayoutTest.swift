@@ -160,6 +160,30 @@ struct ScrollingLayoutTest {
         assertEquals(windows[0].axRectForTest, Rect(topLeftX: corner.x, topLeftY: corner.y, width: 960, height: 1079))
     }
 
+    /// A slide doesn't take back a window that was placed by something else meanwhile
+    @Test func testASlideEndsWhenTheWindowIsPlacedElsewhere() async throws {
+        config.animatesScrolling = true
+        let (workspace, root) = scrollingWorkspace()
+        let windows = (1 ... 3).map { TestWindow.new(id: OpaqueWindowId(UInt64($0)), parent: root) }
+        #expect(windows[0].focusWindow())
+        try await workspace.layoutWorkspace()
+        #expect(windows[2].focusWindow())
+        try await workspace.layoutWorkspace() // The screen slides
+        // E.g. its workspace is hidden: in the corner of the screen
+        windows[1].setAxFrame(corner, nil)
+        try await Task.sleep(for: .milliseconds(400))
+        assertEquals(windows[1].axRectForTest?.topLeftCorner, corner)
+        assertEquals(windows[2].axRectForTest, rect(960, 960)) // The others slid on
+
+        #expect(windows[1].focusWindow())
+        try await workspace.layoutWorkspace() // The screen slides back
+        // The workspace floats: the floating layout puts them in the middle of the screen
+        await parseCommand("workspace-layout floating").cmdOrDie.run(.defaultEnv, .emptyStdin)
+        try await workspace.layoutWorkspace()
+        try await Task.sleep(for: .milliseconds(400))
+        assertEquals(windows.map { $0.axRectForTest?.width }, [1100, 1100, 1100])
+    }
+
     /// While MarSpace is disabled, every window is on the screen: no column waits in the corner
     @Test func testDisabledShowsEveryColumn() async throws {
         let (workspace, root) = scrollingWorkspace()

@@ -130,6 +130,8 @@ open class Window: TreeNode, Hashable {
     ///   is hidden in a corner of the screen
     @MainActor
     final func setAxFrame(_ topLeft: CGPoint?, _ size: CGSize?, readBack: Bool = true) {
+        // Placed by something else (e.g. hidden with its workspace, made floating): a slide doesn't take it back
+        if !ScrollAnimation.isWriting { ScrollAnimation.stop(self) }
         let frame = SentFrame(topLeft: topLeft, size: size)
         if frame == sentFrame { return }
         sentFrame = frame

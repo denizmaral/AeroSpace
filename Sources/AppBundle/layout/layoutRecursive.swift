@@ -76,8 +76,7 @@ extension TreeNode {
                     if let delta = frame.animationDelta {
                         slides.append(ScrollAnimation.Slide(window: frame.window, from: tile + delta, to: tile, size: frame.size, final: topLeft))
                     } else if !ScrollAnimation.isSliding(frame.window, to: topLeft, size: frame.size) {
-                        ScrollAnimation.stop(frame.window) // Somewhere else now
-                        frame.window.setAxFrame(topLeft, frame.size)
+                        frame.window.setAxFrame(topLeft, frame.size) // Somewhere else now: it ends a slide
                     }
                 }
                 if !slides.isEmpty { ScrollAnimation.start(slides) }

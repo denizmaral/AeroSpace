@@ -8,7 +8,8 @@ import Common
 /// Only the positions change during a slide (moving a window costs the app much less than resizing it), and an app that
 /// is busy skips steps: a frame that the app didn't take yet is replaced by the next one (see `MacApp.setAxFrame`). The
 /// layouts of the sessions that follow (e.g. the complete refresh session after a command, the windows that moved) leave
-/// a sliding window alone while they want it where the slide ends. One that wants it elsewhere takes it over
+/// a sliding window alone while they want it where the slide ends. Any other frame for the window ends its slide
+/// (``Window/setAxFrame(_:_:readBack:)``): its workspace was hidden, it was made floating, the layout wants it elsewhere
 @MainActor
 enum ScrollAnimation {
     struct Slide {
@@ -25,6 +26,8 @@ enum ScrollAnimation {
     private static let duration: Duration = .milliseconds(220)
     private static var slides: [OpaqueWindowId: Slide] = [:]
     private static var task: Task<Void, Never>? = nil
+    /// The frames that are sent are the ones of the slides: they don't end them
+    private(set) static var isWriting = false
 
     /// The window slides to where the layout wants it
     static func isSliding(_ window: Window, to final: CGPoint, size: CGSize) -> Bool {
@@ -32,19 +35,18 @@ enum ScrollAnimation {
         return slide.final == final && slide.size == size
     }
 
-    /// The layout puts the window somewhere else
+    /// The window is placed by something else
     static func stop(_ window: Window) {
         slides.removeValue(forKey: window.windowId)
     }
 
     static func start(_ newSlides: [Slide]) {
         // The windows of a slide that is under way and doesn't go on: where it was taking them
-        for (id, slide) in slides where !newSlides.contains(where: { $0.window.windowId == id }) {
-            slide.window.setAxFrame(slide.final, slide.size)
-        }
+        let ended = slides.values.filter { slide in !newSlides.contains { $0.window.windowId == slide.window.windowId } }
         slides = Dictionary(newSlides.map { ($0.window.windowId, $0) }, uniquingKeysWith: { _, last in last })
-        for slide in newSlides {
-            slide.window.setAxFrame(slide.from, slide.size, readBack: false)
+        write {
+            for slide in ended { slide.window.setAxFrame(slide.final, slide.size) }
+            for slide in newSlides { slide.window.setAxFrame(slide.from, slide.size, readBack: false) }
         }
         task?.cancel()
         task = Task.startUnstructured { @MainActor in
@@ -56,15 +58,26 @@ enum ScrollAnimation {
                 if progress >= 1 { break }
                 let eased = 1 - pow(1 - progress, 3) // Ease out
                 for slide in slides.values {
+                    if slide.window.windowId == currentlyManipulatedWithMouseWindowId { // The user took it
+                        stop(slide.window)
+                        continue
+                    }
                     let point = CGPoint(x: slide.from.x + (slide.to.x - slide.from.x) * eased, y: slide.from.y + (slide.to.y - slide.from.y) * eased)
-                    slide.window.setAxFrame(point, nil, readBack: false)
+                    write { slide.window.setAxFrame(point, nil, readBack: false) }
+                    FocusBorderController.shared.windowFrameDidChange(slide.window) // The border goes along
                 }
             }
             let ended = slides.values
             slides = [:]
-            for slide in ended {
-                slide.window.setAxFrame(slide.final, slide.size) // Read back: what the window made of its tile
+            write {
+                for slide in ended { slide.window.setAxFrame(slide.final, slide.size) } // Read back: what it made of its tile
             }
         }
+    }
+
+    private static func write(_ body: () -> Void) {
+        isWriting = true
+        defer { isWriting = false }
+        body()
     }
 }

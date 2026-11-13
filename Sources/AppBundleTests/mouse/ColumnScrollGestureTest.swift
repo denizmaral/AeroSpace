@@ -41,6 +41,11 @@ struct ColumnScrollGestureTest {
         _ = gesture.handle(.began, dx: 0, dy: 0, isWanted: true)
         _ = gesture.handle(.changed, dx: 40, dy: 0, isWanted: true)
         assertEquals(gesture.handle(.ended, dx: 0, dy: 0, isWanted: true), (.take, -1))
+
+        // The fingers only brushed the trackpad
+        _ = gesture.handle(.began, dx: 0, dy: 0, isWanted: true)
+        _ = gesture.handle(.changed, dx: 12, dy: 0, isWanted: true)
+        assertEquals(gesture.handle(.ended, dx: 0, dy: 0, isWanted: true), (.take, 0))
     }
 
     @Test func testUpAndDownStaysWithTheApp() {

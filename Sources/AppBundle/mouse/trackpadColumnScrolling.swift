@@ -22,6 +22,8 @@ struct ColumnScrollGesture: Sendable, Equatable {
     static let columnDistance: CGFloat = 110
     /// The fingers' distance after which it's clear whether the gesture goes sideways
     static let decisionDistance: CGFloat = 6
+    /// A shorter gesture that is taken moves no column: the fingers only brushed the trackpad
+    static let flickDistance: CGFloat = 30
 
     enum State: Sendable, Equatable {
         case idle
@@ -73,7 +75,7 @@ struct ColumnScrollGesture: Sendable, Equatable {
                 if case .undecided = state { state = .left }
                 guard state == .taken else { return (.pass, 0) }
                 // A quick flick that didn't reach the distance of a column moves one: it was meant to
-                let flick = moved == 0 && abs(distance) >= Self.decisionDistance ? (distance > 0 ? -1 : 1) : 0
+                let flick = moved == 0 && abs(distance) >= Self.flickDistance ? (distance > 0 ? -1 : 1) : 0
                 return (.take, flick)
             case .began:
                 state = isWanted() ? .undecided(dx: 0, dy: 0) : .left
@@ -169,8 +171,9 @@ enum TrackpadColumnScrolling {
             ? globalUnsortedMonitorInfos.map(\.visibleWorkspace).filter { $0.rootTilingContainer.layout == .scrolling }
             : []
         let screens = workspaces.map(\.workspaceMonitorInfo.rect)
+        // Not the windows of MarSpace that let the mouse through: the focus border covers the focused column
         let excluded = workspaces.flatMap { $0.floatingWindows.compactMap(\.observedFrame) } +
-            NSApp.windows.filter(\.isVisible).map(\.frame.withYAxisFlipped)
+            NSApp.windows.filter { $0.isVisible && !$0.ignoresMouseEvents }.map(\.frame.withYAxisFlipped)
         let modifiers = config.trackpadScrollModifiers
         let changed = shared.withLock { shared in
             defer { (shared.screens, shared.excluded, shared.modifiers) = (screens, excluded, modifiers) }
