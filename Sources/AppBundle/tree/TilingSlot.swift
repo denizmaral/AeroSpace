@@ -36,6 +36,17 @@ struct TilingSlot {
     fileprivate var leftSiblings: ArraySlice<WeightedSibling> { siblings[..<index] }
 }
 
+/// Where a window that is away comes back to in the tiling tree (see ``Window/tilingSlotReturn(on:)``)
+enum TilingSlotReturn {
+    /// A child of the container, before its child at `index`
+    case child(of: TilingContainer, index: Int, weight: CGFloat)
+    /// A new container takes the place of `neighbor` (with its weight), with the neighbor (`neighborWeight`) and the window
+    case wrapping(TreeNode, isAfterNeighbor: Bool, orientation: Orientation, layout: Layout, neighborWeight: CGFloat, weight: CGFloat)
+    /// The children of the root are wrapped again (`wrapperWeight`), the root gets `orientation` and `layout` back, and
+    /// the window is a child of the root next to the wrapper (see ``TilingSlot/needsRootRewrap(_:)``)
+    case rewrappingRoot(isAfterNeighbor: Bool, orientation: Orientation, layout: Layout, wrapperWeight: CGFloat, weight: CGFloat)
+}
+
 private struct EmptiedContainer {
     /// Strong: the windows of the container that are away refer to it
     let container: TilingContainer
@@ -135,6 +146,75 @@ extension Window {
             bindBackEmptiedContainer(parent, on: workspace, ownRecord: slot.emptiedContainer)
         }
         return bindToParent(of: slot, on: workspace) || bindNextToNeighbor(of: slot, on: workspace)
+    }
+
+    /// Where the floating window would come back to in the tiling tree of `workspace` if it was made a tile now (see
+    /// ``bindBackToTilingSlot(on:)``), without changing the tree: the tree persisted across restarts of MarSpace holds it
+    /// there (see ``TilingTreeSnapshot/Node/away(id:weight:)``). nil if it has no place there, or if it comes back in a
+    /// way that the snapshot doesn't express (e.g. several windows left the same flattened container): it's a new tile
+    /// after a restart then
+    @MainActor
+    func tilingSlotReturn(on workspace: Workspace) -> TilingSlotReturn? {
+        guard let slot = tilingSlot else { return nil }
+        let others = allAwayWindows(of: workspace).filter { $0 !== self }
+        if let parent = slot.parent, parent.parent == nil,
+           slot.emptiedContainer?.container === parent || others.contains(where: { $0.tilingSlot?.emptiedContainer?.container === parent })
+        {
+            return nil // The container is bound back first
+        }
+        if let parent = slot.parent, parent.lifeStatus == .alive, parent.nodeWorkspace === workspace {
+            // Several windows flattened the root: it's wrapped again for each of them
+            if parent.isRootContainer, others.contains(where: { $0.tilingSlot?.needsRootRewrap(parent) == true }) { return nil }
+            if slot.needsRootRewrap(parent) {
+                return .rewrappingRoot(
+                    isAfterNeighbor: slot.isAfterNeighbor,
+                    orientation: slot.orientation,
+                    layout: slot.layout,
+                    wrapperWeight: slot.neighborAdaptiveWeight,
+                    weight: slot.adaptiveWeight,
+                )
+            }
+            return .child(
+                of: parent,
+                index: insertionIndex(in: parent.children, siblings: slot.siblings, index: slot.index),
+                weight: restoredWeight(slot.adaptiveWeight, siblings: slot.siblings, in: parent),
+            )
+        }
+        // The normalization flattened the parent: the window splits its neighbor again (see bindNextToNeighbor), only if
+        // the neighbor is in the tree and the window is the only one that left the parent
+        guard let neighbor = slot.neighbor, neighbor.nodeWorkspace === workspace,
+              let neighborParent = neighbor.parent as? TilingContainer, neighborParent.lifeStatus == .alive,
+              let neighborIndex = neighbor.ownIndex(in: .all),
+              !others.contains(where: { slot.parent != nil && $0.tilingSlot?.parent === slot.parent })
+        else { return nil }
+        if neighborParent.orientation == slot.orientation {
+            return .child(
+                of: neighborParent,
+                index: neighborIndex + (slot.isAfterNeighbor ? 1 : 0),
+                weight: restoredWeight(slot.adaptiveWeight, siblings: slot.siblings, in: neighborParent),
+            )
+        }
+        guard slot.neighborAdaptiveWeight > 0 else { return nil } // The neighbor would get an automatic weight
+        return .wrapping(
+            neighbor,
+            isAfterNeighbor: slot.isAfterNeighbor,
+            orientation: slot.orientation,
+            layout: slot.layout,
+            neighborWeight: slot.neighborAdaptiveWeight,
+            // The new container has the neighbor only, with its old weight
+            weight: restoredWeight(slot.adaptiveWeight, siblings: slot.siblings, children: [(neighbor, slot.neighborAdaptiveWeight)], isAway: { _ in false }),
+        )
+    }
+
+    /// The window that `restoreTilingTree` put back at its place in the tree goes back to `container`, its floating
+    /// container: it remembers the place (it was lost with a restart of MarSpace), and stays pinned if it was
+    @MainActor
+    func leaveTilingTreeRememberingSlot(for container: FloatingWindowsContainer, isPinned: Bool) {
+        guard case .tilingContainer(let parent) = windowParentCases else { return }
+        let siblings = siblingsIncludingAwayNodes(parent)
+        let previous = bind(to: container, adaptiveWeight: WEIGHT_AUTO, index: INDEX_BIND_LAST).orDie()
+        tilingSlot = TilingSlot(leaving: self, parent, previous, siblings)
+        self.isPinned = isPinned // Ended by the binding as a tile
     }
 
     /// The container of the window that is away in a macOS native state, and the weight that the window would get there
@@ -384,19 +464,33 @@ private func bindBackEmptiedContainer(_ container: TilingContainer, on workspace
 @MainActor
 private func restoredWeight(_ weight: CGFloat, siblings: [WeightedSibling], in parent: TilingContainer) -> CGFloat {
     let orientation = parent.orientation
-    let children = parent.inhabitedChildren
+    let away = awayNodes(of: parent)
+    return restoredWeight(
+        weight,
+        siblings: siblings,
+        children: parent.inhabitedChildren.map { ($0, $0.getWeight(orientation)) },
+        isAway: { node in away.contains { $0.node === node } },
+    )
+}
+
+/// See ``restoredWeight(_:siblings:in:)``. `children`: the inhabited children of the parent with their weights now
+@MainActor
+private func restoredWeight(
+    _ weight: CGFloat,
+    siblings: [WeightedSibling],
+    children: [(node: TreeNode, weight: CGFloat)],
+    isAway: (TreeNode?) -> Bool,
+) -> CGFloat {
     // The first child that comes back: its weight is the scale for the others that are away
     guard !children.isEmpty else { return weight }
-    let total = children.reduce(0) { $0 + max($1.getWeight(orientation), 0) }
-    let away = awayNodes(of: parent)
+    let total = children.reduce(0) { $0 + max($1.weight, 0) }
     var before: CGFloat = 0 // The siblings that had a share when the node left (the old scale)
     var broughtBack: CGFloat = 0 // The children that were away then and came back with their own share (the new scale)
     for sibling in siblings {
-        let node = sibling.node
-        let isChild = node.map { $0.parent === parent && $0.tilingTreeNodeCasesOrDie().isInhabited } ?? false
+        let child = sibling.node.flatMap { node in children.first { $0.node === node } }
         if sibling.isAway {
-            if isChild, let node { broughtBack += max(node.getWeight(orientation), 0) }
-        } else if isChild || !away.contains(where: { $0.node === node }) {
+            if let child { broughtBack += max(child.weight, 0) }
+        } else if child != nil || !isAway(sibling.node) {
             before += max(sibling.weight, 0) // A child now, or gone (closed, moved): its share is free
         } // else: still away, it brings its share back itself
     }

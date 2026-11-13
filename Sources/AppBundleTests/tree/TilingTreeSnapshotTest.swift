@@ -174,6 +174,32 @@ struct TilingTreeSnapshotTest {
         assertEquals(snapshot.workspaceLayouts, [])
     }
 
+    /// The file of the MarSpace version before the away windows (the floating windows that remember their tiles): the
+    /// windows go back to their places
+    @Test func testFileWithoutAwayWindows() throws {
+        let trees = [PersistedTilingTree(workspace: "1", mostRecentWindow: 7, root: .init(orientation: .h, layout: .tiles, weight: 1, children: [.window(id: 7, weight: 1)]))]
+        let placements = [WindowPlacement(nativeWindowId: 7, pid: 100, workspace: "1", isFloating: false)]
+        var version4 = WindowPlacementSnapshot.encode(placements, trees: trees, bootSession: 1)
+        version4[4] = 4
+        let snapshot = try #require(WindowPlacementSnapshot(data: version4))
+        assertEquals(snapshot.all, placements)
+        assertEquals(snapshot.trees, trees)
+    }
+
+    @Test func testAwayWindowsRoundTrip() throws {
+        let trees = [PersistedTilingTree(
+            workspace: "1",
+            mostRecentWindow: 7,
+            root: .init(orientation: .h, layout: .tiles, weight: 1, children: [
+                .window(id: 7, weight: 1),
+                .container(.init(orientation: .v, layout: .tiles, weight: 2, children: [.away(id: 8, weight: 0.5), .window(id: 9, weight: 1)])),
+            ]),
+        )]
+        let snapshot = try #require(WindowPlacementSnapshot(data: WindowPlacementSnapshot.encode([], trees: trees, bootSession: 1)))
+        assertEquals(snapshot.trees, trees)
+        assertEquals(trees[0].mapWindowIds { $0 == 8 ? nil : $0 }?.root.children.last, .container(.init(orientation: .v, layout: .tiles, weight: 2, children: [.window(id: 9, weight: 1)])))
+    }
+
     /// A floating workspace floats its windows again after a restart, and the tiles and columns that the workspaces
     /// remember come back (see WorkspaceLayout)
     @Test func testWorkspaceLayoutsRoundTrip() throws {

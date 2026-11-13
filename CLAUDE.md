@@ -97,7 +97,7 @@ Async functions take a `CancellationMode` (`.cancellable` / `.nonCancellable`). 
 
 A tiling window that leaves for a macOS native state (fullscreen, minimized, hidden app) records its `TilingSlot` (`tree/TilingSlot.swift`) and returns to it. Only if the slot is gone is it placed as a new window.
 
-Across restarts of MarSpace, `WindowPlacementStore` persists the workspace of every window and the tiling tree of every workspace (`tree/TilingTreeSnapshot.swift`, by native window id), and the workspace layouts with their remembered trees (file version 4). The startup session registers the windows in an arbitrary order as new windows, then puts them back into the persisted trees.
+Across restarts of MarSpace, `WindowPlacementStore` persists the workspace of every window and the tiling tree of every workspace (`tree/TilingTreeSnapshot.swift`, by native window id), and the workspace layouts with their remembered trees (file version 5). The trees also hold the floating windows that remember their tiles (`TilingSlot`) as away windows, where they come back to (`Window.tilingSlotReturn`); the restore puts them there and takes them out again, so they remember the place. The startup session registers the windows in an arbitrary order as new windows, then puts them back into the persisted trees.
 
 ### Layout (`AppBundle/layout/`)
 `layoutRecursive.swift` turns the tree and weights into rectangles, records `lastAppliedLayoutPhysicalRect`/`VirtualRect` on each node (also used by mouse resize and moves), and applies frames through the accessibility API.

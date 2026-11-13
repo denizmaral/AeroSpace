@@ -21,6 +21,12 @@ extension Workspace {
         floatingWindowsContainer.children.filterIsInstance(of: Window.self)
     }
 
+    /// Doesn't create the floating container (the getter of ``floatingWindows`` does)
+    @MainActor
+    var floatingWindowsIfAny: [Window] {
+        children.lazy.compactMap { $0 as? FloatingWindowsContainer }.first?.children.filterIsInstance(of: Window.self) ?? []
+    }
+
     @MainActor
     var floatingWindowsContainer: FloatingWindowsContainer {
         let containers = children.filterIsInstance(of: FloatingWindowsContainer.self)

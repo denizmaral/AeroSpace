@@ -133,9 +133,7 @@ extension Workspace {
                     window.floatByWorkspaceLayout(on: workspace)
                 }
             } else {
-                // Doesn't create the floating container (the getter of floatingWindows does)
-                let floating = workspace.children.lazy.compactMap { $0 as? FloatingWindowsContainer }.first?.children ?? []
-                for case let window as Window in floating where window.isFloatedByWorkspaceLayout {
+                for window in workspace.floatingWindowsIfAny where window.isFloatedByWorkspaceLayout {
                     window.stopFloatingByWorkspaceLayout()
                     window.bindAsNewTilingWindow(to: workspace)
                 }

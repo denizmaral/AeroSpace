@@ -19,9 +19,10 @@ struct WindowPlacement: Equatable, Sendable {
 ///
 /// Binary format (little-endian):
 /// ```
-/// Header (32 bytes; 28 bytes in version 3, which has no workspace layouts; 24 bytes in version 2, which has no trees):
+/// Header (32 bytes, also in version 4, whose trees have no away windows; 28 bytes in version 3, which has no workspace
+/// layouts; 24 bytes in version 2, which has no trees):
 ///   magic:         UInt32 "MSWP"
-///   version:       UInt16 (4)
+///   version:       UInt16 (5)
 ///   reserved:      UInt16
 ///   count:         UInt32
 ///   blobLength:    UInt32
@@ -51,8 +52,10 @@ struct WindowPlacementSnapshot: Sendable {
     private let layoutsStart: Int
 
     private static let magic: UInt32 = 0x5057_534D // "MSWP" little-endian
-    private static let version: UInt16 = 4
+    private static let version: UInt16 = 5
     /// Still read: the files that the previous versions of MarSpace wrote, when MarSpace is updated
+    /// The trees have no away windows
+    private static let versionWithoutAwayWindows: UInt16 = 4
     private static let versionWithoutLayouts: UInt16 = 3
     private static let versionWithoutTrees: UInt16 = 2
     private static let headerSize = 32
@@ -65,7 +68,7 @@ struct WindowPlacementSnapshot: Sendable {
         guard data.count >= Self.headerSizeWithoutTrees, data.loadLE(UInt32.self, at: 0) == Self.magic else { return nil }
         let headerSize: Int
         switch data.loadLE(UInt16.self, at: 4) {
-            case Self.version: headerSize = Self.headerSize
+            case Self.version, Self.versionWithoutAwayWindows: headerSize = Self.headerSize
             case Self.versionWithoutLayouts: headerSize = Self.headerSizeWithoutLayouts
             case Self.versionWithoutTrees: headerSize = Self.headerSizeWithoutTrees
             default: return nil

@@ -170,6 +170,36 @@ struct WorkspaceLayoutCommandTest {
         assertEquals(workspace.rootTilingContainer.allLeafWindowsRecursive.map(\.windowId.rawId).sorted(), [1, 2, 3])
     }
 
+    /// A popped out window floats on its own account: the workspace floats and tiles again meanwhile, it pops back into
+    /// its tile
+    @Test func testAPoppedOutWindow() async {
+        config.enableNormalizationFlattenContainers = true
+        config.enableNormalizationOppositeOrientationForNestedContainers = true
+        let workspace = Workspace.get(byName: name)
+        var popped: TestWindow!
+        workspace.rootTilingContainer.apply {
+            TestWindow.new(id: 1, parent: $0)
+            TilingContainer.newVTiles(parent: $0, adaptiveWeight: 1).apply {
+                popped = TestWindow.new(id: 2, parent: $0)
+                TestWindow.new(id: 3, parent: $0)
+            }
+        }
+        let tiles = workspace.rootTilingContainer.layoutDescription
+        #expect(popped.focusWindow())
+        await run("pop-out")
+        session(workspace)
+        for layout in ["floating", "scrolling", "tiling"] {
+            await run("workspace-layout \(layout)")
+            session(workspace)
+            assertEquals(popped.isPoppedOut, true)
+            assertEquals(popped.isFloatedByWorkspaceLayout, false)
+        }
+        #expect(popped.focusWindow())
+        await run("pop-out")
+        session(workspace)
+        assertEquals(workspace.rootTilingContainer.layoutDescription, tiles)
+    }
+
     /// The screen shows the columns that it showed: the focused column isn't moved to an edge
     @Test func testTheScreenShowsTheSameColumns() async throws {
         let workspace = Workspace.get(byName: name)

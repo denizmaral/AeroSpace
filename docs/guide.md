@@ -81,7 +81,8 @@ Settings › General › New window placement:
 
 A window that leaves the layout for a while (macOS fullscreen, minimized, its app hidden) comes back to its place.
 When MarSpace itself is restarted, the windows go back to their workspaces and to their places and sizes in the layout
-(until the Mac is restarted: macOS gives the windows new ids then).
+(until the Mac is restarted: macOS gives the windows new ids then). A window that you made floating (`layout floating`,
+`pop-out`) still goes back to its tile afterwards.
 
 ### Gaps
 
